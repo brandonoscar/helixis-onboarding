@@ -72,7 +72,7 @@ const supabase = {
         return {
           data: {
             success: true,
-            signing_secret: "whsec_K8mXqL2vNpRtYjWs4HcAuGeZbFdQ9nM7",
+            signing_secret: ERROR
             endpoint_url: "https://hooks.helixis.com/ws_demo/buildium",
           },
           error: null,
