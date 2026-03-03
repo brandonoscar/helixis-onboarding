@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { supabase } from "./lib/supabase";
 
 // ─────────────────────────────────────────────────────────
 // TYPES
@@ -36,60 +37,6 @@ interface TeamMember {
   role: Role;
   status: "pending" | "sent";
 }
-
-// ─────────────────────────────────────────────────────────
-// MOCK SUPABASE CLIENT (replace with real @supabase/supabase-js)
-// ─────────────────────────────────────────────────────────
-
-const mockDelay = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-const supabase = {
-  auth: {
-    signInWithOtp: async (opts: { email: string }) => {
-      await mockDelay(1200);
-      return { error: null };
-    },
-    verifyOtp: async (opts: { email: string; token: string; type: string }) => {
-      await mockDelay(900);
-      if (opts.token === "000000") return { data: { user: null }, error: { message: "Invalid code" } };
-      return { data: { user: { id: "usr_demo", email: opts.email } }, error: null };
-    },
-    getSession: async () => ({ data: { session: null }, error: null }),
-  },
-  functions: {
-    invoke: async (fn: string, opts: any) => {
-      await mockDelay(1400);
-      if (fn === "provision-integration") {
-        return { data: { success: true, integration_id: "int_demo", key_hint: "...x7f2" }, error: null };
-      }
-      if (fn === "test-connection") {
-        return { data: { success: true, message: "Connected to Buildium API", latency_ms: 312 }, error: null };
-      }
-      if (fn === "lock-integration") {
-        return { data: { success: true }, error: null };
-      }
-      if (fn === "rotate-webhook-secret") {
-        return {
-          data: {
-            success: true,
-            signing_secret: ERROR
-            endpoint_url: "https://hooks.helixis.com/ws_demo/buildium",
-          },
-          error: null,
-        };
-      }
-      if (fn === "invite-member") {
-        return { data: { success: true, email_sent: true }, error: null };
-      }
-      return { data: null, error: null };
-    },
-  },
-  from: (table: string) => ({
-    insert: (data: any) => ({
-      select: () => ({ single: async () => ({ data: { id: "ws_demo", ...data }, error: null }) }),
-    }),
-  }),
-};
 
 // ─────────────────────────────────────────────────────────
 // DESIGN TOKENS
@@ -958,7 +905,7 @@ function StepWorkspace({ onNext }: { onNext: (data: WorkspaceData) => void }) {
   const handleSubmit = async () => {
     if (!name.trim()) return;
     setLoading(true);
-    await mockDelay(600);
+    // Just collect name/slug — workspace is created in DB after auth
     setLoading(false);
     onNext({ name: name.trim(), slug });
   };
@@ -1029,7 +976,10 @@ function StepAuth({ onNext }: { onNext: (email: string) => void }) {
   const sendLink = async () => {
     if (!email.includes("@")) return;
     setLoading(true);
-    const { error: e } = await supabase.auth.signInWithOtp({ email });
+    const { error: e } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: window.location.origin },
+    });
     setLoading(false);
     if (e) { setError(e.message); return; }
     setSent(true);
@@ -1076,11 +1026,16 @@ function StepAuth({ onNext }: { onNext: (email: string) => void }) {
               type="email"
               placeholder="you@yourcompany.com"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => { setEmail(e.target.value); setError(""); }}
               onKeyDown={(e) => e.key === "Enter" && sendLink()}
               autoFocus
             />
             <span className="hint">We'll send a one-time code. No password required.</span>
+            {error && (
+              <div className="test-result error" style={{ marginTop: 8 }}>
+                <span>⚠</span> {error}
+              </div>
+            )}
           </div>
         ) : (
           <div>
@@ -1146,6 +1101,7 @@ function StepIntegration({
   const [apiSecret, setApiSecret] = useState("");
   const [env, setEnv] = useState<"production" | "sandbox">("production");
   const [integration, setIntegration] = useState<IntegrationState>({ status: "idle" });
+  const [integrationId, setIntegrationId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [locking, setLocking] = useState(false);
 
@@ -1160,6 +1116,10 @@ function StepIntegration({
     const { data: saveData } = await supabase.functions.invoke("provision-integration", {
       body: { workspace_id: workspaceId, provider: "buildium", api_key: apiKey, api_secret: apiSecret, environment: env },
     });
+
+    if (saveData?.integration_id) {
+      setIntegrationId(saveData.integration_id);
+    }
 
     const { data: testData } = await supabase.functions.invoke("test-connection", {
       body: { workspace_id: workspaceId, provider: "buildium" },
@@ -1179,9 +1139,10 @@ function StepIntegration({
   };
 
   const lockIntegration = async () => {
+    if (!integrationId) return;
     setLocking(true);
     await supabase.functions.invoke("lock-integration", {
-      body: { workspace_id: workspaceId, integration_id: "int_demo" },
+      body: { workspace_id: workspaceId, integration_id: integrationId },
     });
     setLocking(false);
     const locked = { ...integration, status: "locked" as const, lockedAt: new Date().toLocaleString() };
@@ -1642,11 +1603,31 @@ function Sidebar({ current, completed }: { current: Step; completed: Set<Step> }
 export default function App() {
   const [step, setStep] = useState<Step>("workspace");
   const [completed, setCompleted] = useState<Set<Step>>(new Set());
-  const [workspace, setWorkspace] = useState<WorkspaceData>({ name: "", slug: "", id: "ws_demo" });
+  const [workspace, setWorkspace] = useState<WorkspaceData>({ name: "", slug: "" });
   const [userEmail, setUserEmail] = useState("");
   const [members, setMembers] = useState<TeamMember[]>([]);
+  const [creatingWorkspace, setCreatingWorkspace] = useState(false);
 
   const complete = (s: Step) => setCompleted((prev) => new Set([...prev, s]));
+
+  // Recover existing session on load (e.g., after magic link redirect)
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUserEmail(session.user.email || "");
+        complete("auth");
+        // If still on workspace or auth step, advance past auth
+        setStep((prev) => (prev === "auth" ? "workspace" : prev));
+      }
+    });
+    // Listen for auth state changes (magic link callback)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUserEmail(session.user.email || "");
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
   const handleWorkspace = (data: WorkspaceData) => {
     setWorkspace(data);
@@ -1654,9 +1635,23 @@ export default function App() {
     setStep("auth");
   };
 
-  const handleAuth = (email: string) => {
+  const handleAuth = async (email: string) => {
     setUserEmail(email);
     complete("auth");
+
+    // Now that user is authenticated, create workspace in DB
+    setCreatingWorkspace(true);
+    const { data, error } = await supabase.functions.invoke("create-workspace", {
+      body: { name: workspace.name, slug: workspace.slug },
+    });
+    setCreatingWorkspace(false);
+
+    if (error || !data?.workspace_id) {
+      alert(data?.error || error?.message || "Failed to create workspace");
+      return;
+    }
+
+    setWorkspace((prev) => ({ ...prev, id: data.workspace_id }));
     setStep("integration");
   };
 
@@ -1683,7 +1678,15 @@ export default function App() {
         <Sidebar current={step} completed={completed} />
         <div className="main">
           {step === "workspace" && <StepWorkspace onNext={handleWorkspace} />}
-          {step === "auth" && <StepAuth onNext={handleAuth} />}
+          {step === "auth" && !creatingWorkspace && <StepAuth onNext={handleAuth} />}
+          {creatingWorkspace && (
+            <div className="panel">
+              <div className="panel-header">
+                <h1 className="panel-title"><span className="spinner" /> Setting up your workspace…</h1>
+                <p className="panel-desc">Creating {workspace.name} and configuring access controls.</p>
+              </div>
+            </div>
+          )}
           {step === "integration" && <StepIntegration workspaceId={workspace.id!} onNext={handleIntegration} />}
           {step === "webhooks" && <StepWebhooks workspaceId={workspace.id!} onNext={handleWebhooks} />}
           {step === "team" && <StepTeam workspaceId={workspace.id!} onNext={handleTeam} />}
