@@ -1002,7 +1002,7 @@ function StepAuth({ onNext }: { onNext: (email: string) => void }) {
     setError("");
     const { data, error: e } = await supabase.auth.verifyOtp({ email, token: code, type: "email" });
     setLoading(false);
-    if (e || !data.user) { setError("Invalid code. Please try again."); return; }
+    if (e || !data.session) { setError("Invalid code. Please try again."); return; }
     onNext(email);
   };
 
@@ -1639,9 +1639,17 @@ export default function App() {
     setUserEmail(email);
     complete("auth");
 
+    // Ensure the session is available before calling the edge function
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      alert("Authentication session not found. Please verify your email again.");
+      return;
+    }
+
     // Now that user is authenticated, create workspace in DB
     setCreatingWorkspace(true);
     const { data, error } = await supabase.functions.invoke("create-workspace", {
+      headers: { Authorization: `Bearer ${session.access_token}` },
       body: { name: workspace.name, slug: workspace.slug },
     });
     setCreatingWorkspace(false);
