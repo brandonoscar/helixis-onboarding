@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { supabase } from "./lib/supabase";
+import { supabase, supabaseUrl, supabaseAnonKey } from "./lib/supabase";
 
 // ─────────────────────────────────────────────────────────
 // TYPES
@@ -1638,21 +1638,36 @@ export default function App() {
   const handleAuth = async (email: string, accessToken: string) => {
     setUserEmail(email);
 
-    // Create workspace using the access token captured directly from verifyOtp
+    // Create workspace using raw fetch with the access token from verifyOtp.
+    // Bypasses supabase.functions.invoke to guarantee the Authorization header
+    // is sent exactly as-is, with no middleware interference.
     setCreatingWorkspace(true);
-    const { data, error } = await supabase.functions.invoke("create-workspace", {
-      headers: { Authorization: `Bearer ${accessToken}` },
-      body: { name: workspace.name, slug: workspace.slug },
-    });
+    let data: { workspace_id?: string; error?: string } | null = null;
+    let error: string | null = null;
+    try {
+      const res = await fetch(`${supabaseUrl}/functions/v1/create-workspace`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+          apikey: supabaseAnonKey,
+        },
+        body: JSON.stringify({ name: workspace.name, slug: workspace.slug }),
+      });
+      data = await res.json();
+      if (!res.ok) error = data?.error || `HTTP ${res.status}`;
+    } catch (e: any) {
+      error = e.message || "Network error";
+    }
     setCreatingWorkspace(false);
 
     if (error || !data?.workspace_id) {
-      alert(data?.error || error?.message || "Failed to create workspace");
+      alert(error || data?.error || "Failed to create workspace");
       return;
     }
 
     complete("auth");
-    setWorkspace((prev) => ({ ...prev, id: data.workspace_id }));
+    setWorkspace((prev) => ({ ...prev, id: data!.workspace_id }));
     setStep("integration");
   };
 
