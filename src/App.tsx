@@ -966,7 +966,7 @@ function StepWorkspace({ onNext }: { onNext: (data: WorkspaceData) => void }) {
 // STEP 2: AUTH (Magic Link)
 // ─────────────────────────────────────────────────────────
 
-function StepAuth({ onNext }: { onNext: (email: string) => void }) {
+function StepAuth({ onNext }: { onNext: (email: string, accessToken: string) => void }) {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
@@ -1003,7 +1003,7 @@ function StepAuth({ onNext }: { onNext: (email: string) => void }) {
     const { data, error: e } = await supabase.auth.verifyOtp({ email, token: code, type: "email" });
     setLoading(false);
     if (e || !data.session) { setError("Invalid code. Please try again."); return; }
-    onNext(email);
+    onNext(email, data.session.access_token);
   };
 
   return (
@@ -1635,21 +1635,13 @@ export default function App() {
     setStep("auth");
   };
 
-  const handleAuth = async (email: string) => {
+  const handleAuth = async (email: string, accessToken: string) => {
     setUserEmail(email);
-    complete("auth");
 
-    // Ensure the session is available before calling the edge function
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) {
-      alert("Authentication session not found. Please verify your email again.");
-      return;
-    }
-
-    // Now that user is authenticated, create workspace in DB
+    // Create workspace using the access token captured directly from verifyOtp
     setCreatingWorkspace(true);
     const { data, error } = await supabase.functions.invoke("create-workspace", {
-      headers: { Authorization: `Bearer ${session.access_token}` },
+      headers: { Authorization: `Bearer ${accessToken}` },
       body: { name: workspace.name, slug: workspace.slug },
     });
     setCreatingWorkspace(false);
@@ -1659,6 +1651,7 @@ export default function App() {
       return;
     }
 
+    complete("auth");
     setWorkspace((prev) => ({ ...prev, id: data.workspace_id }));
     setStep("integration");
   };
