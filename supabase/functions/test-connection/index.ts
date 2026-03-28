@@ -126,7 +126,7 @@ async function testBuildiumConnection(
     : "https://api.buildium.com/v1";
 
   try {
-    const response = await fetch(`${baseUrl}/properties?limit=1`, {
+    const response = await fetch(`${baseUrl}/rentals?limit=1`, {
       headers: {
         "x-buildium-client-id": clientId,
         "x-buildium-client-secret": clientSecret,
