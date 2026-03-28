@@ -1639,8 +1639,7 @@ export default function App() {
     setUserEmail(email);
 
     // Create workspace using raw fetch with the access token from verifyOtp.
-    // Bypasses supabase.functions.invoke to guarantee the Authorization header
-    // is sent exactly as-is, with no middleware interference.
+    console.log("[handleAuth] accessToken length:", accessToken?.length, "prefix:", accessToken?.substring(0, 20));
     setCreatingWorkspace(true);
     let data: { workspace_id?: string; error?: string } | null = null;
     let error: string | null = null;
@@ -1662,7 +1661,7 @@ export default function App() {
     setCreatingWorkspace(false);
 
     if (error || !data?.workspace_id) {
-      alert(error || data?.error || "Failed to create workspace");
+      alert(JSON.stringify(data, null, 2) || error || "Failed to create workspace");
       return;
     }
 
