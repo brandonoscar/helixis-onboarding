@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { supabase } from "./lib/supabase";
+import { supabase, supabaseUrl, supabaseAnonKey } from "./lib/supabase";
 
 // ─────────────────────────────────────────────────────────
 // TYPES
@@ -966,7 +966,7 @@ function StepWorkspace({ onNext }: { onNext: (data: WorkspaceData) => void }) {
 // STEP 2: AUTH (Magic Link)
 // ─────────────────────────────────────────────────────────
 
-function StepAuth({ onNext }: { onNext: (email: string) => void }) {
+function StepAuth({ onNext }: { onNext: (email: string, accessToken: string) => void }) {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
@@ -1002,8 +1002,8 @@ function StepAuth({ onNext }: { onNext: (email: string) => void }) {
     setError("");
     const { data, error: e } = await supabase.auth.verifyOtp({ email, token: code, type: "email" });
     setLoading(false);
-    if (e || !data.user) { setError("Invalid code. Please try again."); return; }
-    onNext(email);
+    if (e || !data.session) { setError("Invalid code. Please try again."); return; }
+    onNext(email, data.session.access_token);
   };
 
   return (
@@ -1102,17 +1102,14 @@ function StepIntegration({
   const [env, setEnv] = useState<"production" | "sandbox">("production");
   const [integration, setIntegration] = useState<IntegrationState>({ status: "idle" });
   const [integrationId, setIntegrationId] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
   const [locking, setLocking] = useState(false);
-
-  const showKeys = integration.status !== "locked";
-  const canTest = integration.status === "idle" || integration.status === "error";
+  const [googleConnected, setGoogleConnected] = useState(false);
+  const [googleConnecting, setGoogleConnecting] = useState(false);
 
   const testConnection = async () => {
     if (!apiKey || !apiSecret) return;
     setIntegration((s) => ({ ...s, status: "testing" }));
 
-    // First save keys, then test
     const { data: saveData } = await supabase.functions.invoke("provision-integration", {
       body: { workspace_id: workspaceId, provider: "buildium", api_key: apiKey, api_secret: apiSecret, environment: env },
     });
@@ -1147,128 +1144,157 @@ function StepIntegration({
     setLocking(false);
     const locked = { ...integration, status: "locked" as const, lockedAt: new Date().toLocaleString() };
     setIntegration(locked);
-    onNext(locked);
   };
+
+  const connectGoogle = async () => {
+    setGoogleConnecting(true);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: window.location.origin,
+        scopes: "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/contacts.readonly",
+        queryParams: { access_type: "offline", prompt: "consent" },
+      },
+    });
+    if (error) {
+      setGoogleConnecting(false);
+      alert(error.message);
+    }
+  };
+
+  // Check if Google is already linked
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      const identities = user.identities || [];
+      if (identities.some((i: any) => i.provider === "google")) setGoogleConnected(true);
+    });
+  }, []);
+
+  const allDone = integration.status === "locked" && googleConnected;
+  const canContinue = integration.status === "locked";
 
   return (
     <div className="panel" key="integration">
       <div className="panel-header">
         <div className="panel-tag">Step 3 of 6</div>
-        <h1 className="panel-title">Connect Buildium</h1>
-        <p className="panel-desc">Enter your Buildium API credentials. These are stored encrypted and never shown again after locking.</p>
+        <h1 className="panel-title">Connect your services</h1>
+        <p className="panel-desc">Link your property management platform and productivity tools to Helixis.</p>
       </div>
 
-      {integration.status === "locked" ? (
-        <div className="card">
-          <div className="locked-banner">
-            <div className="locked-info">
-              <div className="locked-icon">🔒</div>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--green)" }}>Buildium — Connected & Locked</div>
-                <div style={{ fontSize: 11, color: "var(--text-3)" }}>Key: {integration.keyHint} · Locked {integration.lockedAt}</div>
-              </div>
+      {/* ── Buildium ── */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: integration.status === "locked" ? 0 : 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ fontSize: 20 }}>🏢</div>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>Buildium</div>
+              <div style={{ fontSize: 11, color: "var(--text-3)" }}>Property management platform</div>
             </div>
+          </div>
+          {integration.status === "locked" ? (
             <span className="badge badge-green"><span className="dot pulse" /> Connected</span>
-          </div>
-          <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
-            <button className="btn btn-ghost" style={{ flex: 1, fontSize: 12 }}>📋 View audit log</button>
-            <button className="btn btn-danger">Request change</button>
-          </div>
-          <div style={{ marginTop: 12 }}>
-            <SOC2Note text="Credentials are immutably locked. Any changes require a formal change request, which is logged and reviewed by Helixis staff." />
-          </div>
-        </div>
-      ) : (
-        <div className="card">
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ fontSize: 20 }}>🏢</div>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 600 }}>Buildium</div>
-                <div style={{ fontSize: 11, color: "var(--text-3)" }}>Property management platform</div>
-              </div>
-            </div>
+          ) : (
             <div className="toggle-row">
               <button className={`toggle-opt ${env === "production" ? "active" : ""}`} onClick={() => setEnv("production")}>Production</button>
               <button className={`toggle-opt ${env === "sandbox" ? "active" : ""}`} onClick={() => setEnv("sandbox")}>Sandbox</button>
             </div>
-          </div>
-
-          <div className="field">
-            <label>Buildium Client ID</label>
-            <input
-              className="secret-input"
-              type="password"
-              placeholder="••••••••••••••••••••"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              autoComplete="new-password"
-            />
-          </div>
-
-          <div className="field">
-            <label>Buildium Client Secret</label>
-            <input
-              className="secret-input"
-              type="password"
-              placeholder="••••••••••••••••••••"
-              value={apiSecret}
-              onChange={(e) => setApiSecret(e.target.value)}
-              autoComplete="new-password"
-            />
-            <span className="hint">
-              Find these in Buildium → Settings → API Settings. Keys are write-only and encrypted via AES-256 before storage.
-            </span>
-          </div>
-
-          {integration.status === "testing" && (
-            <div className="test-result" style={{ background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-2)" }}>
-              <span className="spinner accent" /> Testing connection to Buildium API…
-            </div>
-          )}
-
-          {integration.status === "connected" && (
-            <div className="test-result success">
-              <span>✓</span>
-              <span>{integration.testMessage} ({integration.latencyMs}ms) · Last tested {integration.lastTested}</span>
-            </div>
-          )}
-
-          {integration.status === "error" && (
-            <div className="test-result error">
-              <span>⚠</span> {integration.testMessage}
-            </div>
           )}
         </div>
-      )}
 
-      <SOC2Note text="API keys are never logged or stored in plaintext. They're encrypted server-side using Supabase Vault (AES-256-GCM) and only accessible by Helixis Edge Functions." />
+        {integration.status === "locked" ? (
+          <div style={{ marginTop: 12, fontSize: 11, color: "var(--text-3)" }}>
+            Key: {integration.keyHint} · Locked {integration.lockedAt}
+          </div>
+        ) : (
+          <>
+            <div className="field">
+              <label>Client ID</label>
+              <input className="secret-input" type="password" placeholder="••••••••••••••••••••" value={apiKey} onChange={(e) => setApiKey(e.target.value)} autoComplete="new-password" />
+            </div>
+            <div className="field">
+              <label>Client Secret</label>
+              <input className="secret-input" type="password" placeholder="••••••••••••••••••••" value={apiSecret} onChange={(e) => setApiSecret(e.target.value)} autoComplete="new-password" />
+              <span className="hint">Find these in Buildium → Settings → API Settings.</span>
+            </div>
 
-      {integration.status !== "locked" && (
-        <div className="btn-row" style={{ marginTop: 8 }}>
-          <button
-            className="btn btn-secondary"
-            onClick={testConnection}
-            disabled={!apiKey || !apiSecret || integration.status === "testing"}
-          >
-            {integration.status === "testing" ? <><span className="spinner accent" /> Testing…</> : "⚡ Test connection"}
-          </button>
-          <button
-            className="btn btn-primary"
-            style={{ flex: 1, margin: 0 }}
-            onClick={lockIntegration}
-            disabled={integration.status !== "connected" || locking}
-          >
-            {locking ? <><span className="spinner" /> Locking…</> : "🔒 Save & Lock →"}
-          </button>
+            {integration.status === "testing" && (
+              <div className="test-result" style={{ background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-2)" }}>
+                <span className="spinner accent" /> Testing connection to Buildium API…
+              </div>
+            )}
+            {integration.status === "connected" && (
+              <div className="test-result success">
+                <span>✓</span>
+                <span>{integration.testMessage} ({integration.latencyMs}ms) · Last tested {integration.lastTested}</span>
+              </div>
+            )}
+            {integration.status === "error" && (
+              <div className="test-result error">
+                <span>⚠</span> {integration.testMessage}
+              </div>
+            )}
+
+            <div className="btn-row" style={{ marginTop: 8 }}>
+              <button className="btn btn-secondary" onClick={testConnection} disabled={!apiKey || !apiSecret || integration.status === "testing"}>
+                {integration.status === "testing" ? <><span className="spinner accent" /> Testing…</> : "Test connection"}
+              </button>
+              <button className="btn btn-primary" style={{ flex: 1, margin: 0 }} onClick={lockIntegration} disabled={integration.status !== "connected" || locking}>
+                {locking ? <><span className="spinner" /> Locking…</> : "Save & Lock"}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ── Google ── */}
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ fontSize: 20 }}>
+              <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59A14.5 14.5 0 0 1 9.5 24c0-1.59.28-3.14.76-4.59l-7.98-6.19A23.99 23.99 0 0 0 0 24c0 3.77.9 7.35 2.56 10.53l7.97-5.94z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 5.94C6.51 42.62 14.62 48 24 48z"/></svg>
+            </div>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>Google</div>
+              <div style={{ fontSize: 11, color: "var(--text-3)" }}>Gmail, Calendar, Contacts, Drive</div>
+            </div>
+          </div>
+          {googleConnected ? (
+            <span className="badge badge-green"><span className="dot pulse" /> Connected</span>
+          ) : (
+            <button className="btn btn-secondary" style={{ margin: 0, padding: "6px 16px", fontSize: 12 }} onClick={connectGoogle} disabled={googleConnecting}>
+              {googleConnecting ? <><span className="spinner accent" /> Connecting…</> : "Connect"}
+            </button>
+          )}
         </div>
-      )}
+        {googleConnected && (
+          <div style={{ marginTop: 8, fontSize: 11, color: "var(--text-3)" }}>
+            Access to Gmail, Google Calendar, and Contacts is authorized.
+          </div>
+        )}
+      </div>
 
-      {integration.status === "locked" && (
-        <button className="btn btn-primary" onClick={() => onNext(integration)}>
-          Continue →
-        </button>
-      )}
+      {/* ── Microsoft ── */}
+      <div className="card" style={{ marginBottom: 16, opacity: 0.5 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ fontSize: 20 }}>
+              <svg width="20" height="20" viewBox="0 0 23 23"><rect x="1" y="1" width="10" height="10" fill="#f25022"/><rect x="12" y="1" width="10" height="10" fill="#7fba00"/><rect x="1" y="12" width="10" height="10" fill="#00a4ef"/><rect x="12" y="12" width="10" height="10" fill="#ffb900"/></svg>
+            </div>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>Microsoft</div>
+              <div style={{ fontSize: 11, color: "var(--text-3)" }}>Outlook, Calendar, Teams, OneDrive</div>
+            </div>
+          </div>
+          <span style={{ fontSize: 11, color: "var(--text-3)", fontWeight: 500 }}>Coming soon</span>
+        </div>
+      </div>
+
+      <SOC2Note text="OAuth tokens are encrypted at rest. Helixis requests only the minimum scopes needed. You can revoke access at any time from your Google or Microsoft account settings." />
+
+      <button className="btn btn-primary" onClick={() => onNext(integration)} disabled={!canContinue}>
+        {allDone ? "Continue →" : canContinue ? "Continue →" : "Complete Buildium setup to continue"}
+      </button>
     </div>
   );
 }
@@ -1559,7 +1585,7 @@ function StepFinish({ workspace, members }: { workspace: WorkspaceData; members:
 const STEPS: { id: Step; label: string }[] = [
   { id: "workspace", label: "Create workspace" },
   { id: "auth", label: "Owner account" },
-  { id: "integration", label: "Connect Buildium" },
+  { id: "integration", label: "Connect" },
   { id: "webhooks", label: "Webhooks" },
   { id: "team", label: "Invite team" },
   { id: "finish", label: "Launch" },
@@ -1635,23 +1661,37 @@ export default function App() {
     setStep("auth");
   };
 
-  const handleAuth = async (email: string) => {
+  const handleAuth = async (email: string, accessToken: string) => {
     setUserEmail(email);
-    complete("auth");
 
-    // Now that user is authenticated, create workspace in DB
+    // Create workspace using raw fetch with the access token from verifyOtp.
     setCreatingWorkspace(true);
-    const { data, error } = await supabase.functions.invoke("create-workspace", {
-      body: { name: workspace.name, slug: workspace.slug },
-    });
+    let data: { workspace_id?: string; error?: string } | null = null;
+    let error: string | null = null;
+    try {
+      const res = await fetch(`${supabaseUrl}/functions/v1/create-workspace`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+          apikey: supabaseAnonKey,
+        },
+        body: JSON.stringify({ name: workspace.name, slug: workspace.slug }),
+      });
+      data = await res.json();
+      if (!res.ok) error = data?.error || `HTTP ${res.status}`;
+    } catch (e: any) {
+      error = e.message || "Network error";
+    }
     setCreatingWorkspace(false);
 
     if (error || !data?.workspace_id) {
-      alert(data?.error || error?.message || "Failed to create workspace");
+      alert(error || data?.error || "Failed to create workspace");
       return;
     }
 
-    setWorkspace((prev) => ({ ...prev, id: data.workspace_id }));
+    complete("auth");
+    setWorkspace((prev) => ({ ...prev, id: data!.workspace_id }));
     setStep("integration");
   };
 
