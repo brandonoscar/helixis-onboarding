@@ -1093,9 +1093,11 @@ function StepAuth({ onNext }: { onNext: (email: string, accessToken: string) => 
 function StepIntegration({
   workspaceId,
   onNext,
+  onBeforeOAuthRedirect,
 }: {
   workspaceId: string;
   onNext: (state: IntegrationState) => void;
+  onBeforeOAuthRedirect?: () => void;
 }) {
   const [apiKey, setApiKey] = useState("");
   const [apiSecret, setApiSecret] = useState("");
@@ -1148,6 +1150,7 @@ function StepIntegration({
 
   const connectGoogle = async () => {
     setGoogleConnecting(true);
+    onBeforeOAuthRedirect?.();
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
@@ -1626,6 +1629,42 @@ function Sidebar({ current, completed }: { current: Step; completed: Set<Step> }
 // APP ROOT
 // ─────────────────────────────────────────────────────────
 
+const STORAGE_KEY = "helixis_onboarding_state";
+
+function saveOnboardingState(state: {
+  step: Step;
+  completed: Step[];
+  workspace: WorkspaceData;
+  userEmail: string;
+  members: TeamMember[];
+}) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch {}
+}
+
+function loadOnboardingState(): {
+  step: Step;
+  completed: Step[];
+  workspace: WorkspaceData;
+  userEmail: string;
+  members: TeamMember[];
+} | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function clearOnboardingState() {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {}
+}
+
 export default function App() {
   const [step, setStep] = useState<Step>("workspace");
   const [completed, setCompleted] = useState<Set<Step>>(new Set());
@@ -1636,16 +1675,29 @@ export default function App() {
 
   const complete = (s: Step) => setCompleted((prev) => new Set([...prev, s]));
 
-  // Recover existing session on load (e.g., after magic link redirect)
+  // Restore state after OAuth redirect or page reload
   useEffect(() => {
+    const saved = loadOnboardingState();
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
         setUserEmail(session.user.email || "");
         complete("auth");
-        // If still on workspace or auth step, advance past auth
-        setStep((prev) => (prev === "auth" ? "workspace" : prev));
+
+        // Restore saved onboarding state (e.g., after Google OAuth redirect)
+        if (saved && saved.workspace.id) {
+          setWorkspace(saved.workspace);
+          setMembers(saved.members);
+          saved.completed.forEach((s) => complete(s));
+          setStep(saved.step);
+          clearOnboardingState();
+        } else {
+          // Session exists but no saved state — advance past auth if stuck there
+          setStep((prev) => (prev === "auth" ? "workspace" : prev));
+        }
       }
     });
+
     // Listen for auth state changes (magic link callback)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
@@ -1727,7 +1779,15 @@ export default function App() {
               </div>
             </div>
           )}
-          {step === "integration" && <StepIntegration workspaceId={workspace.id!} onNext={handleIntegration} />}
+          {step === "integration" && <StepIntegration workspaceId={workspace.id!} onNext={handleIntegration} onBeforeOAuthRedirect={() => {
+            saveOnboardingState({
+              step: "integration",
+              completed: [...completed],
+              workspace,
+              userEmail,
+              members,
+            });
+          }} />}
           {step === "webhooks" && <StepWebhooks workspaceId={workspace.id!} onNext={handleWebhooks} />}
           {step === "team" && <StepTeam workspaceId={workspace.id!} onNext={handleTeam} />}
           {step === "finish" && <StepFinish workspace={workspace} members={members} />}
