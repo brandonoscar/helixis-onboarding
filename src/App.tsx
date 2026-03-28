@@ -1307,28 +1307,20 @@ function StepIntegration({
 // ─────────────────────────────────────────────────────────
 
 function StepWebhooks({ workspaceId, onNext }: { workspaceId: string; onNext: () => void }) {
-  const [webhook, setWebhook] = useState<WebhookState>({ secretConfirmed: false, secretViewed: false, health: "awaiting" });
-  const [generating, setGenerating] = useState(false);
-  const [confirmed, setConfirmed] = useState(false);
+  const [webhookSecret, setWebhookSecret] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
 
-  const generateSecret = async () => {
-    setGenerating(true);
-    const { data } = await supabase.functions.invoke("rotate-webhook-secret", {
-      body: { workspace_id: workspaceId, provider: "buildium" },
-    });
-    setGenerating(false);
-    setWebhook({
-      endpointUrl: data.endpoint_url,
-      signingSecret: data.signing_secret,
-      secretViewed: true,
-      secretConfirmed: false,
-      health: "awaiting",
-    });
-  };
+  const endpointUrl = `https://hooks.helixis.com/${workspaceId}/buildium`;
 
-  const confirmSaved = () => {
-    setWebhook((w) => ({ ...w, signingSecret: undefined, secretConfirmed: true }));
-    setConfirmed(true);
+  const saveSecret = async () => {
+    if (!webhookSecret.trim()) return;
+    setSaving(true);
+    await supabase.functions.invoke("rotate-webhook-secret", {
+      body: { workspace_id: workspaceId, provider: "buildium", signing_secret: webhookSecret.trim() },
+    });
+    setSaving(false);
+    setSaved(true);
   };
 
   return (
@@ -1336,94 +1328,82 @@ function StepWebhooks({ workspaceId, onNext }: { workspaceId: string; onNext: ()
       <div className="panel-header">
         <div className="panel-tag">Step 4 of 6</div>
         <h1 className="panel-title">Configure webhooks</h1>
-        <p className="panel-desc">Helixis listens for real-time events from Buildium. Add the endpoint URL and signing secret to your Buildium account.</p>
+        <p className="panel-desc">Connect Buildium webhooks so Helixis receives real-time updates when properties, tenants, or leases change.</p>
       </div>
 
-      {!webhook.secretViewed ? (
+      {/* Step 1: Copy endpoint URL */}
+      <div className="card">
+        <div className="card-title">1. Add this URL in Buildium</div>
+        <CopyField label="Go to Buildium → Developer Tools → Webhooks → Create endpoint, and paste this URL" value={endpointUrl} />
+        <div className="hint" style={{ marginTop: 8 }}>This is where Buildium will send event notifications.</div>
+      </div>
+
+      {/* Step 2: Paste Buildium's secret */}
+      {!saved ? (
         <div className="card">
-          <div style={{ textAlign: "center", padding: "20px 0" }}>
-            <div style={{ fontSize: 32, marginBottom: 12 }}>🔗</div>
-            <div style={{ fontSize: 14, color: "var(--text-2)", marginBottom: 20 }}>Generate your webhook endpoint and signing secret.</div>
-            <button className="btn btn-secondary" onClick={generateSecret} disabled={generating} style={{ margin: "0 auto" }}>
-              {generating ? <><span className="spinner accent" /> Generating…</> : "Generate webhook secret"}
-            </button>
+          <div className="card-title">2. Paste Buildium's webhook secret</div>
+          <div style={{ fontSize: 13, color: "var(--text-2)", marginBottom: 12 }}>
+            After creating the endpoint in Buildium, copy the <strong>Secret</strong> it generated and paste it below.
           </div>
+          <div className="field">
+            <label>Webhook Signing Secret</label>
+            <input
+              className="secret-input"
+              type="password"
+              placeholder="Paste Buildium's webhook secret here"
+              value={webhookSecret}
+              onChange={(e) => setWebhookSecret(e.target.value)}
+              autoComplete="new-password"
+            />
+            <span className="hint">Found in Buildium → Developer Tools → Webhooks, next to "Copy secret".</span>
+          </div>
+          <button
+            className="btn btn-secondary"
+            style={{ width: "100%", marginTop: 8 }}
+            onClick={saveSecret}
+            disabled={!webhookSecret.trim() || saving}
+          >
+            {saving ? <><span className="spinner accent" /> Saving…</> : "Save webhook secret"}
+          </button>
         </div>
       ) : (
-        <div>
-          <div className="card">
-            <div className="card-title">Webhook Endpoint URL</div>
-            <CopyField label="Add this URL to Buildium → Settings → Webhooks" value={webhook.endpointUrl || ""} />
-            <div className="hint">This endpoint receives all Buildium events in real-time.</div>
-          </div>
-
-          {webhook.signingSecret && !confirmed ? (
-            <div className="card">
-              <div className="card-title">Signing Secret — Save Now</div>
-              <div className="secret-reveal">
-                <div className="secret-reveal-label">⚠ Shown once only</div>
-                <div className="secret-value">{webhook.signingSecret}</div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button
-                    className="copy-btn"
-                    onClick={() => navigator.clipboard.writeText(webhook.signingSecret!)}
-                    style={{ background: "var(--accent-dim)", border: "1px solid rgba(124,106,247,0.3)", padding: "6px 14px", borderRadius: 6 }}
-                  >
-                    Copy secret
-                  </button>
-                </div>
-                <div style={{ marginTop: 12 }} className="secret-warning">
-                  <span>⚠</span>
-                  <span>This secret will not be shown again. Copy it and store it securely (e.g., your password manager or secrets vault) before confirming.</span>
-                </div>
-              </div>
-
-              <button
-                className="btn btn-secondary"
-                style={{ marginTop: 12, width: "100%" }}
-                onClick={confirmSaved}
-              >
-                ✓ I've saved the signing secret
-              </button>
-            </div>
-          ) : confirmed ? (
-            <div className="card">
-              <div className="locked-banner">
-                <div className="locked-info">
-                  <div className="locked-icon">✓</div>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--green)" }}>Signing secret confirmed</div>
-                    <div style={{ fontSize: 11, color: "var(--text-3)" }}>Secret stored encrypted. Will not be shown again.</div>
-                  </div>
-                </div>
-                <span className="badge badge-green">Secured</span>
-              </div>
-            </div>
-          ) : null}
-
-          <div className="card">
-            <div className="card-title">Webhook Health</div>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div className="card">
+          <div className="locked-banner">
+            <div className="locked-info">
+              <div className="locked-icon">✓</div>
               <div>
-                <span className="badge badge-muted"><span className="dot" style={{ background: "var(--text-3)" }} /> Awaiting first event</span>
-                <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 6 }}>Events will appear here once Buildium starts sending them.</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--green)" }}>Webhook configured</div>
+                <div style={{ fontSize: 11, color: "var(--text-3)" }}>Secret stored encrypted. Helixis will verify all incoming events.</div>
               </div>
-              <button className="btn btn-ghost" style={{ fontSize: 12 }}>Send test event</button>
             </div>
+            <span className="badge badge-green">Secured</span>
           </div>
         </div>
       )}
+
+      {/* Step 3: Select events hint */}
+      <div className="card">
+        <div className="card-title">3. Select events in Buildium</div>
+        <div style={{ fontSize: 13, color: "var(--text-2)", lineHeight: 1.6 }}>
+          In the Buildium webhook creation dialog, expand each category and select the events you want Helixis to receive. We recommend enabling <strong>Rentals</strong>, <strong>Maintenance</strong>, and <strong>Accounting</strong> at minimum.
+        </div>
+      </div>
 
       <SOC2Note text="Webhook signing secrets are stored encrypted and used server-side only to verify event authenticity (HMAC-SHA256). The secret itself is never sent back to the client." />
 
       <button
         className="btn btn-primary"
         onClick={onNext}
-        disabled={webhook.secretViewed && !confirmed}
+        disabled={!saved}
         style={{ marginTop: 8 }}
       >
-        {!webhook.secretViewed ? "Skip for now →" : "Continue →"}
+        Continue →
       </button>
+      {!saved && (
+        <button className="btn btn-ghost" onClick={onNext} style={{ width: "100%", marginTop: 4 }}>
+          Skip for now
+        </button>
+      )}
     </div>
   );
 }
