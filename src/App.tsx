@@ -1105,8 +1105,6 @@ function StepIntegration({
   const [locking, setLocking] = useState(false);
   const [googleConnected, setGoogleConnected] = useState(false);
   const [googleConnecting, setGoogleConnecting] = useState(false);
-  const [microsoftConnected, setMicrosoftConnected] = useState(false);
-  const [microsoftConnecting, setMicrosoftConnecting] = useState(false);
 
   const testConnection = async () => {
     if (!apiKey || !apiSecret) return;
@@ -1164,32 +1162,16 @@ function StepIntegration({
     }
   };
 
-  const connectMicrosoft = async () => {
-    setMicrosoftConnecting(true);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "azure",
-      options: {
-        redirectTo: window.location.origin,
-        scopes: "Mail.Read Calendars.Read Contacts.Read User.Read offline_access",
-      },
-    });
-    if (error) {
-      setMicrosoftConnecting(false);
-      alert(error.message);
-    }
-  };
-
-  // Check if Google/Microsoft are already linked
+  // Check if Google is already linked
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) return;
       const identities = user.identities || [];
       if (identities.some((i: any) => i.provider === "google")) setGoogleConnected(true);
-      if (identities.some((i: any) => i.provider === "azure")) setMicrosoftConnected(true);
     });
   }, []);
 
-  const allDone = integration.status === "locked" && googleConnected && microsoftConnected;
+  const allDone = integration.status === "locked" && googleConnected;
   const canContinue = integration.status === "locked";
 
   return (
@@ -1293,7 +1275,7 @@ function StepIntegration({
       </div>
 
       {/* ── Microsoft ── */}
-      <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card" style={{ marginBottom: 16, opacity: 0.5 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{ fontSize: 20 }}>
@@ -1304,19 +1286,8 @@ function StepIntegration({
               <div style={{ fontSize: 11, color: "var(--text-3)" }}>Outlook, Calendar, Teams, OneDrive</div>
             </div>
           </div>
-          {microsoftConnected ? (
-            <span className="badge badge-green"><span className="dot pulse" /> Connected</span>
-          ) : (
-            <button className="btn btn-secondary" style={{ margin: 0, padding: "6px 16px", fontSize: 12 }} onClick={connectMicrosoft} disabled={microsoftConnecting}>
-              {microsoftConnecting ? <><span className="spinner accent" /> Connecting…</> : "Connect"}
-            </button>
-          )}
+          <span style={{ fontSize: 11, color: "var(--text-3)", fontWeight: 500 }}>Coming soon</span>
         </div>
-        {microsoftConnected && (
-          <div style={{ marginTop: 8, fontSize: 11, color: "var(--text-3)" }}>
-            Access to Outlook, Calendar, Teams, and OneDrive is authorized.
-          </div>
-        )}
       </div>
 
       <SOC2Note text="OAuth tokens are encrypted at rest. Helixis requests only the minimum scopes needed. You can revoke access at any time from your Google or Microsoft account settings." />
