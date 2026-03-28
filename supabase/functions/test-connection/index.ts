@@ -17,18 +17,14 @@ serve(async (req) => {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
 
-    const userClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } }
-    );
+    const token = authHeader.replace("Bearer ", "");
 
     const serviceClient = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { data: { user }, error: authError } = await userClient.auth.getUser();
+    const { data: { user }, error: authError } = await serviceClient.auth.getUser(token);
     if (authError || !user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
 
     const { workspace_id, provider } = await req.json();
@@ -126,15 +122,14 @@ async function testBuildiumConnection(
   environment: string
 ): Promise<{ success: boolean; message: string; latency_ms: number }> {
   const baseUrl = environment === "sandbox"
-    ? "https://api.buildiumpages.com/v1"
+    ? "https://apisandbox.buildium.com/v1"
     : "https://api.buildium.com/v1";
 
   try {
-    // Buildium uses HTTP Basic Auth with clientId:clientSecret
-    const credentials = btoa(`${clientId}:${clientSecret}`);
-    const response = await fetch(`${baseUrl}/properties?pagesize=1`, {
+    const response = await fetch(`${baseUrl}/properties?limit=1`, {
       headers: {
-        Authorization: `Basic ${credentials}`,
+        "x-buildium-client-id": clientId,
+        "x-buildium-client-secret": clientSecret,
         Accept: "application/json",
       },
     });
