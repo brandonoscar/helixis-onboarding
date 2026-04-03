@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { supabase, supabaseUrl, supabaseAnonKey } from "./lib/supabase";
 
 // ─────────────────────────────────────────────────────────
 // TYPES
 // ─────────────────────────────────────────────────────────
 
-type Step = "workspace" | "auth" | "integration" | "webhooks" | "team" | "documents" | "finish";
+type Step = "workspace" | "integration" | "webhooks" | "team" | "documents" | "account" | "finish";
 type Role = "owner" | "manager" | "employee";
 
 interface WorkspaceData {
@@ -14,22 +14,10 @@ interface WorkspaceData {
   id?: string;
 }
 
-interface IntegrationState {
-  status: "idle" | "testing" | "connected" | "error" | "locked";
-  keyHint?: string;
-  lockedAt?: string;
-  lastTested?: string;
-  testMessage?: string;
-  latencyMs?: number;
-}
-
-interface WebhookState {
-  endpointUrl?: string;
-  signingSecret?: string;
-  secretConfirmed: boolean;
-  secretViewed: boolean;
-  health: "awaiting" | "healthy" | "stale";
-  lastReceived?: string;
+interface IntegrationData {
+  apiKey: string;
+  apiSecret: string;
+  environment: "production" | "sandbox";
 }
 
 interface TeamMember {
@@ -38,14 +26,15 @@ interface TeamMember {
   status: "pending" | "sent";
 }
 
-interface UploadedDoc {
-  id: string;
-  fileName: string;
-  fileType: string;
-  fileSize: number;
-  status: "uploading" | "ready" | "pending" | "error";
-  wordCount?: number;
-  errorMessage?: string;
+interface DocumentsData {
+  description: string;
+  files: File[];
+}
+
+interface ProvisioningStep {
+  label: string;
+  status: "pending" | "running" | "done" | "error";
+  message?: string;
 }
 
 // ─────────────────────────────────────────────────────────
@@ -1161,228 +1150,29 @@ function StepWorkspace({ onNext }: { onNext: (data: WorkspaceData) => void }) {
 }
 
 // ─────────────────────────────────────────────────────────
-// STEP 2: AUTH (Magic Link)
-// ─────────────────────────────────────────────────────────
-
-function StepAuth({ onNext }: { onNext: (email: string, accessToken: string) => void }) {
-  const [email, setEmail] = useState("");
-  const [sent, setSent] = useState(false);
-  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-
-  const sendLink = async () => {
-    if (!email.includes("@")) return;
-    setLoading(true);
-    const { error: e } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: window.location.origin },
-    });
-    setLoading(false);
-    if (e) { setError(e.message); return; }
-    setSent(true);
-  };
-
-  const handleOtpChange = (i: number, val: string) => {
-    if (!/^\d*$/.test(val)) return;
-    const next = [...otp];
-    next[i] = val.slice(-1);
-    setOtp(next);
-    if (val && i < 5) {
-      document.getElementById(`otp-${i + 1}`)?.focus();
-    }
-  };
-
-  const verifyOtp = async () => {
-    const code = otp.join("");
-    if (code.length !== 6) return;
-    setLoading(true);
-    setError("");
-    const { data, error: e } = await supabase.auth.verifyOtp({ email, token: code, type: "email" });
-    setLoading(false);
-    if (e || !data.session) { setError("Invalid code. Please try again."); return; }
-    onNext(email, data.session.access_token);
-  };
-
-  return (
-    <div className="panel" key="auth">
-      <div className="panel-header">
-        <div className="panel-tag">Step 2 of 7</div>
-        <h1 className="panel-title">{sent ? "Check your email" : "Create your owner account"}</h1>
-        <p className="panel-desc">
-          {sent
-            ? `We sent a 6-digit code to ${email}. Enter it below to continue.`
-            : "You'll be the workspace Owner with full administrative access."}
-        </p>
-      </div>
-
-      <div className="card">
-        {!sent ? (
-          <div className="field">
-            <label>Work Email</label>
-            <input
-              type="email"
-              placeholder="you@yourcompany.com"
-              value={email}
-              onChange={(e) => { setEmail(e.target.value); setError(""); }}
-              onKeyDown={(e) => e.key === "Enter" && sendLink()}
-              autoFocus
-            />
-            <span className="hint">We'll send a one-time code. No password required.</span>
-            {error && (
-              <div className="test-result error" style={{ marginTop: 8 }}>
-                <span>⚠</span> {error}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div>
-            <div className="otp-row">
-              {otp.map((d, i) => (
-                <input
-                  key={i}
-                  id={`otp-${i}`}
-                  className="otp-box"
-                  maxLength={1}
-                  value={d}
-                  onChange={(e) => handleOtpChange(i, e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Backspace" && !d && i > 0) {
-                      document.getElementById(`otp-${i - 1}`)?.focus();
-                    }
-                  }}
-                  autoFocus={i === 0}
-                />
-              ))}
-            </div>
-            {error && (
-              <div className="test-result error" style={{ marginTop: 0, marginBottom: 12 }}>
-                <span>⚠</span> {error}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      <SOC2Note text="All authentication events are logged for audit purposes. Email-based auth provides a strong security posture with no password storage." />
-
-      {!sent ? (
-        <button className="btn btn-primary" onClick={sendLink} disabled={!email.includes("@") || loading}>
-          {loading ? <><span className="spinner" /> Sending…</> : "Send verification code →"}
-        </button>
-      ) : (
-        <div>
-          <button className="btn btn-primary" onClick={verifyOtp} disabled={otp.join("").length !== 6 || loading}>
-            {loading ? <><span className="spinner" /> Verifying…</> : "Verify & continue →"}
-          </button>
-          <button className="btn btn-ghost" style={{ width: "100%", marginTop: 8 }} onClick={() => setSent(false)}>
-            ← Use different email
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────
-// STEP 3: INTEGRATION SETUP
+// STEP 2: INTEGRATION SETUP (local-only — credentials saved during account creation)
 // ─────────────────────────────────────────────────────────
 
 function StepIntegration({
-  workspaceId,
   onNext,
 }: {
-  workspaceId: string;
-  onNext: (state: IntegrationState) => void;
+  onNext: (data: IntegrationData) => void;
 }) {
   const [apiKey, setApiKey] = useState("");
   const [apiSecret, setApiSecret] = useState("");
   const [env, setEnv] = useState<"production" | "sandbox">("production");
-  const [integration, setIntegration] = useState<IntegrationState>({ status: "idle" });
-  const [integrationId, setIntegrationId] = useState<string | null>(null);
-  const [locking, setLocking] = useState(false);
-  const [googleConnected, setGoogleConnected] = useState(false);
-  const [googleConnecting, setGoogleConnecting] = useState(false);
-
-  const testConnection = async () => {
-    if (!apiKey || !apiSecret) return;
-    setIntegration((s) => ({ ...s, status: "testing" }));
-
-    const { data: saveData } = await supabase.functions.invoke("provision-integration", {
-      body: { workspace_id: workspaceId, provider: "buildium", api_key: apiKey, api_secret: apiSecret, environment: env },
-    });
-
-    if (saveData?.integration_id) {
-      setIntegrationId(saveData.integration_id);
-    }
-
-    const { data: testData } = await supabase.functions.invoke("test-connection", {
-      body: { workspace_id: workspaceId, provider: "buildium" },
-    });
-
-    if (testData?.success) {
-      setIntegration({
-        status: "connected",
-        keyHint: saveData?.key_hint,
-        lastTested: new Date().toLocaleTimeString(),
-        testMessage: testData.message,
-        latencyMs: testData.latency_ms,
-      });
-    } else {
-      setIntegration({ status: "error", testMessage: testData?.message || "Connection failed" });
-    }
-  };
-
-  const lockIntegration = async () => {
-    if (!integrationId) return;
-    setLocking(true);
-    await supabase.functions.invoke("lock-integration", {
-      body: { workspace_id: workspaceId, integration_id: integrationId },
-    });
-    setLocking(false);
-    const locked = { ...integration, status: "locked" as const, lockedAt: new Date().toLocaleString() };
-    setIntegration(locked);
-  };
-
-  const connectGoogle = async () => {
-    setGoogleConnecting(true);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: window.location.origin,
-        scopes: "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/contacts.readonly",
-        queryParams: { access_type: "offline", prompt: "consent" },
-      },
-    });
-    if (error) {
-      setGoogleConnecting(false);
-      alert(error.message);
-    }
-  };
-
-  // Check if Google is already linked
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return;
-      const identities = user.identities || [];
-      if (identities.some((i: any) => i.provider === "google")) setGoogleConnected(true);
-    });
-  }, []);
-
-  const allDone = integration.status === "locked" && googleConnected;
-  const canContinue = integration.status === "locked";
 
   return (
     <div className="panel" key="integration">
       <div className="panel-header">
-        <div className="panel-tag">Step 3 of 7</div>
+        <div className="panel-tag">Step 2 of 7</div>
         <h1 className="panel-title">Connect your services</h1>
-        <p className="panel-desc">Link your property management platform and productivity tools to Helixis.</p>
+        <p className="panel-desc">Enter your Buildium API credentials. They'll be encrypted and tested when you create your account.</p>
       </div>
 
       {/* ── Buildium ── */}
       <div className="card" style={{ marginBottom: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: integration.status === "locked" ? 0 : 16 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div style={{ fontSize: 20 }}>🏢</div>
             <div>
@@ -1390,59 +1180,21 @@ function StepIntegration({
               <div style={{ fontSize: 11, color: "var(--text-3)" }}>Property management platform</div>
             </div>
           </div>
-          {integration.status === "locked" ? (
-            <span className="badge badge-green"><span className="dot pulse" /> Connected</span>
-          ) : (
-            <div className="toggle-row">
-              <button className={`toggle-opt ${env === "production" ? "active" : ""}`} onClick={() => setEnv("production")}>Production</button>
-              <button className={`toggle-opt ${env === "sandbox" ? "active" : ""}`} onClick={() => setEnv("sandbox")}>Sandbox</button>
-            </div>
-          )}
+          <div className="toggle-row">
+            <button className={`toggle-opt ${env === "production" ? "active" : ""}`} onClick={() => setEnv("production")}>Production</button>
+            <button className={`toggle-opt ${env === "sandbox" ? "active" : ""}`} onClick={() => setEnv("sandbox")}>Sandbox</button>
+          </div>
         </div>
 
-        {integration.status === "locked" ? (
-          <div style={{ marginTop: 12, fontSize: 11, color: "var(--text-3)" }}>
-            Key: {integration.keyHint} · Locked {integration.lockedAt}
-          </div>
-        ) : (
-          <>
-            <div className="field">
-              <label>Client ID</label>
-              <input className="secret-input" type="password" placeholder="••••••••••••••••••••" value={apiKey} onChange={(e) => setApiKey(e.target.value)} autoComplete="new-password" />
-            </div>
-            <div className="field">
-              <label>Client Secret</label>
-              <input className="secret-input" type="password" placeholder="••••••••••••••••••••" value={apiSecret} onChange={(e) => setApiSecret(e.target.value)} autoComplete="new-password" />
-              <span className="hint">Find these in Buildium → Settings → API Settings.</span>
-            </div>
-
-            {integration.status === "testing" && (
-              <div className="test-result" style={{ background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-2)" }}>
-                <span className="spinner accent" /> Testing connection to Buildium API…
-              </div>
-            )}
-            {integration.status === "connected" && (
-              <div className="test-result success">
-                <span>✓</span>
-                <span>{integration.testMessage} ({integration.latencyMs}ms) · Last tested {integration.lastTested}</span>
-              </div>
-            )}
-            {integration.status === "error" && (
-              <div className="test-result error">
-                <span>⚠</span> {integration.testMessage}
-              </div>
-            )}
-
-            <div className="btn-row" style={{ marginTop: 8 }}>
-              <button className="btn btn-secondary" onClick={testConnection} disabled={!apiKey || !apiSecret || integration.status === "testing"}>
-                {integration.status === "testing" ? <><span className="spinner accent" /> Testing…</> : "Test connection"}
-              </button>
-              <button className="btn btn-primary" style={{ flex: 1, margin: 0 }} onClick={lockIntegration} disabled={integration.status !== "connected" || locking}>
-                {locking ? <><span className="spinner" /> Locking…</> : "Save & Lock"}
-              </button>
-            </div>
-          </>
-        )}
+        <div className="field">
+          <label>Client ID</label>
+          <input className="secret-input" type="password" placeholder="••••••••••••••••••••" value={apiKey} onChange={(e) => setApiKey(e.target.value)} autoComplete="new-password" />
+        </div>
+        <div className="field">
+          <label>Client Secret</label>
+          <input className="secret-input" type="password" placeholder="••••••••••••••••••••" value={apiSecret} onChange={(e) => setApiSecret(e.target.value)} autoComplete="new-password" />
+          <span className="hint">Find these in Buildium → Settings → API Settings.</span>
+        </div>
       </div>
 
       {/* ── Google ── */}
@@ -1457,19 +1209,11 @@ function StepIntegration({
               <div style={{ fontSize: 11, color: "var(--text-3)" }}>Gmail, Calendar, Contacts, Drive</div>
             </div>
           </div>
-          {googleConnected ? (
-            <span className="badge badge-green"><span className="dot pulse" /> Connected</span>
-          ) : (
-            <button className="btn btn-secondary" style={{ margin: 0, padding: "6px 16px", fontSize: 12 }} onClick={connectGoogle} disabled={googleConnecting}>
-              {googleConnecting ? <><span className="spinner accent" /> Connecting…</> : "Connect"}
-            </button>
-          )}
+          <span className="badge badge-muted">After signup</span>
         </div>
-        {googleConnected && (
-          <div style={{ marginTop: 8, fontSize: 11, color: "var(--text-3)" }}>
-            Access to Gmail, Google Calendar, and Contacts is authorized.
-          </div>
-        )}
+        <div style={{ marginTop: 8, fontSize: 11, color: "var(--text-3)" }}>
+          Google OAuth will be connected after you create your account.
+        </div>
       </div>
 
       {/* ── Microsoft ── */}
@@ -1488,159 +1232,86 @@ function StepIntegration({
         </div>
       </div>
 
-      <SOC2Note text="OAuth tokens are encrypted at rest. Helixis requests only the minimum scopes needed. You can revoke access at any time from your Google or Microsoft account settings." />
+      <SOC2Note text="Your API credentials are never stored in the browser. They'll be encrypted at rest using AES-256-GCM in our vault when you create your account." />
 
-      <button className="btn btn-primary" onClick={() => onNext(integration)} disabled={!canContinue}>
-        {allDone ? "Continue →" : canContinue ? "Continue →" : "Complete Buildium setup to continue"}
+      <button className="btn btn-primary" onClick={() => onNext({ apiKey, apiSecret, environment: env })} disabled={!apiKey || !apiSecret}>
+        Continue →
       </button>
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────
-// STEP 4: WEBHOOKS
+// STEP 3: WEBHOOKS (informational — generated during account creation)
 // ─────────────────────────────────────────────────────────
 
-function StepWebhooks({ workspaceId, onNext }: { workspaceId: string; onNext: () => void }) {
-  const [webhook, setWebhook] = useState<WebhookState>({ secretConfirmed: false, secretViewed: false, health: "awaiting" });
-  const [generating, setGenerating] = useState(false);
-  const [confirmed, setConfirmed] = useState(false);
-
-  const generateSecret = async () => {
-    setGenerating(true);
-    const { data } = await supabase.functions.invoke("rotate-webhook-secret", {
-      body: { workspace_id: workspaceId, provider: "buildium" },
-    });
-    setGenerating(false);
-    setWebhook({
-      endpointUrl: data.endpoint_url,
-      signingSecret: data.signing_secret,
-      secretViewed: true,
-      secretConfirmed: false,
-      health: "awaiting",
-    });
-  };
-
-  const confirmSaved = () => {
-    setWebhook((w) => ({ ...w, signingSecret: undefined, secretConfirmed: true }));
-    setConfirmed(true);
-  };
-
+function StepWebhooks({ onNext }: { onNext: () => void }) {
   return (
     <div className="panel" key="webhooks">
       <div className="panel-header">
-        <div className="panel-tag">Step 4 of 7</div>
-        <h1 className="panel-title">Configure webhooks</h1>
-        <p className="panel-desc">Helixis listens for real-time events from Buildium. Add the endpoint URL and signing secret to your Buildium account.</p>
+        <div className="panel-tag">Step 3 of 7</div>
+        <h1 className="panel-title">Webhooks</h1>
+        <p className="panel-desc">Helixis listens for real-time events from Buildium. Your webhook endpoint and signing secret will be generated when you create your account.</p>
       </div>
 
-      {!webhook.secretViewed ? (
-        <div className="card">
-          <div style={{ textAlign: "center", padding: "20px 0" }}>
-            <div style={{ fontSize: 32, marginBottom: 12 }}>🔗</div>
-            <div style={{ fontSize: 14, color: "var(--text-2)", marginBottom: 20 }}>Generate your webhook endpoint and signing secret.</div>
-            <button className="btn btn-secondary" onClick={generateSecret} disabled={generating} style={{ margin: "0 auto" }}>
-              {generating ? <><span className="spinner accent" /> Generating…</> : "Generate webhook secret"}
-            </button>
+      <div className="card">
+        <div style={{ textAlign: "center", padding: "20px 0" }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>🔗</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text)", marginBottom: 8 }}>How webhooks work</div>
+          <div style={{ fontSize: 13, color: "var(--text-2)", lineHeight: 1.6, maxWidth: 380, margin: "0 auto" }}>
+            When you create your account, Helixis will generate a secure webhook endpoint and a signing secret. You'll add these to your Buildium settings so Helixis receives real-time property events.
           </div>
         </div>
-      ) : (
-        <div>
-          <div className="card">
-            <div className="card-title">Webhook Endpoint URL</div>
-            <CopyField label="Add this URL to Buildium → Settings → Webhooks" value={webhook.endpointUrl || ""} />
-            <div className="hint">This endpoint receives all Buildium events in real-time.</div>
+      </div>
+
+      <div className="card">
+        <div className="card-title">What gets configured</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 28, height: 28, borderRadius: 8, background: "var(--accent-dim)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, flexShrink: 0 }}>1</div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text)" }}>Webhook endpoint URL</div>
+              <div style={{ fontSize: 11, color: "var(--text-3)" }}>A unique HTTPS endpoint for your workspace</div>
+            </div>
           </div>
-
-          {webhook.signingSecret && !confirmed ? (
-            <div className="card">
-              <div className="card-title">Signing Secret — Save Now</div>
-              <div className="secret-reveal">
-                <div className="secret-reveal-label">⚠ Shown once only</div>
-                <div className="secret-value">{webhook.signingSecret}</div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button
-                    className="copy-btn"
-                    onClick={() => navigator.clipboard.writeText(webhook.signingSecret!)}
-                    style={{ background: "var(--accent-dim)", border: "1px solid rgba(124,106,247,0.3)", padding: "6px 14px", borderRadius: 6 }}
-                  >
-                    Copy secret
-                  </button>
-                </div>
-                <div style={{ marginTop: 12 }} className="secret-warning">
-                  <span>⚠</span>
-                  <span>This secret will not be shown again. Copy it and store it securely (e.g., your password manager or secrets vault) before confirming.</span>
-                </div>
-              </div>
-
-              <button
-                className="btn btn-secondary"
-                style={{ marginTop: 12, width: "100%" }}
-                onClick={confirmSaved}
-              >
-                ✓ I've saved the signing secret
-              </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 28, height: 28, borderRadius: 8, background: "var(--accent-dim)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, flexShrink: 0 }}>2</div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text)" }}>Signing secret</div>
+              <div style={{ fontSize: 11, color: "var(--text-3)" }}>HMAC-SHA256 key to verify event authenticity</div>
             </div>
-          ) : confirmed ? (
-            <div className="card">
-              <div className="locked-banner">
-                <div className="locked-info">
-                  <div className="locked-icon">✓</div>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--green)" }}>Signing secret confirmed</div>
-                    <div style={{ fontSize: 11, color: "var(--text-3)" }}>Secret stored encrypted. Will not be shown again.</div>
-                  </div>
-                </div>
-                <span className="badge badge-green">Secured</span>
-              </div>
-            </div>
-          ) : null}
-
-          <div className="card">
-            <div className="card-title">Webhook Health</div>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div>
-                <span className="badge badge-muted"><span className="dot" style={{ background: "var(--text-3)" }} /> Awaiting first event</span>
-                <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 6 }}>Events will appear here once Buildium starts sending them.</div>
-              </div>
-              <button className="btn btn-ghost" style={{ fontSize: 12 }}>Send test event</button>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 28, height: 28, borderRadius: 8, background: "var(--accent-dim)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, flexShrink: 0 }}>3</div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text)" }}>Real-time events</div>
+              <div style={{ fontSize: 11, color: "var(--text-3)" }}>Tenant activity, maintenance, leases, and more</div>
             </div>
           </div>
         </div>
-      )}
+      </div>
 
-      <SOC2Note text="Webhook signing secrets are stored encrypted and used server-side only to verify event authenticity (HMAC-SHA256). The secret itself is never sent back to the client." />
+      <SOC2Note text="Webhook signing secrets are stored encrypted and used server-side only. The secret is shown once during setup — save it securely." />
 
-      <button
-        className="btn btn-primary"
-        onClick={onNext}
-        disabled={webhook.secretViewed && !confirmed}
-        style={{ marginTop: 8 }}
-      >
-        {!webhook.secretViewed ? "Skip for now →" : "Continue →"}
+      <button className="btn btn-primary" onClick={onNext} style={{ marginTop: 8 }}>
+        Continue →
       </button>
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────
-// STEP 5: TEAM
+// STEP 4: TEAM (local-only — invitations sent during account creation)
 // ─────────────────────────────────────────────────────────
 
-function StepTeam({ workspaceId, onNext }: { workspaceId: string; onNext: (members: TeamMember[]) => void }) {
+function StepTeam({ onNext }: { onNext: (members: TeamMember[]) => void }) {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<Role>("employee");
   const [members, setMembers] = useState<TeamMember[]>([]);
-  const [sending, setSending] = useState(false);
 
-  const addMember = async () => {
+  const addMember = () => {
     if (!email.includes("@") || members.find((m) => m.email === email)) return;
-    setSending(true);
-    await supabase.functions.invoke("invite-member", {
-      body: { workspace_id: workspaceId, email, role },
-    });
-    setSending(false);
-    setMembers((m) => [...m, { email, role, status: "sent" }]);
+    setMembers((m) => [...m, { email, role, status: "pending" }]);
     setEmail("");
   };
 
@@ -1653,9 +1324,9 @@ function StepTeam({ workspaceId, onNext }: { workspaceId: string; onNext: (membe
   return (
     <div className="panel" key="team">
       <div className="panel-header">
-        <div className="panel-tag">Step 5 of 7</div>
+        <div className="panel-tag">Step 4 of 7</div>
         <h1 className="panel-title">Invite your team</h1>
-        <p className="panel-desc">Add teammates now or skip and do it later from Settings. Employees won't see integration screens.</p>
+        <p className="panel-desc">Add teammates now or skip and do it later from Settings. Invitations will be sent when you create your account.</p>
       </div>
 
       <div className="card">
@@ -1683,10 +1354,10 @@ function StepTeam({ workspaceId, onNext }: { workspaceId: string; onNext: (membe
         <button
           className="btn btn-secondary"
           onClick={addMember}
-          disabled={!email.includes("@") || sending}
+          disabled={!email.includes("@")}
           style={{ width: "100%" }}
         >
-          {sending ? <><span className="spinner accent" /> Sending invite…</> : "+ Add team member"}
+          + Add team member
         </button>
       </div>
 
@@ -1698,7 +1369,7 @@ function StepTeam({ workspaceId, onNext }: { workspaceId: string; onNext: (membe
               <div className="member-avatar">{m.email[0]}</div>
               <div className="member-info">
                 <div className="member-email">{m.email}</div>
-                <div className="member-status">Invite sent</div>
+                <div className="member-status">Will be invited</div>
               </div>
               <span className={`badge ${m.role === "owner" ? "badge-purple" : m.role === "manager" ? "badge-yellow" : "badge-muted"}`}>
                 {m.role}
@@ -1753,16 +1424,13 @@ function getDocIcon(type: string): string {
 }
 
 function StepDocuments({
-  workspaceId,
   onNext,
 }: {
-  workspaceId: string;
-  onNext: (docCount: number) => void;
+  onNext: (data: DocumentsData) => void;
 }) {
   const [description, setDescription] = useState("");
-  const [files, setFiles] = useState<UploadedDoc[]>([]);
+  const [files, setFiles] = useState<File[]>([]);
   const [dragOver, setDragOver] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   const wordCount = description
@@ -1784,7 +1452,7 @@ function StepDocuments({
   }, []);
 
   const validateAndAddFiles = useCallback(
-    async (fileList: FileList | File[]) => {
+    (fileList: FileList | File[]) => {
       const newFiles = Array.from(fileList);
       setError("");
 
@@ -1801,78 +1469,15 @@ function StepDocuments({
           continue;
         }
 
-        if (files.some((f) => f.fileName === file.name)) {
+        if (files.some((f) => f.name === file.name)) {
           setError(`"${file.name}" has already been added.`);
           continue;
         }
 
-        const tempId = crypto.randomUUID();
-        const uploadDoc: UploadedDoc = {
-          id: tempId,
-          fileName: file.name,
-          fileType: file.type,
-          fileSize: file.size,
-          status: "uploading",
-        };
-        setFiles((prev) => [...prev, uploadDoc]);
-
-        // Upload via edge function
-        const formData = new FormData();
-        formData.append("workspace_id", workspaceId);
-        formData.append("file", file);
-
-        try {
-          const session = await supabase.auth.getSession();
-          const token = session.data.session?.access_token;
-
-          const res = await fetch(
-            `${supabaseUrl}/functions/v1/upload-document`,
-            {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${token}`,
-                apikey: supabaseAnonKey,
-              },
-              body: formData,
-            }
-          );
-
-          const data = await res.json();
-
-          if (!res.ok) {
-            setFiles((prev) =>
-              prev.map((f) =>
-                f.id === tempId
-                  ? { ...f, status: "error", errorMessage: data.error }
-                  : f
-              )
-            );
-          } else {
-            setFiles((prev) =>
-              prev.map((f) =>
-                f.id === tempId
-                  ? {
-                      ...f,
-                      id: data.document_id || tempId,
-                      status: data.status || "ready",
-                      wordCount: data.word_count,
-                    }
-                  : f
-              )
-            );
-          }
-        } catch {
-          setFiles((prev) =>
-            prev.map((f) =>
-              f.id === tempId
-                ? { ...f, status: "error", errorMessage: "Upload failed" }
-                : f
-            )
-          );
-        }
+        setFiles((prev) => [...prev, file]);
       }
     },
-    [files, workspaceId]
+    [files]
   );
 
   const handleDrop = useCallback(
@@ -1897,47 +1502,22 @@ function StepDocuments({
     [validateAndAddFiles]
   );
 
-  const removeFile = (id: string) => {
-    setFiles((prev) => prev.filter((f) => f.id !== id));
+  const removeFile = (name: string) => {
+    setFiles((prev) => prev.filter((f) => f.name !== name));
   };
 
-  const handleSaveAndContinue = async () => {
+  const handleContinue = () => {
     if (!wordsMet) {
       setError("Please write at least 100 words describing your business.");
       return;
     }
-
-    setSaving(true);
-    setError("");
-
-    try {
-      const { data, error: fnError } = await supabase.functions.invoke(
-        "upload-document",
-        {
-          body: { workspace_id: workspaceId, description },
-        }
-      );
-
-      if (fnError || !data?.success) {
-        setError(data?.error || fnError?.message || "Failed to save business context");
-        setSaving(false);
-        return;
-      }
-
-      setSaving(false);
-      onNext(files.filter((f) => f.status !== "error").length);
-    } catch {
-      setError("Failed to save. Please try again.");
-      setSaving(false);
-    }
+    onNext({ description, files });
   };
-
-  const uploadingCount = files.filter((f) => f.status === "uploading").length;
 
   return (
     <div className="panel" key="documents">
       <div className="panel-header">
-        <div className="panel-tag">Step 6 of 7</div>
+        <div className="panel-tag">Step 5 of 7</div>
         <h1 className="panel-title">Teach Helixis your business</h1>
         <p className="panel-desc">
           Upload your SOPs, process documents, and describe how your business operates.
@@ -2011,36 +1591,24 @@ function StepDocuments({
         {files.length > 0 && (
           <div className="file-list">
             {files.map((f) => (
-              <div className="file-item" key={f.id}>
-                <div className="file-icon">{getDocIcon(f.fileType)}</div>
+              <div className="file-item" key={f.name}>
+                <div className="file-icon">{getDocIcon(f.type)}</div>
                 <div className="file-info">
-                  <div className="file-name">{f.fileName}</div>
+                  <div className="file-name">{f.name}</div>
                   <div className="file-meta">
-                    {formatFileSize(f.fileSize)}
-                    {f.status === "uploading" && " — Uploading..."}
-                    {f.status === "ready" && " — Ready"}
-                    {f.status === "pending" && " — Processing..."}
-                    {f.status === "error" && (
-                      <span style={{ color: "var(--red)" }}>
-                        {" "}— {f.errorMessage || "Error"}
-                      </span>
-                    )}
+                    {formatFileSize(f.size)} — Ready to upload
                   </div>
                 </div>
-                {f.status === "uploading" ? (
-                  <span className="spinner accent" />
-                ) : (
-                  <button
-                    className="file-remove"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      removeFile(f.id);
-                    }}
-                    title="Remove file"
-                  >
-                    {"\u2715"}
-                  </button>
-                )}
+                <button
+                  className="file-remove"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeFile(f.name);
+                  }}
+                  title="Remove file"
+                >
+                  {"\u2715"}
+                </button>
               </div>
             ))}
           </div>
@@ -2058,25 +1626,329 @@ function StepDocuments({
         </div>
       )}
 
-      <SOC2Note text="Your documents are encrypted at rest in Supabase Storage. Content is processed server-side and stored as secure AI context — never shared externally." />
+      <SOC2Note text="Your documents will be encrypted at rest in Supabase Storage when you create your account. Content is processed server-side and stored as secure AI context — never shared externally." />
 
       <button
         className="btn btn-primary"
-        onClick={handleSaveAndContinue}
-        disabled={!wordsMet || saving || uploadingCount > 0}
+        onClick={handleContinue}
+        disabled={!wordsMet}
       >
-        {saving ? (
-          <>
-            <span className="spinner" /> Saving business context…
-          </>
-        ) : uploadingCount > 0 ? (
-          <>
-            <span className="spinner" /> Uploading {uploadingCount} file
-            {uploadingCount > 1 ? "s" : ""}…
-          </>
-        ) : (
-          "Save & Continue \u2192"
+        Continue {"\u2192"}
+      </button>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────
+// STEP 6: CREATE ACCOUNT (password auth + provisioning)
+// ─────────────────────────────────────────────────────────
+
+function StepCreateAccount({
+  workspace,
+  integration,
+  members,
+  documents,
+  onNext,
+}: {
+  workspace: WorkspaceData;
+  integration: IntegrationData;
+  members: TeamMember[];
+  documents: DocumentsData;
+  onNext: (workspaceId: string) => void;
+}) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
+  const [provisioning, setProvisioning] = useState(false);
+  const [steps, setSteps] = useState<ProvisioningStep[]>([]);
+
+  const passwordValid = password.length >= 8;
+  const passwordsMatch = password === confirmPassword;
+  const canSubmit = email.includes("@") && passwordValid && passwordsMatch;
+
+  const updateStep = (index: number, update: Partial<ProvisioningStep>) => {
+    setSteps((prev) => prev.map((s, i) => (i === index ? { ...s, ...update } : s)));
+  };
+
+  const handleCreateAccount = async () => {
+    if (!canSubmit) return;
+    setError("");
+    setProvisioning(true);
+
+    const provSteps: ProvisioningStep[] = [
+      { label: "Creating your account", status: "pending" },
+      { label: "Setting up workspace", status: "pending" },
+      { label: "Encrypting API credentials", status: "pending" },
+      { label: "Testing Buildium connection", status: "pending" },
+      { label: "Generating webhook secret", status: "pending" },
+      ...(members.length > 0 ? [{ label: `Sending ${members.length} team invite${members.length > 1 ? "s" : ""}`, status: "pending" as const }] : []),
+      { label: "Uploading business context", status: "pending" },
+      ...(documents.files.length > 0 ? [{ label: `Uploading ${documents.files.length} document${documents.files.length > 1 ? "s" : ""}`, status: "pending" as const }] : []),
+    ];
+    setSteps(provSteps);
+
+    let stepIdx = 0;
+    let accessToken = "";
+    let workspaceId = "";
+
+    try {
+      // 1. Create account
+      updateStep(stepIdx, { status: "running" });
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+      });
+      if (signUpError) throw new Error(signUpError.message);
+      if (!signUpData.session) throw new Error("Account created but email confirmation may be required. Check your inbox.");
+      accessToken = signUpData.session.access_token;
+      updateStep(stepIdx, { status: "done" });
+      stepIdx++;
+
+      // 2. Create workspace
+      updateStep(stepIdx, { status: "running" });
+      const wsRes = await fetch(`${supabaseUrl}/functions/v1/create-workspace`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}`, apikey: supabaseAnonKey },
+        body: JSON.stringify({ name: workspace.name, slug: workspace.slug }),
+      });
+      const wsData = await wsRes.json();
+      if (!wsRes.ok) throw new Error(wsData.error || "Failed to create workspace");
+      workspaceId = wsData.workspace_id;
+      updateStep(stepIdx, { status: "done" });
+      stepIdx++;
+
+      // 3. Provision integration (encrypt API keys)
+      updateStep(stepIdx, { status: "running" });
+      const provRes = await fetch(`${supabaseUrl}/functions/v1/provision-integration`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}`, apikey: supabaseAnonKey },
+        body: JSON.stringify({
+          workspace_id: workspaceId,
+          provider: "buildium",
+          api_key: integration.apiKey,
+          api_secret: integration.apiSecret,
+          environment: integration.environment,
+        }),
+      });
+      const provData = await provRes.json();
+      if (!provRes.ok) throw new Error(provData.error || "Failed to provision integration");
+      updateStep(stepIdx, { status: "done" });
+      stepIdx++;
+
+      // 4. Test connection
+      updateStep(stepIdx, { status: "running" });
+      const testRes = await fetch(`${supabaseUrl}/functions/v1/test-connection`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}`, apikey: supabaseAnonKey },
+        body: JSON.stringify({ workspace_id: workspaceId, provider: "buildium" }),
+      });
+      const testData = await testRes.json();
+      if (testData?.success) {
+        updateStep(stepIdx, { status: "done", message: `Connected (${testData.latency_ms}ms)` });
+        // Auto-lock on success
+        if (provData?.integration_id) {
+          await fetch(`${supabaseUrl}/functions/v1/lock-integration`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}`, apikey: supabaseAnonKey },
+            body: JSON.stringify({ workspace_id: workspaceId, integration_id: provData.integration_id }),
+          });
+        }
+      } else {
+        updateStep(stepIdx, { status: "done", message: "Saved — test manually from dashboard" });
+      }
+      stepIdx++;
+
+      // 5. Generate webhook secret
+      updateStep(stepIdx, { status: "running" });
+      const whRes = await fetch(`${supabaseUrl}/functions/v1/rotate-webhook-secret`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}`, apikey: supabaseAnonKey },
+        body: JSON.stringify({ workspace_id: workspaceId, provider: "buildium" }),
+      });
+      await whRes.json();
+      updateStep(stepIdx, { status: "done" });
+      stepIdx++;
+
+      // 6. Send team invites (if any)
+      if (members.length > 0) {
+        updateStep(stepIdx, { status: "running" });
+        for (const m of members) {
+          await fetch(`${supabaseUrl}/functions/v1/invite-member`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}`, apikey: supabaseAnonKey },
+            body: JSON.stringify({ workspace_id: workspaceId, email: m.email, role: m.role }),
+          });
+        }
+        updateStep(stepIdx, { status: "done" });
+        stepIdx++;
+      }
+
+      // 7. Upload business context
+      updateStep(stepIdx, { status: "running" });
+      await fetch(`${supabaseUrl}/functions/v1/upload-document`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}`, apikey: supabaseAnonKey },
+        body: JSON.stringify({ workspace_id: workspaceId, description: documents.description }),
+      });
+      updateStep(stepIdx, { status: "done" });
+      stepIdx++;
+
+      // 8. Upload document files (if any)
+      if (documents.files.length > 0) {
+        updateStep(stepIdx, { status: "running" });
+        for (const file of documents.files) {
+          const formData = new FormData();
+          formData.append("workspace_id", workspaceId);
+          formData.append("file", file);
+          await fetch(`${supabaseUrl}/functions/v1/upload-document`, {
+            method: "POST",
+            headers: { Authorization: `Bearer ${accessToken}`, apikey: supabaseAnonKey },
+            body: formData,
+          });
+        }
+        updateStep(stepIdx, { status: "done" });
+        stepIdx++;
+      }
+
+      // Done!
+      setTimeout(() => onNext(workspaceId), 800);
+    } catch (err: any) {
+      setError(err.message || "Something went wrong. Please try again.");
+      // Mark current step as error
+      setSteps((prev) => prev.map((s, i) => (i === stepIdx ? { ...s, status: "error" } : s)));
+      setProvisioning(false);
+    }
+  };
+
+  if (provisioning) {
+    return (
+      <div className="panel" key="account-provisioning">
+        <div className="panel-header">
+          <div className="panel-tag">Step 6 of 7</div>
+          <h1 className="panel-title">Setting up {workspace.name}</h1>
+          <p className="panel-desc">Creating your account and configuring your workspace. This only takes a moment.</p>
+        </div>
+
+        <div className="card">
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {steps.map((s, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0" }}>
+                <div style={{ width: 24, height: 24, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, flexShrink: 0,
+                  ...(s.status === "done" ? { background: "var(--green-dim)", color: "var(--green)" } :
+                      s.status === "running" ? { background: "var(--accent-dim)", color: "var(--accent)" } :
+                      s.status === "error" ? { background: "var(--red-dim)", color: "var(--red)" } :
+                      { background: "var(--surface-3)", color: "var(--text-3)" })
+                }}>
+                  {s.status === "done" ? "\u2713" : s.status === "running" ? <span className="spinner accent" style={{ width: 12, height: 12, borderWidth: 1.5 }} /> : s.status === "error" ? "\u2715" : (i + 1)}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: s.status === "done" ? "var(--text-2)" : s.status === "running" ? "var(--text)" : s.status === "error" ? "var(--red)" : "var(--text-3)" }}>
+                    {s.label}
+                  </div>
+                  {s.message && <div style={{ fontSize: 11, color: "var(--text-3)" }}>{s.message}</div>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {error && (
+          <div className="test-result error" style={{ marginTop: 8 }}>
+            <span>{"\u26A0"}</span> {error}
+          </div>
         )}
+        {error && (
+          <button className="btn btn-primary" onClick={handleCreateAccount} style={{ marginTop: 8 }}>
+            Retry →
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="panel" key="account">
+      <div className="panel-header">
+        <div className="panel-tag">Step 6 of 7</div>
+        <h1 className="panel-title">Create your account</h1>
+        <p className="panel-desc">Set up your owner account to finalize your workspace. Your password secures access to {workspace.name}.</p>
+      </div>
+
+      <div className="card">
+        <div className="field">
+          <label>Work Email</label>
+          <input
+            type="email"
+            placeholder="you@yourcompany.com"
+            value={email}
+            onChange={(e) => { setEmail(e.target.value); setError(""); }}
+            autoFocus
+          />
+        </div>
+
+        <div className="field">
+          <label>Password</label>
+          <input
+            type="password"
+            placeholder="Minimum 8 characters"
+            value={password}
+            onChange={(e) => { setPassword(e.target.value); setError(""); }}
+            autoComplete="new-password"
+          />
+          {password && !passwordValid && (
+            <span className="hint" style={{ color: "var(--yellow)" }}>Password must be at least 8 characters</span>
+          )}
+        </div>
+
+        <div className="field">
+          <label>Confirm Password</label>
+          <input
+            type="password"
+            placeholder="Re-enter your password"
+            value={confirmPassword}
+            onChange={(e) => { setConfirmPassword(e.target.value); setError(""); }}
+            autoComplete="new-password"
+          />
+          {confirmPassword && !passwordsMatch && (
+            <span className="hint" style={{ color: "var(--red)" }}>Passwords don't match</span>
+          )}
+        </div>
+      </div>
+
+      {error && (
+        <div className="test-result error" style={{ marginTop: 0, marginBottom: 8 }}>
+          <span>{"\u26A0"}</span> {error}
+        </div>
+      )}
+
+      <div className="card" style={{ background: "var(--surface-2)", border: "1px solid var(--border)" }}>
+        <div className="card-title" style={{ marginBottom: 12 }}>What happens next</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8, fontSize: 12, color: "var(--text-2)" }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <span style={{ color: "var(--accent)" }}>{"\u2713"}</span> Create {workspace.name} workspace
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <span style={{ color: "var(--accent)" }}>{"\u2713"}</span> Encrypt & test Buildium API connection
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <span style={{ color: "var(--accent)" }}>{"\u2713"}</span> Generate webhook endpoint & signing secret
+          </div>
+          {members.length > 0 && (
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <span style={{ color: "var(--accent)" }}>{"\u2713"}</span> Send {members.length} team invitation{members.length > 1 ? "s" : ""}
+            </div>
+          )}
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <span style={{ color: "var(--accent)" }}>{"\u2713"}</span> Upload business context & documents for AI memory
+          </div>
+        </div>
+      </div>
+
+      <SOC2Note text="Your password is hashed with bcrypt and never stored in plaintext. All workspace data is encrypted at rest." />
+
+      <button className="btn btn-primary" onClick={handleCreateAccount} disabled={!canSubmit}>
+        Create account & launch →
       </button>
     </div>
   );
@@ -2145,11 +2017,11 @@ function StepFinish({ workspace, members, docCount }: { workspace: WorkspaceData
 
 const STEPS: { id: Step; label: string }[] = [
   { id: "workspace", label: "Create workspace" },
-  { id: "auth", label: "Owner account" },
   { id: "integration", label: "Connect" },
   { id: "webhooks", label: "Webhooks" },
   { id: "team", label: "Invite team" },
   { id: "documents", label: "Business context" },
+  { id: "account", label: "Create account" },
   { id: "finish", label: "Launch" },
 ];
 
@@ -2192,73 +2064,20 @@ export default function App() {
   const [step, setStep] = useState<Step>("workspace");
   const [completed, setCompleted] = useState<Set<Step>>(new Set());
   const [workspace, setWorkspace] = useState<WorkspaceData>({ name: "", slug: "" });
-  const [userEmail, setUserEmail] = useState("");
+  const [integration, setIntegration] = useState<IntegrationData>({ apiKey: "", apiSecret: "", environment: "production" });
   const [members, setMembers] = useState<TeamMember[]>([]);
-  const [docCount, setDocCount] = useState(0);
-  const [creatingWorkspace, setCreatingWorkspace] = useState(false);
+  const [documents, setDocuments] = useState<DocumentsData>({ description: "", files: [] });
 
   const complete = (s: Step) => setCompleted((prev) => new Set([...prev, s]));
-
-  // Recover existing session on load (e.g., after magic link redirect)
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setUserEmail(session.user.email || "");
-        complete("auth");
-        // If still on workspace or auth step, advance past auth
-        setStep((prev) => (prev === "auth" ? "workspace" : prev));
-      }
-    });
-    // Listen for auth state changes (magic link callback)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        setUserEmail(session.user.email || "");
-      }
-    });
-    return () => subscription.unsubscribe();
-  }, []);
 
   const handleWorkspace = (data: WorkspaceData) => {
     setWorkspace(data);
     complete("workspace");
-    setStep("auth");
-  };
-
-  const handleAuth = async (email: string, accessToken: string) => {
-    setUserEmail(email);
-
-    // Create workspace using raw fetch with the access token from verifyOtp.
-    setCreatingWorkspace(true);
-    let data: { workspace_id?: string; error?: string } | null = null;
-    let error: string | null = null;
-    try {
-      const res = await fetch(`${supabaseUrl}/functions/v1/create-workspace`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-          apikey: supabaseAnonKey,
-        },
-        body: JSON.stringify({ name: workspace.name, slug: workspace.slug }),
-      });
-      data = await res.json();
-      if (!res.ok) error = data?.error || `HTTP ${res.status}`;
-    } catch (e: any) {
-      error = e.message || "Network error";
-    }
-    setCreatingWorkspace(false);
-
-    if (error || !data?.workspace_id) {
-      alert(error || data?.error || "Failed to create workspace");
-      return;
-    }
-
-    complete("auth");
-    setWorkspace((prev) => ({ ...prev, id: data!.workspace_id }));
     setStep("integration");
   };
 
-  const handleIntegration = (state: IntegrationState) => {
+  const handleIntegration = (data: IntegrationData) => {
+    setIntegration(data);
     complete("integration");
     setStep("webhooks");
   };
@@ -2274,9 +2093,15 @@ export default function App() {
     setStep("documents");
   };
 
-  const handleDocuments = (count: number) => {
-    setDocCount(count);
+  const handleDocuments = (data: DocumentsData) => {
+    setDocuments(data);
     complete("documents");
+    setStep("account");
+  };
+
+  const handleAccount = (workspaceId: string) => {
+    setWorkspace((prev) => ({ ...prev, id: workspaceId }));
+    complete("account");
     setStep("finish");
   };
 
@@ -2287,20 +2112,20 @@ export default function App() {
         <Sidebar current={step} completed={completed} />
         <div className="main">
           {step === "workspace" && <StepWorkspace onNext={handleWorkspace} />}
-          {step === "auth" && !creatingWorkspace && <StepAuth onNext={handleAuth} />}
-          {creatingWorkspace && (
-            <div className="panel">
-              <div className="panel-header">
-                <h1 className="panel-title"><span className="spinner" /> Setting up your workspace…</h1>
-                <p className="panel-desc">Creating {workspace.name} and configuring access controls.</p>
-              </div>
-            </div>
+          {step === "integration" && <StepIntegration onNext={handleIntegration} />}
+          {step === "webhooks" && <StepWebhooks onNext={handleWebhooks} />}
+          {step === "team" && <StepTeam onNext={handleTeam} />}
+          {step === "documents" && <StepDocuments onNext={handleDocuments} />}
+          {step === "account" && (
+            <StepCreateAccount
+              workspace={workspace}
+              integration={integration}
+              members={members}
+              documents={documents}
+              onNext={handleAccount}
+            />
           )}
-          {step === "integration" && <StepIntegration workspaceId={workspace.id!} onNext={handleIntegration} />}
-          {step === "webhooks" && <StepWebhooks workspaceId={workspace.id!} onNext={handleWebhooks} />}
-          {step === "team" && <StepTeam workspaceId={workspace.id!} onNext={handleTeam} />}
-          {step === "documents" && <StepDocuments workspaceId={workspace.id!} onNext={handleDocuments} />}
-          {step === "finish" && <StepFinish workspace={workspace} members={members} docCount={docCount} />}
+          {step === "finish" && <StepFinish workspace={workspace} members={members} docCount={documents.files.length} />}
         </div>
       </div>
     </>
