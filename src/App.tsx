@@ -5,7 +5,7 @@ import { supabase, supabaseUrl, supabaseAnonKey } from "./lib/supabase";
 // TYPES
 // ─────────────────────────────────────────────────────────
 
-type Step = "workspace" | "auth" | "integration" | "webhooks" | "team" | "finish";
+type Step = "workspace" | "auth" | "integration" | "webhooks" | "team" | "documents" | "finish";
 type Role = "owner" | "manager" | "employee";
 
 interface WorkspaceData {
@@ -36,6 +36,16 @@ interface TeamMember {
   email: string;
   role: Role;
   status: "pending" | "sent";
+}
+
+interface UploadedDoc {
+  id: string;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  status: "uploading" | "ready" | "pending" | "error";
+  wordCount?: number;
+  errorMessage?: string;
 }
 
 // ─────────────────────────────────────────────────────────
@@ -843,6 +853,194 @@ const css = `
 
   .soc2-icon { font-size: 13px; flex-shrink: 0; margin-top: 1px; }
 
+  /* ── DROPZONE ── */
+  .dropzone {
+    border: 2px dashed var(--border-bright);
+    border-radius: var(--radius-lg);
+    padding: 32px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--surface-2);
+    position: relative;
+  }
+
+  .dropzone:hover, .dropzone.drag-over {
+    border-color: var(--accent);
+    background: var(--accent-dim);
+  }
+
+  .dropzone.drag-over {
+    box-shadow: 0 0 0 4px var(--accent-dim);
+  }
+
+  .dropzone-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: var(--accent-dim);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    margin: 0 auto 12px;
+  }
+
+  .dropzone-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+
+  .dropzone-sub {
+    font-size: 12px;
+    color: var(--text-3);
+    line-height: 1.5;
+  }
+
+  .dropzone-browse {
+    color: var(--accent);
+    font-weight: 600;
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  .file-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 16px;
+  }
+
+  .file-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    animation: fadeUp 0.2s ease both;
+  }
+
+  .file-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: var(--accent-dim);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+
+  .file-info { flex: 1; min-width: 0; }
+
+  .file-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .file-meta {
+    font-size: 11px;
+    color: var(--text-3);
+  }
+
+  .file-remove {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    color: var(--text-3);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+
+  .file-remove:hover {
+    background: var(--red-dim);
+    color: var(--red);
+  }
+
+  .word-counter {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--text-3);
+  }
+
+  .word-counter .count {
+    font-family: 'DM Mono', monospace;
+    font-weight: 500;
+  }
+
+  .word-counter .count.met { color: var(--green); }
+  .word-counter .count.unmet { color: var(--yellow); }
+
+  .context-hint {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 14px 16px;
+    background: linear-gradient(135deg, rgba(124,106,247,0.08), rgba(124,106,247,0.03));
+    border: 1px solid rgba(124,106,247,0.15);
+    border-radius: var(--radius);
+    margin-bottom: 16px;
+  }
+
+  .context-hint-icon {
+    font-size: 18px;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .context-hint-text {
+    font-size: 13px;
+    color: var(--text-2);
+    line-height: 1.6;
+  }
+
+  .context-hint-text strong {
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  textarea {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    outline: none;
+    padding: 12px 14px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+    width: 100%;
+    resize: vertical;
+    min-height: 140px;
+    line-height: 1.6;
+  }
+
+  textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-dim);
+  }
+
+  textarea::placeholder { color: var(--text-3); }
+
   /* ── RESPONSIVE ── */
   @media (max-width: 768px) {
     .sidebar { display: none; }
@@ -913,7 +1111,7 @@ function StepWorkspace({ onNext }: { onNext: (data: WorkspaceData) => void }) {
   return (
     <div className="panel" key="workspace">
       <div className="panel-header">
-        <div className="panel-tag">Step 1 of 6</div>
+        <div className="panel-tag">Step 1 of 7</div>
         <h1 className="panel-title">Create your Helixis workspace</h1>
         <p className="panel-desc">Your workspace is the central hub for your property management operations.</p>
       </div>
@@ -1009,7 +1207,7 @@ function StepAuth({ onNext }: { onNext: (email: string, accessToken: string) => 
   return (
     <div className="panel" key="auth">
       <div className="panel-header">
-        <div className="panel-tag">Step 2 of 6</div>
+        <div className="panel-tag">Step 2 of 7</div>
         <h1 className="panel-title">{sent ? "Check your email" : "Create your owner account"}</h1>
         <p className="panel-desc">
           {sent
@@ -1177,7 +1375,7 @@ function StepIntegration({
   return (
     <div className="panel" key="integration">
       <div className="panel-header">
-        <div className="panel-tag">Step 3 of 6</div>
+        <div className="panel-tag">Step 3 of 7</div>
         <h1 className="panel-title">Connect your services</h1>
         <p className="panel-desc">Link your property management platform and productivity tools to Helixis.</p>
       </div>
@@ -1331,7 +1529,7 @@ function StepWebhooks({ workspaceId, onNext }: { workspaceId: string; onNext: ()
   return (
     <div className="panel" key="webhooks">
       <div className="panel-header">
-        <div className="panel-tag">Step 4 of 6</div>
+        <div className="panel-tag">Step 4 of 7</div>
         <h1 className="panel-title">Configure webhooks</h1>
         <p className="panel-desc">Helixis listens for real-time events from Buildium. Add the endpoint URL and signing secret to your Buildium account.</p>
       </div>
@@ -1455,7 +1653,7 @@ function StepTeam({ workspaceId, onNext }: { workspaceId: string; onNext: (membe
   return (
     <div className="panel" key="team">
       <div className="panel-header">
-        <div className="panel-tag">Step 5 of 6</div>
+        <div className="panel-tag">Step 5 of 7</div>
         <h1 className="panel-title">Invite your team</h1>
         <p className="panel-desc">Add teammates now or skip and do it later from Settings. Employees won't see integration screens.</p>
       </div>
@@ -1523,15 +1721,378 @@ function StepTeam({ workspaceId, onNext }: { workspaceId: string; onNext: (membe
 }
 
 // ─────────────────────────────────────────────────────────
-// STEP 6: FINISH
+// STEP 6: BUSINESS DOCUMENTS
 // ─────────────────────────────────────────────────────────
 
-function StepFinish({ workspace, members }: { workspace: WorkspaceData; members: TeamMember[] }) {
+const ACCEPTED_DOC_TYPES = [
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "text/plain",
+  "text/rtf",
+  "application/rtf",
+  "text/csv",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+];
+
+const ACCEPTED_EXTENSIONS = ".pdf,.doc,.docx,.txt,.rtf,.csv,.xls,.xlsx";
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function getDocIcon(type: string): string {
+  if (type.includes("pdf")) return "\u{1F4C4}";
+  if (type.includes("word") || type.includes("document")) return "\u{1F4DD}";
+  if (type.includes("spreadsheet") || type.includes("excel") || type.includes("csv")) return "\u{1F4CA}";
+  if (type.includes("text")) return "\u{1F4C3}";
+  return "\u{1F4CE}";
+}
+
+function StepDocuments({
+  workspaceId,
+  onNext,
+}: {
+  workspaceId: string;
+  onNext: (docCount: number) => void;
+}) {
+  const [description, setDescription] = useState("");
+  const [files, setFiles] = useState<UploadedDoc[]>([]);
+  const [dragOver, setDragOver] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const wordCount = description
+    .trim()
+    .split(/\s+/)
+    .filter((w) => w.length > 0).length;
+  const wordsMet = wordCount >= 100;
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOver(false);
+  }, []);
+
+  const validateAndAddFiles = useCallback(
+    async (fileList: FileList | File[]) => {
+      const newFiles = Array.from(fileList);
+      setError("");
+
+      for (const file of newFiles) {
+        if (!ACCEPTED_DOC_TYPES.includes(file.type)) {
+          setError(
+            `"${file.name}" is not a supported document type. Please upload PDF, DOC, DOCX, TXT, RTF, CSV, XLS, or XLSX files.`
+          );
+          continue;
+        }
+
+        if (file.size > 10 * 1024 * 1024) {
+          setError(`"${file.name}" exceeds the 10 MB size limit.`);
+          continue;
+        }
+
+        if (files.some((f) => f.fileName === file.name)) {
+          setError(`"${file.name}" has already been added.`);
+          continue;
+        }
+
+        const tempId = crypto.randomUUID();
+        const uploadDoc: UploadedDoc = {
+          id: tempId,
+          fileName: file.name,
+          fileType: file.type,
+          fileSize: file.size,
+          status: "uploading",
+        };
+        setFiles((prev) => [...prev, uploadDoc]);
+
+        // Upload via edge function
+        const formData = new FormData();
+        formData.append("workspace_id", workspaceId);
+        formData.append("file", file);
+
+        try {
+          const session = await supabase.auth.getSession();
+          const token = session.data.session?.access_token;
+
+          const res = await fetch(
+            `${supabaseUrl}/functions/v1/upload-document`,
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${token}`,
+                apikey: supabaseAnonKey,
+              },
+              body: formData,
+            }
+          );
+
+          const data = await res.json();
+
+          if (!res.ok) {
+            setFiles((prev) =>
+              prev.map((f) =>
+                f.id === tempId
+                  ? { ...f, status: "error", errorMessage: data.error }
+                  : f
+              )
+            );
+          } else {
+            setFiles((prev) =>
+              prev.map((f) =>
+                f.id === tempId
+                  ? {
+                      ...f,
+                      id: data.document_id || tempId,
+                      status: data.status || "ready",
+                      wordCount: data.word_count,
+                    }
+                  : f
+              )
+            );
+          }
+        } catch {
+          setFiles((prev) =>
+            prev.map((f) =>
+              f.id === tempId
+                ? { ...f, status: "error", errorMessage: "Upload failed" }
+                : f
+            )
+          );
+        }
+      }
+    },
+    [files, workspaceId]
+  );
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setDragOver(false);
+      if (e.dataTransfer.files.length > 0) {
+        validateAndAddFiles(e.dataTransfer.files);
+      }
+    },
+    [validateAndAddFiles]
+  );
+
+  const handleFileInput = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files && e.target.files.length > 0) {
+        validateAndAddFiles(e.target.files);
+        e.target.value = "";
+      }
+    },
+    [validateAndAddFiles]
+  );
+
+  const removeFile = (id: string) => {
+    setFiles((prev) => prev.filter((f) => f.id !== id));
+  };
+
+  const handleSaveAndContinue = async () => {
+    if (!wordsMet) {
+      setError("Please write at least 100 words describing your business.");
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke(
+        "upload-document",
+        {
+          body: { workspace_id: workspaceId, description },
+        }
+      );
+
+      if (fnError || !data?.success) {
+        setError(data?.error || fnError?.message || "Failed to save business context");
+        setSaving(false);
+        return;
+      }
+
+      setSaving(false);
+      onNext(files.filter((f) => f.status !== "error").length);
+    } catch {
+      setError("Failed to save. Please try again.");
+      setSaving(false);
+    }
+  };
+
+  const uploadingCount = files.filter((f) => f.status === "uploading").length;
+
+  return (
+    <div className="panel" key="documents">
+      <div className="panel-header">
+        <div className="panel-tag">Step 6 of 7</div>
+        <h1 className="panel-title">Teach Helixis your business</h1>
+        <p className="panel-desc">
+          Upload your SOPs, process documents, and describe how your business operates.
+        </p>
+      </div>
+
+      <div className="context-hint">
+        <span className="context-hint-icon">{"\u2728"}</span>
+        <div className="context-hint-text">
+          <strong>The more you explain your business, the better Helixis will be.</strong>{" "}
+          Share your standard operating procedures, team workflows, escalation policies,
+          and anything that makes your property management unique. This context becomes
+          Helixis's memory — helping it understand your processes and respond the way
+          your team would.
+        </div>
+      </div>
+
+      {/* ── Business Description ── */}
+      <div className="card">
+        <div className="card-title">Business Description</div>
+        <div className="field">
+          <label>Describe how your business operates</label>
+          <textarea
+            placeholder="Tell Helixis about your business — how you handle maintenance requests, your tenant communication process, lease renewal workflows, vendor relationships, escalation procedures, and any unique policies or processes that define how your team operates day-to-day..."
+            value={description}
+            onChange={(e) => {
+              setDescription(e.target.value);
+              setError("");
+            }}
+            rows={7}
+          />
+          <div className="word-counter">
+            <span>Minimum 100 words required</span>
+            <span className={`count ${wordsMet ? "met" : "unmet"}`}>
+              {wordCount} / 100 words
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Document Upload ── */}
+      <div className="card">
+        <div className="card-title">Supporting Documents</div>
+        <div
+          className={`dropzone ${dragOver ? "drag-over" : ""}`}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          onClick={() => document.getElementById("doc-upload-input")?.click()}
+        >
+          <input
+            id="doc-upload-input"
+            type="file"
+            accept={ACCEPTED_EXTENSIONS}
+            multiple
+            style={{ display: "none" }}
+            onChange={handleFileInput}
+          />
+          <div className="dropzone-icon">{"\u{1F4C1}"}</div>
+          <div className="dropzone-title">
+            Drag & drop your documents here
+          </div>
+          <div className="dropzone-sub">
+            or <span className="dropzone-browse">browse files</span>
+          </div>
+          <div className="dropzone-sub" style={{ marginTop: 8 }}>
+            PDF, DOC, DOCX, TXT, RTF, CSV, XLS, XLSX — up to 10 MB each
+          </div>
+        </div>
+
+        {files.length > 0 && (
+          <div className="file-list">
+            {files.map((f) => (
+              <div className="file-item" key={f.id}>
+                <div className="file-icon">{getDocIcon(f.fileType)}</div>
+                <div className="file-info">
+                  <div className="file-name">{f.fileName}</div>
+                  <div className="file-meta">
+                    {formatFileSize(f.fileSize)}
+                    {f.status === "uploading" && " — Uploading..."}
+                    {f.status === "ready" && " — Ready"}
+                    {f.status === "pending" && " — Processing..."}
+                    {f.status === "error" && (
+                      <span style={{ color: "var(--red)" }}>
+                        {" "}— {f.errorMessage || "Error"}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {f.status === "uploading" ? (
+                  <span className="spinner accent" />
+                ) : (
+                  <button
+                    className="file-remove"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeFile(f.id);
+                    }}
+                    title="Remove file"
+                  >
+                    {"\u2715"}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <span className="hint" style={{ marginTop: 12, display: "block" }}>
+          Upload SOPs, employee handbooks, process guides, policy documents,
+          or any files that explain how your business runs.
+        </span>
+      </div>
+
+      {error && (
+        <div className="test-result error" style={{ marginTop: 0 }}>
+          <span>{"\u26A0"}</span> {error}
+        </div>
+      )}
+
+      <SOC2Note text="Your documents are encrypted at rest in Supabase Storage. Content is processed server-side and stored as secure AI context — never shared externally." />
+
+      <button
+        className="btn btn-primary"
+        onClick={handleSaveAndContinue}
+        disabled={!wordsMet || saving || uploadingCount > 0}
+      >
+        {saving ? (
+          <>
+            <span className="spinner" /> Saving business context…
+          </>
+        ) : uploadingCount > 0 ? (
+          <>
+            <span className="spinner" /> Uploading {uploadingCount} file
+            {uploadingCount > 1 ? "s" : ""}…
+          </>
+        ) : (
+          "Save & Continue \u2192"
+        )}
+      </button>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────
+// STEP 7: FINISH
+// ─────────────────────────────────────────────────────────
+
+function StepFinish({ workspace, members, docCount }: { workspace: WorkspaceData; members: TeamMember[]; docCount: number }) {
   const checks = [
     { label: "Workspace created", sub: workspace.name, done: true },
     { label: "Buildium connected & locked", sub: "API credentials encrypted", done: true },
     { label: "Webhooks configured", sub: "hooks.helixis.com endpoint active", done: true },
     { label: "Team invited", sub: members.length > 0 ? `${members.length} member${members.length > 1 ? "s" : ""} invited` : "No invites sent (add later)", done: true },
+    { label: "Business context uploaded", sub: `AI memory configured${docCount > 0 ? ` with ${docCount} document${docCount > 1 ? "s" : ""}` : ""}`, done: true },
   ];
 
   return (
@@ -1588,6 +2149,7 @@ const STEPS: { id: Step; label: string }[] = [
   { id: "integration", label: "Connect" },
   { id: "webhooks", label: "Webhooks" },
   { id: "team", label: "Invite team" },
+  { id: "documents", label: "Business context" },
   { id: "finish", label: "Launch" },
 ];
 
@@ -1632,6 +2194,7 @@ export default function App() {
   const [workspace, setWorkspace] = useState<WorkspaceData>({ name: "", slug: "" });
   const [userEmail, setUserEmail] = useState("");
   const [members, setMembers] = useState<TeamMember[]>([]);
+  const [docCount, setDocCount] = useState(0);
   const [creatingWorkspace, setCreatingWorkspace] = useState(false);
 
   const complete = (s: Step) => setCompleted((prev) => new Set([...prev, s]));
@@ -1708,6 +2271,12 @@ export default function App() {
   const handleTeam = (m: TeamMember[]) => {
     setMembers(m);
     complete("team");
+    setStep("documents");
+  };
+
+  const handleDocuments = (count: number) => {
+    setDocCount(count);
+    complete("documents");
     setStep("finish");
   };
 
@@ -1730,7 +2299,8 @@ export default function App() {
           {step === "integration" && <StepIntegration workspaceId={workspace.id!} onNext={handleIntegration} />}
           {step === "webhooks" && <StepWebhooks workspaceId={workspace.id!} onNext={handleWebhooks} />}
           {step === "team" && <StepTeam workspaceId={workspace.id!} onNext={handleTeam} />}
-          {step === "finish" && <StepFinish workspace={workspace} members={members} />}
+          {step === "documents" && <StepDocuments workspaceId={workspace.id!} onNext={handleDocuments} />}
+          {step === "finish" && <StepFinish workspace={workspace} members={members} docCount={docCount} />}
         </div>
       </div>
     </>
