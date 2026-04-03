@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { supabase, supabaseUrl, supabaseAnonKey } from "./lib/supabase";
 
 // ─────────────────────────────────────────────────────────
@@ -28,7 +28,6 @@ interface TeamMember {
 
 interface DocumentsData {
   description: string;
-  files: File[];
 }
 
 interface ProvisioningStep {
@@ -842,126 +841,6 @@ const css = `
 
   .soc2-icon { font-size: 13px; flex-shrink: 0; margin-top: 1px; }
 
-  /* ── DROPZONE ── */
-  .dropzone {
-    border: 2px dashed var(--border-bright);
-    border-radius: var(--radius-lg);
-    padding: 32px 24px;
-    text-align: center;
-    cursor: pointer;
-    transition: all 0.2s;
-    background: var(--surface-2);
-    position: relative;
-  }
-
-  .dropzone:hover, .dropzone.drag-over {
-    border-color: var(--accent);
-    background: var(--accent-dim);
-  }
-
-  .dropzone.drag-over {
-    box-shadow: 0 0 0 4px var(--accent-dim);
-  }
-
-  .dropzone-icon {
-    width: 48px;
-    height: 48px;
-    border-radius: 12px;
-    background: var(--accent-dim);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 22px;
-    margin: 0 auto 12px;
-  }
-
-  .dropzone-title {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--text);
-    margin-bottom: 4px;
-  }
-
-  .dropzone-sub {
-    font-size: 12px;
-    color: var(--text-3);
-    line-height: 1.5;
-  }
-
-  .dropzone-browse {
-    color: var(--accent);
-    font-weight: 600;
-    text-decoration: underline;
-    cursor: pointer;
-  }
-
-  .file-list {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    margin-top: 16px;
-  }
-
-  .file-item {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 14px;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    animation: fadeUp 0.2s ease both;
-  }
-
-  .file-icon {
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    background: var(--accent-dim);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 14px;
-    flex-shrink: 0;
-  }
-
-  .file-info { flex: 1; min-width: 0; }
-
-  .file-name {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--text);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .file-meta {
-    font-size: 11px;
-    color: var(--text-3);
-  }
-
-  .file-remove {
-    width: 24px;
-    height: 24px;
-    border-radius: 6px;
-    border: none;
-    background: transparent;
-    color: var(--text-3);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 14px;
-    transition: all 0.15s;
-    flex-shrink: 0;
-  }
-
-  .file-remove:hover {
-    background: var(--red-dim);
-    color: var(--red);
-  }
-
   .word-counter {
     display: flex;
     align-items: center;
@@ -1392,36 +1271,8 @@ function StepTeam({ onNext }: { onNext: (members: TeamMember[]) => void }) {
 }
 
 // ─────────────────────────────────────────────────────────
-// STEP 6: BUSINESS DOCUMENTS
+// STEP 5: BUSINESS CONTEXT
 // ─────────────────────────────────────────────────────────
-
-const ACCEPTED_DOC_TYPES = [
-  "application/pdf",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "text/plain",
-  "text/rtf",
-  "application/rtf",
-  "text/csv",
-  "application/vnd.ms-excel",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-];
-
-const ACCEPTED_EXTENSIONS = ".pdf,.doc,.docx,.txt,.rtf,.csv,.xls,.xlsx";
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function getDocIcon(type: string): string {
-  if (type.includes("pdf")) return "\u{1F4C4}";
-  if (type.includes("word") || type.includes("document")) return "\u{1F4DD}";
-  if (type.includes("spreadsheet") || type.includes("excel") || type.includes("csv")) return "\u{1F4CA}";
-  if (type.includes("text")) return "\u{1F4C3}";
-  return "\u{1F4CE}";
-}
 
 function StepDocuments({
   onNext,
@@ -1429,8 +1280,6 @@ function StepDocuments({
   onNext: (data: DocumentsData) => void;
 }) {
   const [description, setDescription] = useState("");
-  const [files, setFiles] = useState<File[]>([]);
-  const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState("");
 
   const wordCount = description
@@ -1439,79 +1288,12 @@ function StepDocuments({
     .filter((w) => w.length > 0).length;
   const wordsMet = wordCount >= 100;
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragOver(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragOver(false);
-  }, []);
-
-  const validateAndAddFiles = useCallback(
-    (fileList: FileList | File[]) => {
-      const newFiles = Array.from(fileList);
-      setError("");
-
-      for (const file of newFiles) {
-        if (!ACCEPTED_DOC_TYPES.includes(file.type)) {
-          setError(
-            `"${file.name}" is not a supported document type. Please upload PDF, DOC, DOCX, TXT, RTF, CSV, XLS, or XLSX files.`
-          );
-          continue;
-        }
-
-        if (file.size > 10 * 1024 * 1024) {
-          setError(`"${file.name}" exceeds the 10 MB size limit.`);
-          continue;
-        }
-
-        if (files.some((f) => f.name === file.name)) {
-          setError(`"${file.name}" has already been added.`);
-          continue;
-        }
-
-        setFiles((prev) => [...prev, file]);
-      }
-    },
-    [files]
-  );
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setDragOver(false);
-      if (e.dataTransfer.files.length > 0) {
-        validateAndAddFiles(e.dataTransfer.files);
-      }
-    },
-    [validateAndAddFiles]
-  );
-
-  const handleFileInput = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files && e.target.files.length > 0) {
-        validateAndAddFiles(e.target.files);
-        e.target.value = "";
-      }
-    },
-    [validateAndAddFiles]
-  );
-
-  const removeFile = (name: string) => {
-    setFiles((prev) => prev.filter((f) => f.name !== name));
-  };
-
   const handleContinue = () => {
     if (!wordsMet) {
       setError("Please write at least 100 words describing your business.");
       return;
     }
-    onNext({ description, files });
+    onNext({ description });
   };
 
   return (
@@ -1520,7 +1302,7 @@ function StepDocuments({
         <div className="panel-tag">Step 5 of 7</div>
         <h1 className="panel-title">Teach Helixis your business</h1>
         <p className="panel-desc">
-          Upload your SOPs, process documents, and describe how your business operates.
+          Describe how your business operates so Helixis can understand your processes.
         </p>
       </div>
 
@@ -1535,7 +1317,6 @@ function StepDocuments({
         </div>
       </div>
 
-      {/* ── Business Description ── */}
       <div className="card">
         <div className="card-title">Business Description</div>
         <div className="field">
@@ -1558,75 +1339,13 @@ function StepDocuments({
         </div>
       </div>
 
-      {/* ── Document Upload ── */}
-      <div className="card">
-        <div className="card-title">Supporting Documents</div>
-        <div
-          className={`dropzone ${dragOver ? "drag-over" : ""}`}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          onClick={() => document.getElementById("doc-upload-input")?.click()}
-        >
-          <input
-            id="doc-upload-input"
-            type="file"
-            accept={ACCEPTED_EXTENSIONS}
-            multiple
-            style={{ display: "none" }}
-            onChange={handleFileInput}
-          />
-          <div className="dropzone-icon">{"\u{1F4C1}"}</div>
-          <div className="dropzone-title">
-            Drag & drop your documents here
-          </div>
-          <div className="dropzone-sub">
-            or <span className="dropzone-browse">browse files</span>
-          </div>
-          <div className="dropzone-sub" style={{ marginTop: 8 }}>
-            PDF, DOC, DOCX, TXT, RTF, CSV, XLS, XLSX — up to 10 MB each
-          </div>
-        </div>
-
-        {files.length > 0 && (
-          <div className="file-list">
-            {files.map((f) => (
-              <div className="file-item" key={f.name}>
-                <div className="file-icon">{getDocIcon(f.type)}</div>
-                <div className="file-info">
-                  <div className="file-name">{f.name}</div>
-                  <div className="file-meta">
-                    {formatFileSize(f.size)} — Ready to upload
-                  </div>
-                </div>
-                <button
-                  className="file-remove"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    removeFile(f.name);
-                  }}
-                  title="Remove file"
-                >
-                  {"\u2715"}
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <span className="hint" style={{ marginTop: 12, display: "block" }}>
-          Upload SOPs, employee handbooks, process guides, policy documents,
-          or any files that explain how your business runs.
-        </span>
-      </div>
-
       {error && (
         <div className="test-result error" style={{ marginTop: 0 }}>
           <span>{"\u26A0"}</span> {error}
         </div>
       )}
 
-      <SOC2Note text="Your documents will be encrypted at rest in Supabase Storage when you create your account. Content is processed server-side and stored as secure AI context — never shared externally." />
+      <SOC2Note text="Your business context is encrypted at rest and stored as secure AI memory — never shared externally." />
 
       <button
         className="btn btn-primary"
@@ -1684,7 +1403,6 @@ function StepCreateAccount({
       { label: "Generating webhook secret", status: "pending" },
       ...(members.length > 0 ? [{ label: `Sending ${members.length} team invite${members.length > 1 ? "s" : ""}`, status: "pending" as const }] : []),
       { label: "Uploading business context", status: "pending" },
-      ...(documents.files.length > 0 ? [{ label: `Uploading ${documents.files.length} document${documents.files.length > 1 ? "s" : ""}`, status: "pending" as const }] : []),
     ];
     setSteps(provSteps);
 
@@ -1793,23 +1511,6 @@ function StepCreateAccount({
       });
       updateStep(stepIdx, { status: "done" });
       stepIdx++;
-
-      // 8. Upload document files (if any)
-      if (documents.files.length > 0) {
-        updateStep(stepIdx, { status: "running" });
-        for (const file of documents.files) {
-          const formData = new FormData();
-          formData.append("workspace_id", workspaceId);
-          formData.append("file", file);
-          await fetch(`${supabaseUrl}/functions/v1/upload-document`, {
-            method: "POST",
-            headers: { Authorization: `Bearer ${accessToken}`, apikey: supabaseAnonKey },
-            body: formData,
-          });
-        }
-        updateStep(stepIdx, { status: "done" });
-        stepIdx++;
-      }
 
       // Done!
       setTimeout(() => onNext(workspaceId), 800);
@@ -1940,7 +1641,7 @@ function StepCreateAccount({
             </div>
           )}
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <span style={{ color: "var(--accent)" }}>{"\u2713"}</span> Upload business context & documents for AI memory
+            <span style={{ color: "var(--accent)" }}>{"\u2713"}</span> Save business context as AI memory
           </div>
         </div>
       </div>
@@ -1958,13 +1659,13 @@ function StepCreateAccount({
 // STEP 7: FINISH
 // ─────────────────────────────────────────────────────────
 
-function StepFinish({ workspace, members, docCount }: { workspace: WorkspaceData; members: TeamMember[]; docCount: number }) {
+function StepFinish({ workspace, members }: { workspace: WorkspaceData; members: TeamMember[] }) {
   const checks = [
     { label: "Workspace created", sub: workspace.name, done: true },
     { label: "Buildium connected & locked", sub: "API credentials encrypted", done: true },
     { label: "Webhooks configured", sub: "hooks.helixis.com endpoint active", done: true },
     { label: "Team invited", sub: members.length > 0 ? `${members.length} member${members.length > 1 ? "s" : ""} invited` : "No invites sent (add later)", done: true },
-    { label: "Business context uploaded", sub: `AI memory configured${docCount > 0 ? ` with ${docCount} document${docCount > 1 ? "s" : ""}` : ""}`, done: true },
+    { label: "Business context saved", sub: "AI memory configured", done: true },
   ];
 
   return (
@@ -2066,7 +1767,7 @@ export default function App() {
   const [workspace, setWorkspace] = useState<WorkspaceData>({ name: "", slug: "" });
   const [integration, setIntegration] = useState<IntegrationData>({ apiKey: "", apiSecret: "", environment: "production" });
   const [members, setMembers] = useState<TeamMember[]>([]);
-  const [documents, setDocuments] = useState<DocumentsData>({ description: "", files: [] });
+  const [documents, setDocuments] = useState<DocumentsData>({ description: "" });
 
   const complete = (s: Step) => setCompleted((prev) => new Set([...prev, s]));
 
@@ -2125,7 +1826,7 @@ export default function App() {
               onNext={handleAccount}
             />
           )}
-          {step === "finish" && <StepFinish workspace={workspace} members={members} docCount={documents.files.length} />}
+          {step === "finish" && <StepFinish workspace={workspace} members={members} />}
         </div>
       </div>
     </>
