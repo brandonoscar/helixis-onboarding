@@ -30,7 +30,7 @@ serve(async (req) => {
     if (authError || !user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
 
     const body = await req.json();
-    const { workspace_id, provider, api_key, api_secret, environment = "production" } = body;
+    const { workspace_id, provider, api_key, api_secret, environment = "production", metadata } = body;
 
     // Validate required fields (do NOT log values)
     if (!workspace_id || !provider || !api_key || !api_secret) {
@@ -62,15 +62,19 @@ serve(async (req) => {
     }
 
     // Upsert integration row
+    const integrationRow: Record<string, unknown> = {
+      workspace_id,
+      provider,
+      status: "pending",
+      environment,
+      updated_at: new Date().toISOString(),
+    };
+    // Store provider-specific metadata (e.g., AppFolio subdomain)
+    if (metadata) integrationRow.metadata = metadata;
+
     const { data: integration, error: integrationError } = await serviceClient
       .from("integrations")
-      .upsert({
-        workspace_id,
-        provider,
-        status: "pending",
-        environment,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: "workspace_id,provider" })
+      .upsert(integrationRow, { onConflict: "workspace_id,provider" })
       .select()
       .single();
 

@@ -12,6 +12,7 @@ interface WorkspaceData {
   name: string;
   slug: string;
   id?: string;
+  provider?: string;
 }
 
 interface IntegrationState {
@@ -898,7 +899,7 @@ function StepWorkspace({ onNext }: { onNext: (data: WorkspaceData) => void }) {
 
   const providers = [
     { id: "buildium", label: "Buildium", sub: "Full API integration available", emoji: "🏢", ready: true },
-    { id: "appfolio", label: "AppFolio", sub: "Coming soon", emoji: "🏠", ready: false },
+    { id: "appfolio", label: "AppFolio", sub: "Full API integration available", emoji: "🏠", ready: true },
     { id: "yardi", label: "Yardi", sub: "Coming soon", emoji: "🏗", ready: false },
   ];
 
@@ -907,7 +908,7 @@ function StepWorkspace({ onNext }: { onNext: (data: WorkspaceData) => void }) {
     setLoading(true);
     // Just collect name/slug — workspace is created in DB after auth
     setLoading(false);
-    onNext({ name: name.trim(), slug });
+    onNext({ name: name.trim(), slug, provider });
   };
 
   return (
@@ -1092,13 +1093,16 @@ function StepAuth({ onNext }: { onNext: (email: string, accessToken: string) => 
 
 function StepIntegration({
   workspaceId,
+  provider: selectedProvider,
   onNext,
 }: {
   workspaceId: string;
+  provider: string;
   onNext: (state: IntegrationState) => void;
 }) {
   const [apiKey, setApiKey] = useState("");
   const [apiSecret, setApiSecret] = useState("");
+  const [subdomain, setSubdomain] = useState("");
   const [env, setEnv] = useState<"production" | "sandbox">("production");
   const [integration, setIntegration] = useState<IntegrationState>({ status: "idle" });
   const [integrationId, setIntegrationId] = useState<string | null>(null);
@@ -1106,12 +1110,25 @@ function StepIntegration({
   const [googleConnected, setGoogleConnected] = useState(false);
   const [googleConnecting, setGoogleConnecting] = useState(false);
 
+  const isAppFolio = selectedProvider === "appfolio";
+
   const testConnection = async () => {
     if (!apiKey || !apiSecret) return;
+    if (isAppFolio && !subdomain) return;
     setIntegration((s) => ({ ...s, status: "testing" }));
 
+    const provisionBody: Record<string, unknown> = {
+      workspace_id: workspaceId,
+      provider: selectedProvider,
+      api_key: apiKey,
+      api_secret: apiSecret,
+      environment: env,
+    };
+    // AppFolio needs the subdomain stored as metadata
+    if (isAppFolio) provisionBody.metadata = { subdomain };
+
     const { data: saveData } = await supabase.functions.invoke("provision-integration", {
-      body: { workspace_id: workspaceId, provider: "buildium", api_key: apiKey, api_secret: apiSecret, environment: env },
+      body: provisionBody,
     });
 
     if (saveData?.integration_id) {
@@ -1119,7 +1136,7 @@ function StepIntegration({
     }
 
     const { data: testData } = await supabase.functions.invoke("test-connection", {
-      body: { workspace_id: workspaceId, provider: "buildium" },
+      body: { workspace_id: workspaceId, provider: selectedProvider },
     });
 
     if (testData?.success) {
@@ -1182,24 +1199,24 @@ function StepIntegration({
         <p className="panel-desc">Link your property management platform and productivity tools to Helixis.</p>
       </div>
 
-      {/* ── Buildium ── */}
+      {/* ── Property Management Platform ── */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: integration.status === "locked" ? 0 : 16 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ fontSize: 20 }}>🏢</div>
+            <div style={{ fontSize: 20 }}>{isAppFolio ? "🏠" : "🏢"}</div>
             <div>
-              <div style={{ fontSize: 14, fontWeight: 600 }}>Buildium</div>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>{isAppFolio ? "AppFolio" : "Buildium"}</div>
               <div style={{ fontSize: 11, color: "var(--text-3)" }}>Property management platform</div>
             </div>
           </div>
           {integration.status === "locked" ? (
             <span className="badge badge-green"><span className="dot pulse" /> Connected</span>
-          ) : (
+          ) : !isAppFolio ? (
             <div className="toggle-row">
               <button className={`toggle-opt ${env === "production" ? "active" : ""}`} onClick={() => setEnv("production")}>Production</button>
               <button className={`toggle-opt ${env === "sandbox" ? "active" : ""}`} onClick={() => setEnv("sandbox")}>Sandbox</button>
             </div>
-          )}
+          ) : null}
         </div>
 
         {integration.status === "locked" ? (
@@ -1208,6 +1225,22 @@ function StepIntegration({
           </div>
         ) : (
           <>
+            {isAppFolio && (
+              <div className="field">
+                <label>AppFolio Subdomain</label>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <input
+                    type="text"
+                    placeholder="yourcompany"
+                    value={subdomain}
+                    onChange={(e) => setSubdomain(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+                    style={{ flex: 1 }}
+                  />
+                  <span style={{ fontSize: 12, color: "var(--text-3)", whiteSpace: "nowrap" }}>.appfolio.com</span>
+                </div>
+                <span className="hint">Your AppFolio account subdomain (e.g., if your URL is mycompany.appfolio.com, enter "mycompany").</span>
+              </div>
+            )}
             <div className="field">
               <label>Client ID</label>
               <input className="secret-input" type="password" placeholder="••••••••••••••••••••" value={apiKey} onChange={(e) => setApiKey(e.target.value)} autoComplete="new-password" />
@@ -1215,12 +1248,22 @@ function StepIntegration({
             <div className="field">
               <label>Client Secret</label>
               <input className="secret-input" type="password" placeholder="••••••••••••••••••••" value={apiSecret} onChange={(e) => setApiSecret(e.target.value)} autoComplete="new-password" />
-              <span className="hint">Find these in Buildium → Settings → API Settings.</span>
+              <span className="hint">
+                {isAppFolio
+                  ? "Find these in AppFolio → Account → General Settings → Manage API Settings, or via the Developer Space at developer.appfolio.com."
+                  : "Find these in Buildium → Settings → API Settings."}
+              </span>
             </div>
+
+            {isAppFolio && (
+              <div style={{ fontSize: 11, color: "var(--text-3)", background: "var(--surface-2)", borderRadius: "var(--radius)", padding: "10px 12px", marginBottom: 8, lineHeight: 1.5 }}>
+                <strong style={{ color: "var(--text-2)" }}>Plan requirements:</strong> AppFolio Plus plan required for read-only API access. Max plan required for full read/write + webhooks. <a href="https://developer.appfolio.com" target="_blank" rel="noopener" style={{ color: "var(--accent)" }}>Learn more</a>
+              </div>
+            )}
 
             {integration.status === "testing" && (
               <div className="test-result" style={{ background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-2)" }}>
-                <span className="spinner accent" /> Testing connection to Buildium API…
+                <span className="spinner accent" /> Testing connection to {isAppFolio ? "AppFolio" : "Buildium"} API…
               </div>
             )}
             {integration.status === "connected" && (
@@ -1236,7 +1279,7 @@ function StepIntegration({
             )}
 
             <div className="btn-row" style={{ marginTop: 8 }}>
-              <button className="btn btn-secondary" onClick={testConnection} disabled={!apiKey || !apiSecret || integration.status === "testing"}>
+              <button className="btn btn-secondary" onClick={testConnection} disabled={!apiKey || !apiSecret || (isAppFolio && !subdomain) || integration.status === "testing"}>
                 {integration.status === "testing" ? <><span className="spinner accent" /> Testing…</> : "Test connection"}
               </button>
               <button className="btn btn-primary" style={{ flex: 1, margin: 0 }} onClick={lockIntegration} disabled={integration.status !== "connected" || locking}>
@@ -1293,7 +1336,7 @@ function StepIntegration({
       <SOC2Note text="OAuth tokens are encrypted at rest. Helixis requests only the minimum scopes needed. You can revoke access at any time from your Google or Microsoft account settings." />
 
       <button className="btn btn-primary" onClick={() => onNext(integration)} disabled={!canContinue}>
-        {allDone ? "Continue →" : canContinue ? "Continue →" : "Complete Buildium setup to continue"}
+        {allDone ? "Continue →" : canContinue ? "Continue →" : `Complete ${isAppFolio ? "AppFolio" : "Buildium"} setup to continue`}
       </button>
     </div>
   );
@@ -1303,15 +1346,18 @@ function StepIntegration({
 // STEP 4: WEBHOOKS
 // ─────────────────────────────────────────────────────────
 
-function StepWebhooks({ workspaceId, onNext }: { workspaceId: string; onNext: () => void }) {
+function StepWebhooks({ workspaceId, provider: selectedProvider, onNext }: { workspaceId: string; provider: string; onNext: () => void }) {
   const [webhook, setWebhook] = useState<WebhookState>({ secretConfirmed: false, secretViewed: false, health: "awaiting" });
   const [generating, setGenerating] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
 
+  const isAppFolio = selectedProvider === "appfolio";
+  const providerLabel = isAppFolio ? "AppFolio" : "Buildium";
+
   const generateSecret = async () => {
     setGenerating(true);
     const { data } = await supabase.functions.invoke("rotate-webhook-secret", {
-      body: { workspace_id: workspaceId, provider: "buildium" },
+      body: { workspace_id: workspaceId, provider: selectedProvider },
     });
     setGenerating(false);
     setWebhook({
@@ -1333,7 +1379,7 @@ function StepWebhooks({ workspaceId, onNext }: { workspaceId: string; onNext: ()
       <div className="panel-header">
         <div className="panel-tag">Step 4 of 6</div>
         <h1 className="panel-title">Configure webhooks</h1>
-        <p className="panel-desc">Helixis listens for real-time events from Buildium. Add the endpoint URL and signing secret to your Buildium account.</p>
+        <p className="panel-desc">Helixis listens for real-time events from {providerLabel}. {isAppFolio ? "Webhooks require the AppFolio Max plan. You must contact AppFolio support to enable webhooks for your account." : `Add the endpoint URL and signing secret to your ${providerLabel} account.`}</p>
       </div>
 
       {!webhook.secretViewed ? (
@@ -1350,8 +1396,8 @@ function StepWebhooks({ workspaceId, onNext }: { workspaceId: string; onNext: ()
         <div>
           <div className="card">
             <div className="card-title">Webhook Endpoint URL</div>
-            <CopyField label="Add this URL to Buildium → Settings → Webhooks" value={webhook.endpointUrl || ""} />
-            <div className="hint">This endpoint receives all Buildium events in real-time.</div>
+            <CopyField label={isAppFolio ? "Add this URL in AppFolio → Admin Settings → Webhook Card" : `Add this URL to ${providerLabel} → Settings → Webhooks`} value={webhook.endpointUrl || ""} />
+            <div className="hint">This endpoint receives all {providerLabel} events in real-time.{isAppFolio ? " Note: You must request webhook enablement via developer.appfolio.com first." : ""}</div>
           </div>
 
           {webhook.signingSecret && !confirmed ? (
@@ -1403,7 +1449,7 @@ function StepWebhooks({ workspaceId, onNext }: { workspaceId: string; onNext: ()
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div>
                 <span className="badge badge-muted"><span className="dot" style={{ background: "var(--text-3)" }} /> Awaiting first event</span>
-                <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 6 }}>Events will appear here once Buildium starts sending them.</div>
+                <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 6 }}>Events will appear here once {providerLabel} starts sending them.</div>
               </div>
               <button className="btn btn-ghost" style={{ fontSize: 12 }}>Send test event</button>
             </div>
@@ -1411,7 +1457,10 @@ function StepWebhooks({ workspaceId, onNext }: { workspaceId: string; onNext: ()
         </div>
       )}
 
-      <SOC2Note text="Webhook signing secrets are stored encrypted and used server-side only to verify event authenticity (HMAC-SHA256). The secret itself is never sent back to the client." />
+      <SOC2Note text={isAppFolio
+        ? "AppFolio webhooks are verified server-side using JWS (PS256) signature validation against AppFolio's public keys. No shared secret is required — signatures are verified cryptographically."
+        : "Webhook signing secrets are stored encrypted and used server-side only to verify event authenticity (HMAC-SHA256). The secret itself is never sent back to the client."
+      } />
 
       <button
         className="btn btn-primary"
@@ -1727,8 +1776,8 @@ export default function App() {
               </div>
             </div>
           )}
-          {step === "integration" && <StepIntegration workspaceId={workspace.id!} onNext={handleIntegration} />}
-          {step === "webhooks" && <StepWebhooks workspaceId={workspace.id!} onNext={handleWebhooks} />}
+          {step === "integration" && <StepIntegration workspaceId={workspace.id!} provider={workspace.provider || "buildium"} onNext={handleIntegration} />}
+          {step === "webhooks" && <StepWebhooks workspaceId={workspace.id!} provider={workspace.provider || "buildium"} onNext={handleWebhooks} />}
           {step === "team" && <StepTeam workspaceId={workspace.id!} onNext={handleTeam} />}
           {step === "finish" && <StepFinish workspace={workspace} members={members} />}
         </div>
