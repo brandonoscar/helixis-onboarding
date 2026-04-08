@@ -44,7 +44,7 @@ serve(async (req) => {
     // Get integration + vault references
     const { data: integration } = await serviceClient
       .from("integrations")
-      .select(`id, provider, environment, integration_secrets(vault_api_key_id, vault_api_secret_id)`)
+      .select(`id, provider, environment, metadata, integration_secrets(vault_api_key_id, vault_api_secret_id)`)
       .eq("workspace_id", workspace_id)
       .eq("provider", provider)
       .single();
@@ -74,6 +74,14 @@ serve(async (req) => {
     // Provider-specific test calls
     if (provider === "buildium") {
       testResult = await testBuildiumConnection(apiKeyData, apiSecretData, integration.environment);
+    } else if (provider === "appfolio") {
+      // AppFolio needs the subdomain from integration metadata
+      const subdomain = (integration as any).metadata?.subdomain;
+      if (!subdomain) {
+        testResult = { success: false, message: "Missing AppFolio subdomain configuration", latency_ms: 0 };
+      } else {
+        testResult = await testAppFolioConnection(apiKeyData, apiSecretData, subdomain);
+      }
     } else {
       testResult = { success: false, message: `Provider ${provider} not yet supported`, latency_ms: 0 };
     }
@@ -143,5 +151,39 @@ async function testBuildiumConnection(
     }
   } catch (err) {
     return { success: false, message: "Could not reach Buildium API", latency_ms: 0 };
+  }
+}
+
+async function testAppFolioConnection(
+  clientId: string,
+  clientSecret: string,
+  subdomain: string
+): Promise<{ success: boolean; message: string; latency_ms: number }> {
+  // AppFolio uses HTTP Basic Auth: base64(client_id:client_secret)
+  // Test with a lightweight read endpoint (properties with page_size=1)
+  // Requires Plus plan or above for API access
+  const baseUrl = `https://${subdomain}.appfolio.com/api/v1`;
+  const credentials = btoa(`${clientId}:${clientSecret}`);
+
+  try {
+    const response = await fetch(`${baseUrl}/properties/?page_size=1`, {
+      headers: {
+        Authorization: `Basic ${credentials}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+    });
+
+    if (response.ok) {
+      return { success: true, message: "Connected successfully", latency_ms: 0 };
+    } else if (response.status === 401) {
+      return { success: false, message: "Invalid credentials — check your Client ID and Secret", latency_ms: 0 };
+    } else if (response.status === 403) {
+      return { success: false, message: "Access denied — your AppFolio plan may not include API access (Plus plan required)", latency_ms: 0 };
+    } else {
+      return { success: false, message: `API returned ${response.status}`, latency_ms: 0 };
+    }
+  } catch (err) {
+    return { success: false, message: "Could not reach AppFolio API — check your subdomain", latency_ms: 0 };
   }
 }
