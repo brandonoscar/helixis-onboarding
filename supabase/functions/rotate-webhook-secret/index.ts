@@ -1,6 +1,8 @@
 // supabase/functions/rotate-webhook-secret/index.ts
-// Generates webhook signing secret, stores in vault.
-// Returns the plaintext secret ONCE. After that, it's gone from client view.
+// Stores webhook signing secret in vault.
+// For Buildium: accepts user-provided signing_secret from Buildium's dashboard.
+// For AppFolio: no signing secret needed (uses JWKS public keys for verification).
+// Returns the endpoint URL for the webhook.
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
@@ -32,7 +34,7 @@ serve(async (req) => {
   const { data: { user }, error } = await serviceClient.auth.getUser(token);
   if (error || !user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
 
-  const { workspace_id, provider } = await req.json();
+  const { workspace_id, provider, signing_secret } = await req.json();
 
   const { data: membership } = await serviceClient
     .from("workspace_members")
@@ -45,56 +47,53 @@ serve(async (req) => {
     return new Response(JSON.stringify({ error: "Only owners can configure webhooks" }), { status: 403 });
   }
 
-  // Check if secret was already viewed (prevent re-generation unless explicitly requested)
-  const { data: existing } = await serviceClient
-    .from("webhooks")
-    .select("id, secret_viewed_at, vault_signing_secret_id")
-    .eq("workspace_id", workspace_id)
-    .eq("provider", provider)
-    .single();
-
-  // Generate new secret
-  const signingSecret = generateWebhookSecret();
   const endpointPath = `/${workspace_id}/${provider}`;
+  let vaultId: string | null = null;
 
-  // Store in vault
-  const { data: vaultId, error: vaultError } = await serviceClient
-    .rpc("vault_create_secret", {
-      p_secret: signingSecret,
-      p_name: `helixis_${workspace_id}_${provider}_webhook_secret`,
-      p_description: `Webhook signing secret for ${provider} in workspace ${workspace_id}`,
-    });
+  // For Buildium: store the user-provided signing secret from Buildium's dashboard
+  // For AppFolio: no secret needed (webhook verification uses JWKS public keys)
+  if (provider === "buildium") {
+    const secret = signing_secret || generateWebhookSecret();
+    const { data: vid, error: vaultError } = await serviceClient
+      .rpc("vault_create_secret", {
+        p_secret: secret,
+        p_name: `helixis_${workspace_id}_${provider}_webhook_secret`,
+        p_description: `Webhook signing secret for ${provider} in workspace ${workspace_id}`,
+      });
 
-  if (vaultError) throw new Error("Failed to store webhook secret");
+    if (vaultError) throw new Error("Failed to store webhook secret");
+    vaultId = vid;
+  }
 
   // Upsert webhook row
+  const webhookRow: Record<string, unknown> = {
+    workspace_id,
+    provider,
+    endpoint_path: endpointPath,
+  };
+  if (vaultId) {
+    webhookRow.vault_signing_secret_id = vaultId;
+    webhookRow.secret_viewed_at = new Date().toISOString();
+  }
+
   const { data: webhook } = await serviceClient
     .from("webhooks")
-    .upsert({
-      workspace_id,
-      provider,
-      endpoint_path: endpointPath,
-      vault_signing_secret_id: vaultId,
-      secret_viewed_at: new Date().toISOString(),
-    }, { onConflict: "workspace_id,provider" })
+    .upsert(webhookRow, { onConflict: "workspace_id,provider" })
     .select()
     .single();
 
   await serviceClient.from("audit_log").insert({
     workspace_id,
     actor_user_id: user.id,
-    action: "webhook_secret_generated",
+    action: signing_secret ? "webhook_secret_stored" : "webhook_configured",
     resource_type: "webhook",
     resource_id: webhook?.id,
-    metadata: { provider },
+    metadata: { provider, user_provided: !!signing_secret },
   });
 
-  // Return the plaintext secret ONCE — it will never be retrievable again from UI
   return new Response(JSON.stringify({
     success: true,
-    signing_secret: signingSecret, // ONLY TIME THIS IS RETURNED
     endpoint_url: `https://hooks.helixis.com${endpointPath}`,
     webhook_id: webhook?.id,
-    warning: "Save this secret immediately. It will not be shown again.",
   }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 });

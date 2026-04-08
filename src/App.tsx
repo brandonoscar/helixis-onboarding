@@ -5,7 +5,7 @@ import { supabase, supabaseUrl, supabaseAnonKey } from "./lib/supabase";
 // TYPES
 // ─────────────────────────────────────────────────────────
 
-type Step = "workspace" | "auth" | "integration" | "webhooks" | "team" | "finish";
+type Step = "auth" | "workspace" | "integration" | "webhooks" | "team" | "finish";
 type Role = "owner" | "manager" | "employee";
 
 interface WorkspaceData {
@@ -921,7 +921,7 @@ function StepWorkspace({ onNext }: { onNext: (data: WorkspaceData) => void }) {
   return (
     <div className="panel" key="workspace">
       <div className="panel-header">
-        <div className="panel-tag">Step 1 of 6</div>
+        <div className="panel-tag">Step 2 of 6</div>
         <h1 className="panel-title">Create your Helixis workspace</h1>
         <p className="panel-desc">Your workspace is the central hub for your property management operations.</p>
       </div>
@@ -974,37 +974,97 @@ function StepWorkspace({ onNext }: { onNext: (data: WorkspaceData) => void }) {
 // STEP 2: AUTH (Magic Link)
 // ─────────────────────────────────────────────────────────
 
-function StepAuth({ onNext }: { onNext: (email: string) => void }) {
-  const [email, setEmail] = useState("");
+function StepAuth({ onNext }: { onNext: () => void }) {
+  const [connecting, setConnecting] = useState(false);
+  const [user, setUser] = useState<{ email: string; name: string; avatar: string } | null>(null);
+
+  // Check for existing session (e.g., after OAuth redirect)
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setUser({
+          email: session.user.email || "",
+          name: session.user.user_metadata?.full_name || session.user.email || "",
+          avatar: session.user.user_metadata?.avatar_url || "",
+        });
+      }
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUser({
+          email: session.user.email || "",
+          name: session.user.user_metadata?.full_name || session.user.email || "",
+          avatar: session.user.user_metadata?.avatar_url || "",
+        });
+        setConnecting(false);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const connectGoogle = async () => {
+    setConnecting(true);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: window.location.origin,
+        scopes: "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/contacts.readonly",
+        queryParams: { access_type: "offline", prompt: "consent" },
+      },
+    });
+    if (error) {
+      setConnecting(false);
+      alert(error.message);
+    }
+  };
 
   return (
     <div className="panel" key="auth">
       <div className="panel-header">
-        <div className="panel-tag">Step 2 of 6</div>
-        <h1 className="panel-title">Owner account email</h1>
+        <div className="panel-tag">Step 1 of 6</div>
+        <h1 className="panel-title">Sign in to Helixis</h1>
         <p className="panel-desc">
-          You'll be the workspace Owner with full administrative access. We'll verify this email at the end.
+          Connect your Google account to get started. You'll be the workspace Owner with full administrative access.
         </p>
       </div>
 
       <div className="card">
-        <div className="field">
-          <label>Work Email</label>
-          <input
-            type="email"
-            placeholder="you@yourcompany.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && email.includes("@") && onNext(email)}
-            autoFocus
-          />
-          <span className="hint">We'll send a verification code in the final step to create your account.</span>
-        </div>
+        {user ? (
+          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0" }}>
+            {user.avatar && <img src={user.avatar} alt="" style={{ width: 40, height: 40, borderRadius: "50%" }} />}
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>{user.name}</div>
+              <div style={{ fontSize: 12, color: "var(--text-3)" }}>{user.email}</div>
+            </div>
+            <span className="badge badge-green" style={{ marginLeft: "auto" }}><span className="dot pulse" /> Connected</span>
+          </div>
+        ) : (
+          <div style={{ textAlign: "center", padding: "16px 0" }}>
+            <button
+              className="btn btn-secondary"
+              style={{ display: "inline-flex", alignItems: "center", gap: 10, padding: "10px 24px", fontSize: 14 }}
+              onClick={connectGoogle}
+              disabled={connecting}
+            >
+              {connecting ? (
+                <><span className="spinner accent" /> Connecting…</>
+              ) : (
+                <>
+                  <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59A14.5 14.5 0 0 1 9.5 24c0-1.59.28-3.14.76-4.59l-7.98-6.19A23.99 23.99 0 0 0 0 24c0 3.77.9 7.35 2.56 10.53l7.97-5.94z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 5.94C6.51 42.62 14.62 48 24 48z"/></svg>
+                  Continue with Google
+                </>
+              )}
+            </button>
+            <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 12 }}>
+              Grants access to Gmail, Google Calendar, and Contacts (read-only).
+            </div>
+          </div>
+        )}
       </div>
 
-      <SOC2Note text="Your email is only used for authentication and workspace notifications. It is never shared." />
+      <SOC2Note text="OAuth tokens are encrypted at rest. Helixis requests only the minimum scopes needed. You can revoke access anytime from your Google account settings." />
 
-      <button className="btn btn-primary" onClick={() => onNext(email)} disabled={!email.includes("@")}>
+      <button className="btn btn-primary" onClick={onNext} disabled={!user}>
         Continue →
       </button>
     </div>
@@ -1113,7 +1173,8 @@ function StepIntegration({
 // STEP 4: WEBHOOKS
 // ─────────────────────────────────────────────────────────
 
-function StepWebhooks({ provider: selectedProvider, onNext }: { provider: string; onNext: () => void }) {
+function StepWebhooks({ provider: selectedProvider, onNext }: { provider: string; onNext: (secret: string) => void }) {
+  const [signingSecret, setSigningSecret] = useState("");
   const isAppFolio = selectedProvider === "appfolio";
   const providerLabel = isAppFolio ? "AppFolio" : "Buildium";
 
@@ -1122,18 +1183,39 @@ function StepWebhooks({ provider: selectedProvider, onNext }: { provider: string
       <div className="panel-header">
         <div className="panel-tag">Step 4 of 6</div>
         <h1 className="panel-title">Webhooks</h1>
-        <p className="panel-desc">Helixis uses webhooks to receive real-time events from {providerLabel}. Your webhook endpoint and signing secret will be generated after account creation.</p>
+        <p className="panel-desc">Helixis uses webhooks to receive real-time events from {providerLabel}.</p>
       </div>
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-title">How it works</div>
         <div style={{ fontSize: 13, color: "var(--text-2)", lineHeight: 1.7 }}>
           <div style={{ marginBottom: 8 }}>1. We generate a unique webhook endpoint for your workspace</div>
-          <div style={{ marginBottom: 8 }}>2. You add the endpoint URL {isAppFolio ? "in AppFolio → Admin Settings → Webhook Card" : `in ${providerLabel} → Settings → Webhooks`}</div>
+          <div style={{ marginBottom: 8 }}>2. You add the endpoint URL {isAppFolio ? "in AppFolio → Admin Settings → Webhook Card" : "in Buildium → Settings → Webhooks"}</div>
           <div style={{ marginBottom: 8 }}>3. {providerLabel} sends events (new leads, work orders, etc.) to Helixis in real-time</div>
           <div>4. Helixis verifies every event {isAppFolio ? "using JWS (PS256) cryptographic signatures" : "using HMAC-SHA256 signature verification"}</div>
         </div>
       </div>
+
+      {!isAppFolio && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card-title">Buildium Webhook Signing Secret</div>
+          <div style={{ fontSize: 12, color: "var(--text-2)", lineHeight: 1.6, marginBottom: 12 }}>
+            When you configure a webhook in Buildium, it generates a signing secret. Copy that secret and paste it below so Helixis can verify incoming events.
+          </div>
+          <div className="field">
+            <label>Signing Secret</label>
+            <input
+              className="secret-input"
+              type="password"
+              placeholder="Paste your Buildium webhook signing secret"
+              value={signingSecret}
+              onChange={(e) => setSigningSecret(e.target.value)}
+              autoComplete="new-password"
+            />
+            <span className="hint">Find this in Buildium → Settings → Webhooks → Signing Secret. It usually starts with "whsec_".</span>
+          </div>
+        </div>
+      )}
 
       {isAppFolio && (
         <div className="card" style={{ marginBottom: 16 }}>
@@ -1141,6 +1223,7 @@ function StepWebhooks({ provider: selectedProvider, onNext }: { provider: string
           <div style={{ fontSize: 12, color: "var(--text-2)", lineHeight: 1.6 }}>
             <div style={{ marginBottom: 6 }}><strong style={{ color: "var(--yellow)" }}>Max plan required</strong> — Webhooks are only available on the AppFolio Max plan.</div>
             <div style={{ marginBottom: 6 }}><strong>Manual enablement</strong> — You must request webhook activation through developer.appfolio.com → "Request Help".</div>
+            <div style={{ marginBottom: 6 }}><strong>No shared secret needed</strong> — AppFolio signs webhooks using JWS (PS256). Helixis verifies signatures against AppFolio's public keys automatically.</div>
             <div>Supported topics: <code style={{ fontSize: 11, color: "var(--accent)" }}>leads</code>, <code style={{ fontSize: 11, color: "var(--accent)" }}>work_order_updates</code></div>
           </div>
         </div>
@@ -1148,12 +1231,17 @@ function StepWebhooks({ provider: selectedProvider, onNext }: { provider: string
 
       <SOC2Note text={isAppFolio
         ? "AppFolio webhooks are verified server-side using JWS (PS256) signature validation against AppFolio's public keys. No shared secret is required."
-        : "Webhook signing secrets are stored encrypted and used server-side only to verify event authenticity (HMAC-SHA256). The secret itself is never sent back to the client."
+        : "Your Buildium signing secret is stored encrypted in Supabase Vault (AES-256-GCM) and used server-side only to verify event authenticity via HMAC-SHA256."
       } />
 
-      <button className="btn btn-primary" onClick={onNext} style={{ marginTop: 8 }}>
-        Continue →
-      </button>
+      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+        <button className="btn btn-ghost" onClick={() => onNext("")} style={{ flex: 1 }}>
+          Skip for now
+        </button>
+        <button className="btn btn-primary" onClick={() => onNext(signingSecret)} style={{ flex: 2, margin: 0 }}>
+          Continue →
+        </button>
+      </div>
     </div>
   );
 }
@@ -1255,18 +1343,16 @@ function StepTeam({ onNext }: { onNext: (members: TeamMember[]) => void }) {
 
 function StepFinish({
   workspace,
-  email,
   integrationCreds,
+  webhookSecret,
   members,
 }: {
   workspace: WorkspaceData;
-  email: string;
   integrationCreds: IntegrationCreds | null;
+  webhookSecret: string;
   members: TeamMember[];
 }) {
-  const [phase, setPhase] = useState<"verify" | "creating" | "done" | "error">("verify");
-  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
-  const [otpSent, setOtpSent] = useState(false);
+  const [phase, setPhase] = useState<"confirm" | "creating" | "done" | "error">("confirm");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [progress, setProgress] = useState<Array<{ label: string; status: "pending" | "running" | "done" | "error"; detail?: string }>>([]);
@@ -1274,45 +1360,23 @@ function StepFinish({
   const provider = workspace.provider || "buildium";
   const providerLabel = provider === "appfolio" ? "AppFolio" : "Buildium";
 
-  const sendOtp = async () => {
-    setLoading(true);
-    setError("");
-    const { error: e } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: window.location.origin },
-    });
-    setLoading(false);
-    if (e) { setError(e.message); return; }
-    setOtpSent(true);
-  };
-
-  const handleOtpChange = (i: number, val: string) => {
-    if (!/^\d*$/.test(val)) return;
-    const next = [...otp];
-    next[i] = val.slice(-1);
-    setOtp(next);
-    if (val && i < 5) document.getElementById(`otp-finish-${i + 1}`)?.focus();
-  };
-
   const updateStep = (idx: number, status: "running" | "done" | "error", detail?: string) => {
     setProgress((prev) => prev.map((s, i) => i === idx ? { ...s, status, detail: detail ?? s.detail } : s));
   };
 
-  const verifyAndCreate = async () => {
-    const code = otp.join("");
-    if (code.length !== 6) return;
+  const launchWorkspace = async () => {
     setLoading(true);
     setError("");
 
-    // 1. Verify OTP
-    const { data: authData, error: authErr } = await supabase.auth.verifyOtp({ email, token: code, type: "email" });
-    if (authErr || !authData.session) {
-      setError("Invalid code. Please try again.");
+    // Get existing session from Google OAuth (step 1)
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      setError("Session expired. Please sign in again.");
       setLoading(false);
       return;
     }
 
-    const accessToken = authData.session.access_token;
+    const accessToken = session.access_token;
 
     // Build progress steps
     const steps = [
@@ -1385,8 +1449,13 @@ function StepFinish({
 
       // ── Setup webhooks ──
       updateStep(stepIdx, "running");
+      const webhookBody: Record<string, unknown> = { workspace_id: workspaceId, provider };
+      // For Buildium, pass the user-provided signing secret from their dashboard
+      if (provider === "buildium" && webhookSecret) {
+        webhookBody.signing_secret = webhookSecret;
+      }
       const { data: whData } = await supabase.functions.invoke("rotate-webhook-secret", {
-        body: { workspace_id: workspaceId, provider },
+        body: webhookBody,
       });
       updateStep(stepIdx, "done", whData?.endpoint_url ? "Endpoint ready" : "Configured");
       stepIdx++;
@@ -1415,69 +1484,41 @@ function StepFinish({
     setLoading(false);
   };
 
-  // ── VERIFY PHASE ──
-  if (phase === "verify") {
+  // ── CONFIRM PHASE ──
+  if (phase === "confirm") {
     return (
       <div className="panel" key="finish">
         <div className="panel-header">
           <div className="panel-tag">Step 6 of 6</div>
-          <h1 className="panel-title">Create your account</h1>
+          <h1 className="panel-title">Launch your workspace</h1>
           <p className="panel-desc">
-            {otpSent
-              ? `We sent a 6-digit code to ${email}. Enter it below to create your account and set everything up.`
-              : `We'll send a verification code to ${email} to finalize your account.`}
+            Everything looks good. Click below to create your workspace and connect {providerLabel}.
           </p>
         </div>
 
         <div className="card">
-          {!otpSent ? (
-            <>
-              <div style={{ fontSize: 13, color: "var(--text-2)", marginBottom: 16 }}>
-                Clicking the button below will send a one-time verification code to <strong style={{ color: "var(--text)" }}>{email}</strong>.
-              </div>
-              {error && (
-                <div className="test-result error" style={{ marginBottom: 12 }}>
-                  <span>⚠</span> {error}
-                </div>
-              )}
-              <button className="btn btn-primary" style={{ width: "100%" }} onClick={sendOtp} disabled={loading}>
-                {loading ? <><span className="spinner" /> Sending code…</> : "Send verification code"}
-              </button>
-            </>
-          ) : (
-            <>
-              <div className="otp-row">
-                {otp.map((d, i) => (
-                  <input
-                    key={i}
-                    id={`otp-finish-${i}`}
-                    className="otp-box"
-                    maxLength={1}
-                    value={d}
-                    onChange={(e) => handleOtpChange(i, e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Backspace" && !d && i > 0) document.getElementById(`otp-finish-${i - 1}`)?.focus();
-                    }}
-                    autoFocus={i === 0}
-                  />
-                ))}
-              </div>
-              {error && (
-                <div className="test-result error" style={{ marginTop: 0, marginBottom: 12 }}>
-                  <span>⚠</span> {error}
-                </div>
-              )}
-              <button className="btn btn-primary" style={{ width: "100%", marginTop: 8 }} onClick={verifyAndCreate} disabled={otp.join("").length !== 6 || loading}>
-                {loading ? <><span className="spinner" /> Verifying…</> : "Verify & create account →"}
-              </button>
-              <button className="btn btn-ghost" style={{ width: "100%", marginTop: 8 }} onClick={() => { setOtpSent(false); setOtp(["", "", "", "", "", ""]); setError(""); }}>
-                ← Resend code
-              </button>
-            </>
+          <div style={{ fontSize: 13, color: "var(--text-2)", marginBottom: 16 }}>
+            <strong style={{ color: "var(--text)" }}>Summary</strong>
+          </div>
+          <div style={{ fontSize: 13, color: "var(--text-2)", lineHeight: 1.8 }}>
+            <div>Workspace: <strong style={{ color: "var(--text)" }}>{workspace.name}</strong></div>
+            <div>Provider: <strong style={{ color: "var(--text)" }}>{providerLabel}</strong></div>
+            {integrationCreds && <div>API key: <strong style={{ color: "var(--text)" }}>...{integrationCreds.apiKey.slice(-4)}</strong></div>}
+            {members.length > 0 && <div>Team: <strong style={{ color: "var(--text)" }}>{members.length} member{members.length > 1 ? "s" : ""}</strong></div>}
+          </div>
+
+          {error && (
+            <div className="test-result error" style={{ marginTop: 12, marginBottom: 12 }}>
+              <span>⚠</span> {error}
+            </div>
           )}
+
+          <button className="btn btn-primary" style={{ width: "100%", marginTop: 16 }} onClick={launchWorkspace} disabled={loading}>
+            {loading ? <><span className="spinner" /> Launching…</> : "Launch workspace →"}
+          </button>
         </div>
 
-        <SOC2Note text="All authentication events are logged for audit purposes. Email-based auth provides a strong security posture with no password storage." />
+        <SOC2Note text="All workspace creation events are logged for audit. Your credentials are encrypted with AES-256-GCM via Supabase Vault." />
       </div>
     );
   }
@@ -1550,8 +1591,8 @@ function StepFinish({
 // ─────────────────────────────────────────────────────────
 
 const STEPS: { id: Step; label: string }[] = [
+  { id: "auth", label: "Sign in" },
   { id: "workspace", label: "Create workspace" },
-  { id: "auth", label: "Owner account" },
   { id: "integration", label: "Connect" },
   { id: "webhooks", label: "Webhooks" },
   { id: "team", label: "Invite team" },
@@ -1594,24 +1635,33 @@ function Sidebar({ current, completed }: { current: Step; completed: Set<Step> }
 // ─────────────────────────────────────────────────────────
 
 export default function App() {
-  const [step, setStep] = useState<Step>("workspace");
+  const [step, setStep] = useState<Step>("auth");
   const [completed, setCompleted] = useState<Set<Step>>(new Set());
   const [workspace, setWorkspace] = useState<WorkspaceData>({ name: "", slug: "" });
-  const [userEmail, setUserEmail] = useState("");
   const [integrationCreds, setIntegrationCreds] = useState<IntegrationCreds | null>(null);
+  const [webhookSecret, setWebhookSecret] = useState("");
   const [members, setMembers] = useState<TeamMember[]>([]);
 
   const complete = (s: Step) => setCompleted((prev) => new Set([...prev, s]));
 
+  // Auto-advance past auth if already signed in (e.g., returning from OAuth redirect)
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        complete("auth");
+        setStep((prev) => (prev === "auth" ? "workspace" : prev));
+      }
+    });
+  }, []);
+
+  const handleAuth = () => {
+    complete("auth");
+    setStep("workspace");
+  };
+
   const handleWorkspace = (data: WorkspaceData) => {
     setWorkspace(data);
     complete("workspace");
-    setStep("auth");
-  };
-
-  const handleAuth = (email: string) => {
-    setUserEmail(email);
-    complete("auth");
     setStep("integration");
   };
 
@@ -1621,7 +1671,8 @@ export default function App() {
     setStep("webhooks");
   };
 
-  const handleWebhooks = () => {
+  const handleWebhooks = (secret: string) => {
+    setWebhookSecret(secret);
     complete("webhooks");
     setStep("team");
   };
@@ -1638,12 +1689,12 @@ export default function App() {
       <div className="app">
         <Sidebar current={step} completed={completed} />
         <div className="main">
-          {step === "workspace" && <StepWorkspace onNext={handleWorkspace} />}
           {step === "auth" && <StepAuth onNext={handleAuth} />}
+          {step === "workspace" && <StepWorkspace onNext={handleWorkspace} />}
           {step === "integration" && <StepIntegration provider={workspace.provider || "buildium"} onNext={handleIntegration} />}
           {step === "webhooks" && <StepWebhooks provider={workspace.provider || "buildium"} onNext={handleWebhooks} />}
           {step === "team" && <StepTeam onNext={handleTeam} />}
-          {step === "finish" && <StepFinish workspace={workspace} email={userEmail} integrationCreds={integrationCreds} members={members} />}
+          {step === "finish" && <StepFinish workspace={workspace} integrationCreds={integrationCreds} webhookSecret={webhookSecret} members={members} />}
         </div>
       </div>
     </>
