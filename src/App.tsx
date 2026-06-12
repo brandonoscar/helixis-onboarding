@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { supabase, supabaseUrl, supabaseAnonKey } from "./lib/supabase";
+import { supabase } from "./lib/supabase";
+import { apiFetch, apiJson, BUILDIUM_WEBHOOK_URL } from "./lib/api";
 
 // ─────────────────────────────────────────────────────────
 // TYPES
@@ -21,15 +22,6 @@ interface IntegrationState {
   lastTested?: string;
   testMessage?: string;
   latencyMs?: number;
-}
-
-interface WebhookState {
-  endpointUrl?: string;
-  signingSecret?: string;
-  secretConfirmed: boolean;
-  secretViewed: boolean;
-  health: "awaiting" | "healthy" | "stale";
-  lastReceived?: string;
 }
 
 interface TeamMember {
@@ -1091,17 +1083,14 @@ function StepAuth({ onNext }: { onNext: (email: string, accessToken: string) => 
 // ─────────────────────────────────────────────────────────
 
 function StepIntegration({
-  workspaceId,
   onNext,
 }: {
-  workspaceId: string;
   onNext: (state: IntegrationState) => void;
 }) {
   const [apiKey, setApiKey] = useState("");
   const [apiSecret, setApiSecret] = useState("");
   const [env, setEnv] = useState<"production" | "sandbox">("production");
   const [integration, setIntegration] = useState<IntegrationState>({ status: "idle" });
-  const [integrationId, setIntegrationId] = useState<string | null>(null);
   const [locking, setLocking] = useState(false);
   const [googleConnected, setGoogleConnected] = useState(false);
   const [googleConnecting, setGoogleConnecting] = useState(false);
@@ -1110,66 +1099,90 @@ function StepIntegration({
     if (!apiKey || !apiSecret) return;
     setIntegration((s) => ({ ...s, status: "testing" }));
 
-    const { data: saveData } = await supabase.functions.invoke("provision-integration", {
-      body: { workspace_id: workspaceId, provider: "buildium", api_key: apiKey, api_secret: apiSecret, environment: env },
-    });
-
-    if (saveData?.integration_id) {
-      setIntegrationId(saveData.integration_id);
-    }
-
-    const { data: testData } = await supabase.functions.invoke("test-connection", {
-      body: { workspace_id: workspaceId, provider: "buildium" },
-    });
-
-    if (testData?.success) {
-      setIntegration({
-        status: "connected",
-        keyHint: saveData?.key_hint,
-        lastTested: new Date().toLocaleTimeString(),
-        testMessage: testData.message,
-        latencyMs: testData.latency_ms,
+    try {
+      // Fernet-encrypt + upsert into company_buildium_credentials.
+      const savedRes = await apiFetch("/api/v1/buildium/credentials", {
+        method: "PUT",
+        body: JSON.stringify({ client_id: apiKey, client_secret: apiSecret, environment: env }),
       });
-    } else {
-      setIntegration({ status: "error", testMessage: testData?.message || "Connection failed" });
+      const saved = (await savedRes.json()) as { client_id_last4?: string };
+
+      // Live test against Buildium. Side effect: backfills account_id,
+      // which is what routes inbound webhooks back to this company —
+      // this step is load-bearing, not cosmetic.
+      const testData = await apiJson<{
+        ok: boolean;
+        account_name?: string | null;
+        properties_count?: number | null;
+        error?: string | null;
+      }>("/api/v1/buildium/test", { method: "POST" });
+
+      if (testData.ok) {
+        setIntegration({
+          status: "connected",
+          keyHint: saved.client_id_last4 ? `...${saved.client_id_last4}` : undefined,
+          lastTested: new Date().toLocaleTimeString(),
+          testMessage: `Connected${testData.properties_count != null ? ` — ${testData.properties_count} rental${testData.properties_count === 1 ? "" : "s"} visible` : ""}`,
+        });
+      } else {
+        setIntegration({ status: "error", testMessage: testData.error || "Connection failed" });
+      }
+    } catch (e: any) {
+      setIntegration({ status: "error", testMessage: e.message || "Connection failed" });
     }
   };
 
   const lockIntegration = async () => {
-    if (!integrationId) return;
+    // UI-level acknowledgement: credentials are already encrypted
+    // server-side. A backend lock/immutability endpoint doesn't exist
+    // yet — when it does, call it here.
     setLocking(true);
-    await supabase.functions.invoke("lock-integration", {
-      body: { workspace_id: workspaceId, integration_id: integrationId },
-    });
+    setIntegration((s) => ({ ...s, status: "locked", lockedAt: new Date().toLocaleString() }));
     setLocking(false);
-    const locked = { ...integration, status: "locked" as const, lockedAt: new Date().toLocaleString() };
-    setIntegration(locked);
   };
+
+  const refreshGoogleState = useCallback(async () => {
+    try {
+      const connectors = await apiJson<{ id: string; isConnected: boolean }[]>("/api/v1/connectors/");
+      return connectors.some(
+        (c) => ["gmail", "google_calendar", "google_drive"].includes(c.id) && c.isConnected,
+      );
+    } catch {
+      return false;
+    }
+  }, []);
 
   const connectGoogle = async () => {
     setGoogleConnecting(true);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: window.location.origin,
-        scopes: "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/contacts.readonly",
-        queryParams: { access_type: "offline", prompt: "consent" },
-      },
-    });
-    if (error) {
+    try {
+      // Composio-managed OAuth — the same connection the agent's Gmail /
+      // Calendar / Drive specialists use at tool time.
+      const data = await apiJson<{ redirectUrl: string }>("/api/v1/connectors/gmail/connect", {
+        method: "POST",
+      });
+      window.open(data.redirectUrl, "_blank", "noopener");
+
+      // Poll until Composio reports the connection (max ~2 min).
+      for (let i = 0; i < 40; i++) {
+        await new Promise((r) => setTimeout(r, 3000));
+        if (await refreshGoogleState()) {
+          setGoogleConnected(true);
+          break;
+        }
+      }
+    } catch (e: any) {
+      alert(e.message || "Could not start Google sign-in");
+    } finally {
       setGoogleConnecting(false);
-      alert(error.message);
     }
   };
 
-  // Check if Google is already linked
+  // Check if Google is already connected (via Composio)
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return;
-      const identities = user.identities || [];
-      if (identities.some((i: any) => i.provider === "google")) setGoogleConnected(true);
+    refreshGoogleState().then((connected) => {
+      if (connected) setGoogleConnected(true);
     });
-  }, []);
+  }, [refreshGoogleState]);
 
   const allDone = integration.status === "locked" && googleConnected;
   const canContinue = integration.status === "locked";
@@ -1226,7 +1239,7 @@ function StepIntegration({
             {integration.status === "connected" && (
               <div className="test-result success">
                 <span>✓</span>
-                <span>{integration.testMessage} ({integration.latencyMs}ms) · Last tested {integration.lastTested}</span>
+                <span>{integration.testMessage} · Last tested {integration.lastTested}</span>
               </div>
             )}
             {integration.status === "error" && (
@@ -1303,29 +1316,35 @@ function StepIntegration({
 // STEP 4: WEBHOOKS
 // ─────────────────────────────────────────────────────────
 
-function StepWebhooks({ workspaceId, onNext }: { workspaceId: string; onNext: () => void }) {
-  const [webhook, setWebhook] = useState<WebhookState>({ secretConfirmed: false, secretViewed: false, health: "awaiting" });
-  const [generating, setGenerating] = useState(false);
-  const [confirmed, setConfirmed] = useState(false);
+function StepWebhooks({ onNext }: { onNext: () => void }) {
+  // Buildium generates the signing secret when the user creates the
+  // webhook subscription on their side — Helixis cannot generate it.
+  // The user registers our endpoint in Buildium, then pastes the secret
+  // Buildium showed them back here (PUT /buildium/webhook-secret).
+  const [secret, setSecret] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
 
-  const generateSecret = async () => {
-    setGenerating(true);
-    const { data } = await supabase.functions.invoke("rotate-webhook-secret", {
-      body: { workspace_id: workspaceId, provider: "buildium" },
-    });
-    setGenerating(false);
-    setWebhook({
-      endpointUrl: data.endpoint_url,
-      signingSecret: data.signing_secret,
-      secretViewed: true,
-      secretConfirmed: false,
-      health: "awaiting",
-    });
-  };
-
-  const confirmSaved = () => {
-    setWebhook((w) => ({ ...w, signingSecret: undefined, secretConfirmed: true }));
-    setConfirmed(true);
+  const saveSecret = async () => {
+    if (secret.trim().length < 8) {
+      setError("That doesn't look like a Buildium signing secret (too short).");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      await apiFetch("/api/v1/buildium/webhook-secret", {
+        method: "PUT",
+        body: JSON.stringify({ secret: secret.trim() }),
+      });
+      setSecret("");
+      setSaved(true);
+    } catch (e: any) {
+      setError(e.message || "Failed to save the signing secret");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -1333,93 +1352,66 @@ function StepWebhooks({ workspaceId, onNext }: { workspaceId: string; onNext: ()
       <div className="panel-header">
         <div className="panel-tag">Step 4 of 6</div>
         <h1 className="panel-title">Configure webhooks</h1>
-        <p className="panel-desc">Helixis listens for real-time events from Buildium. Add the endpoint URL and signing secret to your Buildium account.</p>
+        <p className="panel-desc">Helixis listens for real-time events from Buildium. Register the endpoint below in Buildium, then paste back the signing secret Buildium generates.</p>
       </div>
 
-      {!webhook.secretViewed ? (
-        <div className="card">
-          <div style={{ textAlign: "center", padding: "20px 0" }}>
-            <div style={{ fontSize: 32, marginBottom: 12 }}>🔗</div>
-            <div style={{ fontSize: 14, color: "var(--text-2)", marginBottom: 20 }}>Generate your webhook endpoint and signing secret.</div>
-            <button className="btn btn-secondary" onClick={generateSecret} disabled={generating} style={{ margin: "0 auto" }}>
-              {generating ? <><span className="spinner accent" /> Generating…</> : "Generate webhook secret"}
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div>
-          <div className="card">
-            <div className="card-title">Webhook Endpoint URL</div>
-            <CopyField label="Add this URL to Buildium → Settings → Webhooks" value={webhook.endpointUrl || ""} />
-            <div className="hint">This endpoint receives all Buildium events in real-time.</div>
-          </div>
+      <div className="card">
+        <div className="card-title">1 · Webhook Endpoint URL</div>
+        <CopyField label="Add this URL in Buildium → Settings → Webhooks" value={BUILDIUM_WEBHOOK_URL} />
+        <div className="hint">One endpoint for all events — Helixis routes them to your account automatically.</div>
+      </div>
 
-          {webhook.signingSecret && !confirmed ? (
-            <div className="card">
-              <div className="card-title">Signing Secret — Save Now</div>
-              <div className="secret-reveal">
-                <div className="secret-reveal-label">⚠ Shown once only</div>
-                <div className="secret-value">{webhook.signingSecret}</div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button
-                    className="copy-btn"
-                    onClick={() => navigator.clipboard.writeText(webhook.signingSecret!)}
-                    style={{ background: "var(--accent-dim)", border: "1px solid rgba(124,106,247,0.3)", padding: "6px 14px", borderRadius: 6 }}
-                  >
-                    Copy secret
-                  </button>
-                </div>
-                <div style={{ marginTop: 12 }} className="secret-warning">
-                  <span>⚠</span>
-                  <span>This secret will not be shown again. Copy it and store it securely (e.g., your password manager or secrets vault) before confirming.</span>
-                </div>
-              </div>
-
-              <button
-                className="btn btn-secondary"
-                style={{ marginTop: 12, width: "100%" }}
-                onClick={confirmSaved}
-              >
-                ✓ I've saved the signing secret
-              </button>
-            </div>
-          ) : confirmed ? (
-            <div className="card">
-              <div className="locked-banner">
-                <div className="locked-info">
-                  <div className="locked-icon">✓</div>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--green)" }}>Signing secret confirmed</div>
-                    <div style={{ fontSize: 11, color: "var(--text-3)" }}>Secret stored encrypted. Will not be shown again.</div>
-                  </div>
-                </div>
-                <span className="badge badge-green">Secured</span>
-              </div>
-            </div>
-          ) : null}
-
-          <div className="card">
-            <div className="card-title">Webhook Health</div>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div className="card">
+        <div className="card-title">2 · Signing Secret</div>
+        {saved ? (
+          <div className="locked-banner">
+            <div className="locked-info">
+              <div className="locked-icon">✓</div>
               <div>
-                <span className="badge badge-muted"><span className="dot" style={{ background: "var(--text-3)" }} /> Awaiting first event</span>
-                <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 6 }}>Events will appear here once Buildium starts sending them.</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--green)" }}>Signing secret stored</div>
+                <div style={{ fontSize: 11, color: "var(--text-3)" }}>Encrypted server-side. Used only to verify event authenticity.</div>
               </div>
-              <button className="btn btn-ghost" style={{ fontSize: 12 }}>Send test event</button>
             </div>
+            <span className="badge badge-green">Secured</span>
+          </div>
+        ) : (
+          <>
+            <div className="field">
+              <label>Paste the secret Buildium showed you</label>
+              <input
+                className="secret-input"
+                type="password"
+                placeholder="••••••••••••••••••••"
+                value={secret}
+                onChange={(e) => setSecret(e.target.value)}
+                autoComplete="new-password"
+              />
+              <span className="hint">Buildium generates this when you create the webhook subscription. Helixis never displays it again.</span>
+            </div>
+            {error && (
+              <div className="test-result error"><span>⚠</span> {error}</div>
+            )}
+            <button className="btn btn-secondary" onClick={saveSecret} disabled={saving || !secret.trim()} style={{ marginTop: 8 }}>
+              {saving ? <><span className="spinner accent" /> Saving…</> : "Save signing secret"}
+            </button>
+          </>
+        )}
+      </div>
+
+      <div className="card">
+        <div className="card-title">Webhook Health</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <span className="badge badge-muted"><span className="dot" style={{ background: "var(--text-3)" }} /> Awaiting first event</span>
+            <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 6 }}>Events will appear here once Buildium starts sending them.</div>
           </div>
         </div>
-      )}
+      </div>
 
       <SOC2Note text="Webhook signing secrets are stored encrypted and used server-side only to verify event authenticity (HMAC-SHA256). The secret itself is never sent back to the client." />
 
-      <button
-        className="btn btn-primary"
-        onClick={onNext}
-        disabled={webhook.secretViewed && !confirmed}
-        style={{ marginTop: 8 }}
-      >
-        {!webhook.secretViewed ? "Skip for now →" : "Continue →"}
+      <button className="btn btn-primary" onClick={onNext} style={{ marginTop: 8 }}>
+        {saved ? "Continue →" : "Skip for now →"}
       </button>
     </div>
   );
@@ -1429,7 +1421,7 @@ function StepWebhooks({ workspaceId, onNext }: { workspaceId: string; onNext: ()
 // STEP 5: TEAM
 // ─────────────────────────────────────────────────────────
 
-function StepTeam({ workspaceId, onNext }: { workspaceId: string; onNext: (members: TeamMember[]) => void }) {
+function StepTeam({ onNext }: { onNext: (members: TeamMember[]) => void }) {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<Role>("employee");
   const [members, setMembers] = useState<TeamMember[]>([]);
@@ -1437,12 +1429,12 @@ function StepTeam({ workspaceId, onNext }: { workspaceId: string; onNext: (membe
 
   const addMember = async () => {
     if (!email.includes("@") || members.find((m) => m.email === email)) return;
+    // The backend has no invite endpoint yet — invites are recorded
+    // locally so the owner can finish onboarding; invite emails ship
+    // with the backend invite API.
     setSending(true);
-    await supabase.functions.invoke("invite-member", {
-      body: { workspace_id: workspaceId, email, role },
-    });
+    setMembers((m) => [...m, { email, role, status: "pending" }]);
     setSending(false);
-    setMembers((m) => [...m, { email, role, status: "sent" }]);
     setEmail("");
   };
 
@@ -1500,7 +1492,7 @@ function StepTeam({ workspaceId, onNext }: { workspaceId: string; onNext: (membe
               <div className="member-avatar">{m.email[0]}</div>
               <div className="member-info">
                 <div className="member-email">{m.email}</div>
-                <div className="member-status">Invite sent</div>
+                <div className="member-status">Queued — invite emails coming soon</div>
               </div>
               <span className={`badge ${m.role === "owner" ? "badge-purple" : m.role === "manager" ? "badge-yellow" : "badge-muted"}`}>
                 {m.role}
@@ -1530,7 +1522,7 @@ function StepFinish({ workspace, members }: { workspace: WorkspaceData; members:
   const checks = [
     { label: "Workspace created", sub: workspace.name, done: true },
     { label: "Buildium connected & locked", sub: "API credentials encrypted", done: true },
-    { label: "Webhooks configured", sub: "hooks.helixis.com endpoint active", done: true },
+    { label: "Webhooks configured", sub: "Buildium events flow to Helixis", done: true },
     { label: "Team invited", sub: members.length > 0 ? `${members.length} member${members.length > 1 ? "s" : ""} invited` : "No invites sent (add later)", done: true },
   ];
 
@@ -1664,35 +1656,26 @@ export default function App() {
   const handleAuth = async (email: string, accessToken: string) => {
     setUserEmail(email);
 
-    // Create workspace using raw fetch with the access token from verifyOtp.
+    // Idempotently ensure the user's companies + company_users rows exist
+    // in the backend. Token passed explicitly — right after verifyOtp the
+    // persisted session may not be readable yet.
+    // Note: the backend names the company from the user's email prefix;
+    // the wizard's workspace name is display-only for now (no rename
+    // endpoint yet).
     setCreatingWorkspace(true);
-    let data: { workspace_id?: string; error?: string } | null = null;
-    let error: string | null = null;
     try {
-      const res = await fetch(`${supabaseUrl}/functions/v1/create-workspace`, {
+      const data = await apiJson<{ company_id: string }>("/api/v1/auth/bootstrap", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-          apikey: supabaseAnonKey,
-        },
-        body: JSON.stringify({ name: workspace.name, slug: workspace.slug }),
+        token: accessToken,
       });
-      data = await res.json();
-      if (!res.ok) error = data?.error || `HTTP ${res.status}`;
+      complete("auth");
+      setWorkspace((prev) => ({ ...prev, id: data.company_id }));
+      setStep("integration");
     } catch (e: any) {
-      error = e.message || "Network error";
+      alert(e.message || "Failed to set up your workspace");
+    } finally {
+      setCreatingWorkspace(false);
     }
-    setCreatingWorkspace(false);
-
-    if (error || !data?.workspace_id) {
-      alert(error || data?.error || "Failed to create workspace");
-      return;
-    }
-
-    complete("auth");
-    setWorkspace((prev) => ({ ...prev, id: data!.workspace_id }));
-    setStep("integration");
   };
 
   const handleIntegration = (state: IntegrationState) => {
@@ -1727,9 +1710,9 @@ export default function App() {
               </div>
             </div>
           )}
-          {step === "integration" && <StepIntegration workspaceId={workspace.id!} onNext={handleIntegration} />}
-          {step === "webhooks" && <StepWebhooks workspaceId={workspace.id!} onNext={handleWebhooks} />}
-          {step === "team" && <StepTeam workspaceId={workspace.id!} onNext={handleTeam} />}
+          {step === "integration" && <StepIntegration onNext={handleIntegration} />}
+          {step === "webhooks" && <StepWebhooks onNext={handleWebhooks} />}
+          {step === "team" && <StepTeam onNext={handleTeam} />}
           {step === "finish" && <StepFinish workspace={workspace} members={members} />}
         </div>
       </div>
