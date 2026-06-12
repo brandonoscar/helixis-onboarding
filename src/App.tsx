@@ -1429,15 +1429,25 @@ function StepTeam({ onNext }: { onNext: (members: TeamMember[]) => void }) {
 
   const addMember = async () => {
     if (!email.includes("@") || members.find((m) => m.email === email)) return;
-    // The backend has no invite endpoint yet — invites are recorded
-    // locally so the owner can finish onboarding; invite emails ship
-    // with the backend invite API.
     setSending(true);
-    setMembers((m) => [...m, { email, role, status: "pending" }]);
-    setSending(false);
-    setEmail("");
+    try {
+      // GoTrue admin invite: Supabase emails the invitee and the
+      // membership row exists before their first sign-in.
+      await apiFetch("/api/v1/company/invite", {
+        method: "POST",
+        body: JSON.stringify({ email, role }),
+      });
+      setMembers((m) => [...m, { email, role, status: "sent" }]);
+      setEmail("");
+    } catch (e: any) {
+      alert(e.message || "Could not send the invite");
+    } finally {
+      setSending(false);
+    }
   };
 
+  // 'owner' is intentionally not invitable — ownership is never granted
+  // by invitation (mirrors the backend's INVITABLE_ROLES guard).
   const roleDesc: Record<Role, string> = {
     owner: "Full access — billing, integrations, team",
     manager: "Operations access — no billing",
@@ -1467,7 +1477,6 @@ function StepTeam({ onNext }: { onNext: (members: TeamMember[]) => void }) {
         <div className="field">
           <label>Role</label>
           <select value={role} onChange={(e) => setRole(e.target.value as Role)}>
-            <option value="owner">Owner</option>
             <option value="manager">Manager</option>
             <option value="employee">Employee</option>
           </select>
@@ -1492,7 +1501,7 @@ function StepTeam({ onNext }: { onNext: (members: TeamMember[]) => void }) {
               <div className="member-avatar">{m.email[0]}</div>
               <div className="member-info">
                 <div className="member-email">{m.email}</div>
-                <div className="member-status">Queued — invite emails coming soon</div>
+                <div className="member-status">Invite sent</div>
               </div>
               <span className={`badge ${m.role === "owner" ? "badge-purple" : m.role === "manager" ? "badge-yellow" : "badge-muted"}`}>
                 {m.role}
@@ -1657,17 +1666,22 @@ export default function App() {
     setUserEmail(email);
 
     // Idempotently ensure the user's companies + company_users rows exist
-    // in the backend. Token passed explicitly — right after verifyOtp the
-    // persisted session may not be readable yet.
-    // Note: the backend names the company from the user's email prefix;
-    // the wizard's workspace name is display-only for now (no rename
-    // endpoint yet).
+    // in the backend, then apply the wizard's workspace name. Token passed
+    // explicitly — right after verifyOtp the persisted session may not be
+    // readable yet.
     setCreatingWorkspace(true);
     try {
       const data = await apiJson<{ company_id: string }>("/api/v1/auth/bootstrap", {
         method: "POST",
         token: accessToken,
       });
+      if (workspace.name.trim()) {
+        await apiFetch("/api/v1/company", {
+          method: "PATCH",
+          token: accessToken,
+          body: JSON.stringify({ name: workspace.name.trim() }),
+        });
+      }
       complete("auth");
       setWorkspace((prev) => ({ ...prev, id: data.company_id }));
       setStep("integration");
