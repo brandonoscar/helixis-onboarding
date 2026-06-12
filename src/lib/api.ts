@@ -11,8 +11,8 @@
  *   PUT  /api/v1/buildium/webhook-secret — store Buildium-generated secret
  *   POST /api/v1/connectors/{id}/connect — Composio OAuth (Google)
  *
- * Auth: the Supabase project configured in VITE_SUPABASE_URL must be the
- * SAME project the backend verifies JWTs against (helixis-test) — a token
+ * Auth: the Supabase project (src/lib/supabase.ts) must be the SAME
+ * project the backend verifies JWTs against (helixis-test) — a token
  * minted by any other project will be rejected with 401.
  */
 
