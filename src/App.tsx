@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "./lib/supabase";
 import { apiFetch, apiJson, APP_URL, BUILDIUM_WEBHOOK_URL } from "./lib/api";
+import { loadWizard, saveWizard } from "./lib/persist";
 
 // ─────────────────────────────────────────────────────────
 // TYPES
@@ -1645,33 +1646,93 @@ function Sidebar({ current, completed }: { current: Step; completed: Set<Step> }
 // ─────────────────────────────────────────────────────────
 
 export default function App() {
-  const [step, setStep] = useState<Step>("workspace");
-  const [completed, setCompleted] = useState<Set<Step>>(new Set());
-  const [workspace, setWorkspace] = useState<WorkspaceData>({ name: "", slug: "" });
-  const [userEmail, setUserEmail] = useState("");
-  const [members, setMembers] = useState<TeamMember[]>([]);
-  const [webhooksConfigured, setWebhooksConfigured] = useState(false);
+  // Hydrate once from localStorage so a refresh / magic-link redirect resumes
+  // where the user was instead of dropping them back at step 1.
+  const [persisted] = useState(loadWizard);
+  const [step, setStep] = useState<Step>((persisted.step as Step) || "workspace");
+  const [completed, setCompleted] = useState<Set<Step>>(
+    new Set((persisted.completed as Step[]) || []),
+  );
+  const [workspace, setWorkspace] = useState<WorkspaceData>(
+    persisted.workspace || { name: "", slug: "" },
+  );
+  const [userEmail, setUserEmail] = useState(persisted.userEmail || "");
+  const [members, setMembers] = useState<TeamMember[]>(
+    (persisted.members as TeamMember[]) || [],
+  );
+  const [webhooksConfigured, setWebhooksConfigured] = useState(
+    persisted.webhooksConfigured || false,
+  );
   const [creatingWorkspace, setCreatingWorkspace] = useState(false);
+  const didResume = useRef(false);
 
   const complete = (s: Step) => setCompleted((prev) => new Set([...prev, s]));
 
-  // Recover existing session on load (e.g., after magic link redirect)
+  // Persist progress on every meaningful change (no secrets — see persist.ts).
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setUserEmail(session.user.email || "");
+    saveWizard({
+      step,
+      completed: [...completed],
+      workspace,
+      members,
+      webhooksConfigured,
+      userEmail,
+    });
+  }, [step, completed, workspace, members, webhooksConfigured, userEmail]);
+
+  // Idempotently create the company + apply the workspace name. Shared by the
+  // inline-OTP path (handleAuth, explicit token) and the magic-link resume
+  // path (persisted session, no token needed). /auth/bootstrap is idempotent.
+  const bootstrapWorkspace = useCallback(
+    async (token: string | undefined, name: string): Promise<string> => {
+      const data = await apiJson<{ company_id: string }>("/api/v1/auth/bootstrap", {
+        method: "POST",
+        ...(token ? { token } : {}),
+      });
+      if (name.trim()) {
+        await apiFetch("/api/v1/company", {
+          method: "PATCH",
+          ...(token ? { token } : {}),
+          body: JSON.stringify({ name: name.trim() }),
+        });
+      }
+      return data.company_id;
+    },
+    [],
+  );
+
+  // Recover an existing session on load (e.g. after a magic-link redirect,
+  // which reloads the SPA). The inline-OTP path runs handleAuth itself and
+  // marks 'auth' done; only resume-bootstrap when we're authenticated but
+  // 'auth' hasn't completed yet — i.e. we got here via the email link.
+  useEffect(() => {
+    let active = true;
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!active || !session?.user) return;
+      setUserEmail(session.user.email || "");
+      if (didResume.current || completed.has("auth")) return;
+      didResume.current = true;
+      setCreatingWorkspace(true);
+      try {
+        const companyId = await bootstrapWorkspace(undefined, workspace.name);
         complete("auth");
-        // If still on workspace or auth step, advance past auth
-        setStep((prev) => (prev === "auth" ? "workspace" : prev));
+        setWorkspace((prev) => ({ ...prev, id: companyId }));
+        setStep((prev) => (prev === "workspace" || prev === "auth" ? "integration" : prev));
+      } catch (e: any) {
+        alert(e.message || "Failed to restore your workspace session");
+      } finally {
+        setCreatingWorkspace(false);
       }
     });
-    // Listen for auth state changes (magic link callback)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        setUserEmail(session.user.email || "");
-      }
+      if (session?.user) setUserEmail(session.user.email || "");
     });
-    return () => subscription.unsubscribe();
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+    // Reads the hydrated mount snapshot intentionally; resume is a one-shot.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleWorkspace = (data: WorkspaceData) => {
@@ -1682,26 +1743,13 @@ export default function App() {
 
   const handleAuth = async (email: string, accessToken: string) => {
     setUserEmail(email);
-
-    // Idempotently ensure the user's companies + company_users rows exist
-    // in the backend, then apply the wizard's workspace name. Token passed
-    // explicitly — right after verifyOtp the persisted session may not be
-    // readable yet.
+    // Token passed explicitly — right after verifyOtp the persisted session
+    // may not be readable yet.
     setCreatingWorkspace(true);
     try {
-      const data = await apiJson<{ company_id: string }>("/api/v1/auth/bootstrap", {
-        method: "POST",
-        token: accessToken,
-      });
-      if (workspace.name.trim()) {
-        await apiFetch("/api/v1/company", {
-          method: "PATCH",
-          token: accessToken,
-          body: JSON.stringify({ name: workspace.name.trim() }),
-        });
-      }
+      const companyId = await bootstrapWorkspace(accessToken, workspace.name);
       complete("auth");
-      setWorkspace((prev) => ({ ...prev, id: data.company_id }));
+      setWorkspace((prev) => ({ ...prev, id: companyId }));
       setStep("integration");
     } catch (e: any) {
       alert(e.message || "Failed to set up your workspace");
