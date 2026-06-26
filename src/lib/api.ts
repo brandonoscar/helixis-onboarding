@@ -26,6 +26,12 @@ export const API_URL: string =
  *  so the endpoint is the same for every company. */
 export const BUILDIUM_WEBHOOK_URL = `${API_URL}/webhooks/buildium`;
 
+/** Where a finished user lands to actually start using Helixis (the web
+ *  chat app). Baked default + VITE_HELIXIS_* name so a stale Vercel env
+ *  var can't silently win at build time (see gotcha 3 / ADR 0003). */
+export const APP_URL: string =
+  import.meta.env.VITE_HELIXIS_APP_URL || "https://agentichelixis.vercel.app";
+
 export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {

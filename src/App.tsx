@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "./lib/supabase";
-import { apiFetch, apiJson, BUILDIUM_WEBHOOK_URL } from "./lib/api";
+import { apiFetch, apiJson, APP_URL, BUILDIUM_WEBHOOK_URL } from "./lib/api";
+import { loadWizard, saveWizard } from "./lib/persist";
 
 // ─────────────────────────────────────────────────────────
 // TYPES
@@ -1316,7 +1317,7 @@ function StepIntegration({
 // STEP 4: WEBHOOKS
 // ─────────────────────────────────────────────────────────
 
-function StepWebhooks({ onNext }: { onNext: () => void }) {
+function StepWebhooks({ onNext }: { onNext: (saved: boolean) => void }) {
   // Buildium generates the signing secret when the user creates the
   // webhook subscription on their side — Helixis cannot generate it.
   // The user registers our endpoint in Buildium, then pastes the secret
@@ -1410,7 +1411,7 @@ function StepWebhooks({ onNext }: { onNext: () => void }) {
 
       <SOC2Note text="Webhook signing secrets are stored encrypted and used server-side only to verify event authenticity (HMAC-SHA256). The secret itself is never sent back to the client." />
 
-      <button className="btn btn-primary" onClick={onNext} style={{ marginTop: 8 }}>
+      <button className="btn btn-primary" onClick={() => onNext(saved)} style={{ marginTop: 8 }}>
         {saved ? "Continue →" : "Skip for now →"}
       </button>
     </div>
@@ -1527,12 +1528,27 @@ function StepTeam({ onNext }: { onNext: (members: TeamMember[]) => void }) {
 // STEP 6: FINISH
 // ─────────────────────────────────────────────────────────
 
-function StepFinish({ workspace, members }: { workspace: WorkspaceData; members: TeamMember[] }) {
+function StepFinish({
+  workspace,
+  members,
+  webhooksConfigured,
+}: {
+  workspace: WorkspaceData;
+  members: TeamMember[];
+  webhooksConfigured: boolean;
+}) {
+  // Each line reflects what the user actually did — reaching this step
+  // requires Buildium to be locked (StepIntegration gates Continue on it),
+  // but webhooks and team invites are skippable, so don't claim them.
   const checks = [
     { label: "Workspace created", sub: workspace.name, done: true },
     { label: "Buildium connected & locked", sub: "API credentials encrypted", done: true },
-    { label: "Webhooks configured", sub: "Buildium events flow to Helixis", done: true },
-    { label: "Team invited", sub: members.length > 0 ? `${members.length} member${members.length > 1 ? "s" : ""} invited` : "No invites sent (add later)", done: true },
+    webhooksConfigured
+      ? { label: "Webhooks configured", sub: "Buildium events flow to Helixis", done: true }
+      : { label: "Webhooks", sub: "Skipped — add the signing secret later from Settings", done: false },
+    members.length > 0
+      ? { label: "Team invited", sub: `${members.length} member${members.length > 1 ? "s" : ""} invited`, done: true }
+      : { label: "Team", sub: "No invites sent — add teammates later from Settings", done: false },
   ];
 
   return (
@@ -1541,14 +1557,16 @@ function StepFinish({ workspace, members }: { workspace: WorkspaceData; members:
         <div className="finish-icon">✓</div>
         <h1 className="panel-title" style={{ textAlign: "center" }}>You're all set!</h1>
         <p className="panel-desc" style={{ textAlign: "center" }}>
-          {workspace.name} is live on Helixis. Install the extension and start managing properties.
+          {workspace.name} is live on Helixis. Open the app and ask Helixis to run your first task.
         </p>
       </div>
 
       <div className="checklist">
         {checks.map((c) => (
           <div className="check-item" key={c.label}>
-            <div className="check-icon">✓</div>
+            <div className="check-icon" style={c.done ? undefined : { background: "var(--surface-3)", color: "var(--text-3)" }}>
+              {c.done ? "✓" : "–"}
+            </div>
             <div>
               <div className="check-label">{c.label}</div>
               <div className="check-sub">{c.sub}</div>
@@ -1557,8 +1575,12 @@ function StepFinish({ workspace, members }: { workspace: WorkspaceData; members:
         ))}
       </div>
 
-      <div className="card">
-        <div className="card-title">Install the Helixis Extension</div>
+      <a className="btn btn-primary" href={APP_URL} style={{ marginTop: 8, textDecoration: "none" }}>
+        Open Helixis →
+      </a>
+
+      <div className="card" style={{ marginTop: 16 }}>
+        <div className="card-title">Also available — browser extension</div>
         <div className="extension-steps">
           {["Install extension", "Sign in", "You're connected"].map((label, i) => (
             <div className="ext-step" key={label}>
@@ -1567,13 +1589,9 @@ function StepFinish({ workspace, members }: { workspace: WorkspaceData; members:
             </div>
           ))}
         </div>
-        <button className="btn btn-primary" style={{ marginTop: 4 }}>
-          🧩 Install Helixis Extension →
-        </button>
-      </div>
-
-      <div style={{ textAlign: "center", marginTop: 8 }}>
-        <button className="btn btn-ghost">Open admin dashboard instead</button>
+        <div className="hint" style={{ marginTop: 4 }}>
+          The Helixis side-panel rides along on any page. Coming soon to the Chrome Web Store.
+        </div>
       </div>
     </div>
   );
@@ -1616,8 +1634,8 @@ function Sidebar({ current, completed }: { current: Step; completed: Set<Step> }
       </div>
 
       <div className="sidebar-footer">
-        <p>Need help? <a href="#">docs.helixis.com</a></p>
-        <p style={{ marginTop: 6 }}>Onboarding support: <a href="#">hello@helixis.com</a></p>
+        <p>Need help? <a href="https://docs.helixis.com" target="_blank" rel="noopener noreferrer">docs.helixis.com</a></p>
+        <p style={{ marginTop: 6 }}>Onboarding support: <a href="mailto:hello@helixis.com">hello@helixis.com</a></p>
       </div>
     </div>
   );
@@ -1628,32 +1646,93 @@ function Sidebar({ current, completed }: { current: Step; completed: Set<Step> }
 // ─────────────────────────────────────────────────────────
 
 export default function App() {
-  const [step, setStep] = useState<Step>("workspace");
-  const [completed, setCompleted] = useState<Set<Step>>(new Set());
-  const [workspace, setWorkspace] = useState<WorkspaceData>({ name: "", slug: "" });
-  const [userEmail, setUserEmail] = useState("");
-  const [members, setMembers] = useState<TeamMember[]>([]);
+  // Hydrate once from localStorage so a refresh / magic-link redirect resumes
+  // where the user was instead of dropping them back at step 1.
+  const [persisted] = useState(loadWizard);
+  const [step, setStep] = useState<Step>((persisted.step as Step) || "workspace");
+  const [completed, setCompleted] = useState<Set<Step>>(
+    new Set((persisted.completed as Step[]) || []),
+  );
+  const [workspace, setWorkspace] = useState<WorkspaceData>(
+    persisted.workspace || { name: "", slug: "" },
+  );
+  const [userEmail, setUserEmail] = useState(persisted.userEmail || "");
+  const [members, setMembers] = useState<TeamMember[]>(
+    (persisted.members as TeamMember[]) || [],
+  );
+  const [webhooksConfigured, setWebhooksConfigured] = useState(
+    persisted.webhooksConfigured || false,
+  );
   const [creatingWorkspace, setCreatingWorkspace] = useState(false);
+  const didResume = useRef(false);
 
   const complete = (s: Step) => setCompleted((prev) => new Set([...prev, s]));
 
-  // Recover existing session on load (e.g., after magic link redirect)
+  // Persist progress on every meaningful change (no secrets — see persist.ts).
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setUserEmail(session.user.email || "");
+    saveWizard({
+      step,
+      completed: [...completed],
+      workspace,
+      members,
+      webhooksConfigured,
+      userEmail,
+    });
+  }, [step, completed, workspace, members, webhooksConfigured, userEmail]);
+
+  // Idempotently create the company + apply the workspace name. Shared by the
+  // inline-OTP path (handleAuth, explicit token) and the magic-link resume
+  // path (persisted session, no token needed). /auth/bootstrap is idempotent.
+  const bootstrapWorkspace = useCallback(
+    async (token: string | undefined, name: string): Promise<string> => {
+      const data = await apiJson<{ company_id: string }>("/api/v1/auth/bootstrap", {
+        method: "POST",
+        ...(token ? { token } : {}),
+      });
+      if (name.trim()) {
+        await apiFetch("/api/v1/company", {
+          method: "PATCH",
+          ...(token ? { token } : {}),
+          body: JSON.stringify({ name: name.trim() }),
+        });
+      }
+      return data.company_id;
+    },
+    [],
+  );
+
+  // Recover an existing session on load (e.g. after a magic-link redirect,
+  // which reloads the SPA). The inline-OTP path runs handleAuth itself and
+  // marks 'auth' done; only resume-bootstrap when we're authenticated but
+  // 'auth' hasn't completed yet — i.e. we got here via the email link.
+  useEffect(() => {
+    let active = true;
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (!active || !session?.user) return;
+      setUserEmail(session.user.email || "");
+      if (didResume.current || completed.has("auth")) return;
+      didResume.current = true;
+      setCreatingWorkspace(true);
+      try {
+        const companyId = await bootstrapWorkspace(undefined, workspace.name);
         complete("auth");
-        // If still on workspace or auth step, advance past auth
-        setStep((prev) => (prev === "auth" ? "workspace" : prev));
+        setWorkspace((prev) => ({ ...prev, id: companyId }));
+        setStep((prev) => (prev === "workspace" || prev === "auth" ? "integration" : prev));
+      } catch (e: any) {
+        alert(e.message || "Failed to restore your workspace session");
+      } finally {
+        setCreatingWorkspace(false);
       }
     });
-    // Listen for auth state changes (magic link callback)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        setUserEmail(session.user.email || "");
-      }
+      if (session?.user) setUserEmail(session.user.email || "");
     });
-    return () => subscription.unsubscribe();
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+    // Reads the hydrated mount snapshot intentionally; resume is a one-shot.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleWorkspace = (data: WorkspaceData) => {
@@ -1664,26 +1743,13 @@ export default function App() {
 
   const handleAuth = async (email: string, accessToken: string) => {
     setUserEmail(email);
-
-    // Idempotently ensure the user's companies + company_users rows exist
-    // in the backend, then apply the wizard's workspace name. Token passed
-    // explicitly — right after verifyOtp the persisted session may not be
-    // readable yet.
+    // Token passed explicitly — right after verifyOtp the persisted session
+    // may not be readable yet.
     setCreatingWorkspace(true);
     try {
-      const data = await apiJson<{ company_id: string }>("/api/v1/auth/bootstrap", {
-        method: "POST",
-        token: accessToken,
-      });
-      if (workspace.name.trim()) {
-        await apiFetch("/api/v1/company", {
-          method: "PATCH",
-          token: accessToken,
-          body: JSON.stringify({ name: workspace.name.trim() }),
-        });
-      }
+      const companyId = await bootstrapWorkspace(accessToken, workspace.name);
       complete("auth");
-      setWorkspace((prev) => ({ ...prev, id: data.company_id }));
+      setWorkspace((prev) => ({ ...prev, id: companyId }));
       setStep("integration");
     } catch (e: any) {
       alert(e.message || "Failed to set up your workspace");
@@ -1697,7 +1763,8 @@ export default function App() {
     setStep("webhooks");
   };
 
-  const handleWebhooks = () => {
+  const handleWebhooks = (saved: boolean) => {
+    setWebhooksConfigured(saved);
     complete("webhooks");
     setStep("team");
   };
@@ -1727,7 +1794,7 @@ export default function App() {
           {step === "integration" && <StepIntegration onNext={handleIntegration} />}
           {step === "webhooks" && <StepWebhooks onNext={handleWebhooks} />}
           {step === "team" && <StepTeam onNext={handleTeam} />}
-          {step === "finish" && <StepFinish workspace={workspace} members={members} />}
+          {step === "finish" && <StepFinish workspace={workspace} members={members} webhooksConfigured={webhooksConfigured} />}
         </div>
       </div>
     </>
