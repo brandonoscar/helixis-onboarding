@@ -956,46 +956,56 @@ function StepWorkspace({ onNext }: { onNext: (data: WorkspaceData) => void }) {
 }
 
 // ─────────────────────────────────────────────────────────
-// STEP 2: AUTH (Magic Link)
+// STEP 2: AUTH (Owner account — email + password)
 // ─────────────────────────────────────────────────────────
 
 function StepAuth({ onNext }: { onNext: (email: string, accessToken: string) => void }) {
   const [email, setEmail] = useState("");
-  const [sent, setSent] = useState(false);
-  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const sendLink = async () => {
-    if (!email.includes("@")) return;
-    setLoading(true);
-    const { error: e } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: window.location.origin },
-    });
-    setLoading(false);
-    if (e) { setError(e.message); return; }
-    setSent(true);
-  };
+  const canSubmit = email.includes("@") && password.length >= 8;
 
-  const handleOtpChange = (i: number, val: string) => {
-    if (!/^\d*$/.test(val)) return;
-    const next = [...otp];
-    next[i] = val.slice(-1);
-    setOtp(next);
-    if (val && i < 5) {
-      document.getElementById(`otp-${i + 1}`)?.focus();
-    }
-  };
-
-  const verifyOtp = async () => {
-    const code = otp.join("");
-    if (code.length !== 6) return;
+  const handleSubmit = async () => {
+    if (!canSubmit || loading) return;
     setLoading(true);
     setError("");
-    const { data, error: e } = await supabase.auth.verifyOtp({ email, token: code, type: "email" });
+
+    // Create the owner account with a password. Email confirmation is
+    // intentionally OFF for now (to be enabled before launch), so signUp
+    // returns a session immediately. The same password is what the user
+    // signs in with on the web app + extension — so every surface shares
+    // one credential. Invited teammates set their own password via the
+    // GoTrue invite email (Step 5), not here.
+    const { data, error: signUpErr } = await supabase.auth.signUp({ email, password });
+
+    if (signUpErr) {
+      const msg = signUpErr.message.toLowerCase();
+      // Owner re-running the wizard (account already exists) → sign in.
+      if (msg.includes("already registered") || msg.includes("already exists") || msg.includes("user already")) {
+        const { data: signInData, error: signInErr } =
+          await supabase.auth.signInWithPassword({ email, password });
+        setLoading(false);
+        if (signInErr || !signInData.session) {
+          setError("That email already has an account, but the password didn't match. Try again, or use a different email.");
+          return;
+        }
+        onNext(email, signInData.session.access_token);
+        return;
+      }
+      setLoading(false);
+      setError(signUpErr.message);
+      return;
+    }
+
     setLoading(false);
-    if (e || !data.session) { setError("Invalid code. Please try again."); return; }
+    if (!data.session) {
+      // No session back means email confirmation is still enabled on the
+      // Supabase project — which we're deferring until before launch.
+      setError("Account created, but email confirmation is still enabled. Turn off Authentication → Providers → Email → “Confirm email” in Supabase, then continue.");
+      return;
+    }
     onNext(email, data.session.access_token);
   };
 
@@ -1003,78 +1013,49 @@ function StepAuth({ onNext }: { onNext: (email: string, accessToken: string) => 
     <div className="panel" key="auth">
       <div className="panel-header">
         <div className="panel-tag">Step 2 of 6</div>
-        <h1 className="panel-title">{sent ? "Check your email" : "Create your owner account"}</h1>
+        <h1 className="panel-title">Create your owner account</h1>
         <p className="panel-desc">
-          {sent
-            ? `We sent a 6-digit code to ${email}. Enter it below to continue.`
-            : "You'll be the workspace Owner with full administrative access."}
+          You'll be the workspace Owner with full administrative access.
         </p>
       </div>
 
       <div className="card">
-        {!sent ? (
-          <div className="field">
-            <label>Work Email</label>
-            <input
-              type="email"
-              placeholder="you@yourcompany.com"
-              value={email}
-              onChange={(e) => { setEmail(e.target.value); setError(""); }}
-              onKeyDown={(e) => e.key === "Enter" && sendLink()}
-              autoFocus
-            />
-            <span className="hint">We'll send a one-time code. No password required.</span>
-            {error && (
-              <div className="test-result error" style={{ marginTop: 8 }}>
-                <span>⚠</span> {error}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div>
-            <div className="otp-row">
-              {otp.map((d, i) => (
-                <input
-                  key={i}
-                  id={`otp-${i}`}
-                  className="otp-box"
-                  maxLength={1}
-                  value={d}
-                  onChange={(e) => handleOtpChange(i, e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Backspace" && !d && i > 0) {
-                      document.getElementById(`otp-${i - 1}`)?.focus();
-                    }
-                  }}
-                  autoFocus={i === 0}
-                />
-              ))}
-            </div>
-            {error && (
-              <div className="test-result error" style={{ marginTop: 0, marginBottom: 12 }}>
-                <span>⚠</span> {error}
-              </div>
-            )}
+        <div className="field">
+          <label>Work Email</label>
+          <input
+            type="email"
+            placeholder="you@yourcompany.com"
+            value={email}
+            onChange={(e) => { setEmail(e.target.value); setError(""); }}
+            autoComplete="email"
+            autoFocus
+          />
+        </div>
+        <div className="field">
+          <label>Password</label>
+          <input
+            className="secret-input"
+            type="password"
+            placeholder="At least 8 characters"
+            value={password}
+            onChange={(e) => { setPassword(e.target.value); setError(""); }}
+            onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+            autoComplete="new-password"
+          />
+          <span className="hint">You'll use this to sign in to Helixis on the web and in the extension.</span>
+        </div>
+        {error && (
+          <div className="test-result error" style={{ marginTop: 8 }}>
+            <span>⚠</span> {error}
           </div>
         )}
       </div>
 
-      <SOC2Note text="All authentication events are logged for audit purposes. Email-based auth provides a strong security posture with no password storage." />
+      <SOC2Note text="Passwords are hashed and stored by Supabase Auth (GoTrue) — Helixis never sees the plaintext. All authentication events are logged for audit." />
 
-      {!sent ? (
-        <button className="btn btn-primary" onClick={sendLink} disabled={!email.includes("@") || loading}>
-          {loading ? <><span className="spinner" /> Sending…</> : "Send verification code →"}
-        </button>
-      ) : (
-        <div>
-          <button className="btn btn-primary" onClick={verifyOtp} disabled={otp.join("").length !== 6 || loading}>
-            {loading ? <><span className="spinner" /> Verifying…</> : "Verify & continue →"}
-          </button>
-          <button className="btn btn-ghost" style={{ width: "100%", marginTop: 8 }} onClick={() => setSent(false)}>
-            ← Use different email
-          </button>
-        </div>
-      )}
+      <button className="btn btn-primary" onClick={handleSubmit} disabled={!canSubmit || loading}>
+        {loading ? <><span className="spinner" /> Creating account…</> : "Create account & continue →"}
+      </button>
     </div>
   );
 }
