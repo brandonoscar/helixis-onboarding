@@ -171,6 +171,14 @@ const css = `
   }
   .lp-feature:hover { border-color: var(--line-strong); transform: translateY(-2px); }
 
+  .lp-feature-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
   .lp-feature-icon {
     width: 34px;
     height: 34px;
@@ -180,7 +188,20 @@ const css = `
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-bottom: 16px;
+    flex-shrink: 0;
+  }
+
+  /* competitor-alternative tag — positioning, not decoration */
+  .lp-alt {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--r-pill);
+    padding: 3px 9px;
+    white-space: nowrap;
   }
 
   .lp-feature-title { font-size: 14.5px; font-weight: 600; color: var(--ink); margin-bottom: 6px; }
@@ -303,21 +324,32 @@ const STEPS = [
   },
   {
     num: "02",
-    title: "Triage from one inbox",
-    body: "New events arrive with what Helixis noticed across your other records — balances, promises, open work orders — and a drafted action. You approve; nothing sends itself.",
+    title: "Helixis runs the follow-up",
+    body: "New work orders and messages arrive triaged, with what Helixis noticed across your records — balances, promises, repeat issues — and the reply or task already drafted. You approve; nothing sends itself.",
   },
   {
     num: "03",
     title: "Ask anything",
-    body: "One chat that answers across Buildium, Gmail, and Calendar. Every write to your systems is confirmed by you first, every time.",
+    body: "One chat that answers across Buildium, Gmail, and Calendar — leases, ledgers, work orders, owner questions. Every write to your systems is confirmed by you first, every time.",
   },
 ];
 
-const FEATURES = [
+const FEATURES: {
+  icon: string;
+  title: string;
+  body: string;
+  alt?: string;
+}[] = [
+  {
+    icon: ICONS.key,
+    title: "Maintenance execution",
+    alt: "Vendoroo alternative",
+    body: "Work orders arrive triaged, with resident updates and owner summaries already drafted — and get chased to closeout, not just logged.",
+  },
   {
     icon: ICONS.inbox,
     title: "An inbox that drafts the work",
-    body: "Webhooks and important tenant emails become cards with a suggested reply or task — edit, approve, done.",
+    body: "Buildium events and important tenant emails become cards with a suggested reply or task — edit, approve, done.",
   },
   {
     icon: ICONS.eye,
@@ -336,13 +368,9 @@ const FEATURES = [
   },
   {
     icon: ICONS.users,
-    title: "Leasing CRM built in",
-    body: "Calls, texts, and emails become leads. Pipeline stages sync automatically when an applicant appears in Buildium.",
-  },
-  {
-    icon: ICONS.key,
-    title: "Turnovers & renewals",
-    body: "Move-out notices open a tracked turnover checklist; upcoming lease ends surface with renewal context.",
+    title: "Leasing, turnovers & renewals",
+    alt: "LeadSimple alternative",
+    body: "Calls, texts, and emails become pipeline leads; move-out notices open a tracked turnover checklist; lease ends surface with renewal context.",
   },
 ];
 
@@ -389,15 +417,15 @@ export default function Landing() {
       <header className="lp-hero">
         <div>
           <div className="lp-eyebrow lp-rise" style={{ animationDelay: "0.05s" }}>
-            AI operations for property management
+            The execution layer for Buildium teams
           </div>
           <h1 className="lp-h1 lp-rise" style={{ animationDelay: "0.15s" }}>
-            Your Buildium, thinking for itself.
+            We help Buildium users turn maintenance chaos into completed work orders.
           </h1>
           <p className="lp-sub lp-rise" style={{ animationDelay: "0.25s" }}>
-            Helixis mirrors your portfolio in real time, triages what matters into one
-            inbox with the reply already drafted, and answers anything — leases,
-            balances, work orders — in plain English.
+            Faster fixes, cleaner owner updates, fewer resident follow-ups — without
+            hiring another coordinator. Buildium stays your system of record; Helixis
+            is the system of action that runs the next step.
           </p>
           <div className="lp-hero-ctas lp-rise" style={{ animationDelay: "0.35s" }}>
             <a className="btn btn-primary" href="/start" style={{ padding: "12px 26px", fontSize: 15 }}>
@@ -408,7 +436,8 @@ export default function Landing() {
             </a>
           </div>
           <div className="lp-hero-note lp-rise" style={{ animationDelay: "0.45s" }}>
-            Connects to your Buildium account in about ten minutes.
+            For property management companies already on Buildium that want more
+            execution per manager — no migration, no new platform.
           </div>
         </div>
         <div className="lp-hero-viz lp-rise" style={{ animationDelay: "0.3s" }}>
@@ -422,7 +451,7 @@ export default function Landing() {
           <h2 className="lp-h2">From webhook to done, without the busywork.</h2>
           <p className="lp-section-sub">
             Helixis rides your existing Buildium data — no migration, no second system
-            of record. Buildium stays the source of truth; Helixis does the thinking.
+            of record, no double entry. Buildium records; Helixis executes.
           </p>
         </Reveal>
         <Reveal>
@@ -440,18 +469,22 @@ export default function Landing() {
 
       <section className="lp-section">
         <Reveal>
-          <div className="lp-kicker">What you get</div>
+          <div className="lp-kicker">What Helixis executes</div>
           <h2 className="lp-h2">A teammate, not another tab.</h2>
           <p className="lp-section-sub">
-            Everything below ships today and works off your live Buildium account.
+            One layer instead of a stack of add-ons — everything below ships today and
+            works off your live Buildium account.
           </p>
         </Reveal>
         <Reveal>
           <div className="lp-grid">
             {FEATURES.map((f) => (
               <div className="lp-feature" key={f.title}>
-                <div className="lp-feature-icon">
-                  <Icon d={f.icon} />
+                <div className="lp-feature-head">
+                  <div className="lp-feature-icon">
+                    <Icon d={f.icon} />
+                  </div>
+                  {f.alt && <span className="lp-alt">{f.alt}</span>}
                 </div>
                 <div className="lp-feature-title">{f.title}</div>
                 <div className="lp-feature-body">{f.body}</div>
