@@ -207,6 +207,137 @@ const css = `
   .lp-feature-title { font-size: 14.5px; font-weight: 600; color: var(--ink); margin-bottom: 6px; }
   .lp-feature-body { font-size: 13px; line-height: 1.6; color: var(--ink-muted); }
 
+  /* ── hero product mock (the inbox card) ── */
+  .mock {
+    width: 100%;
+    max-width: 440px;
+    background: var(--canvas-1);
+    border: 1px solid var(--line-strong);
+    border-radius: var(--r-lg);
+    overflow: hidden;
+    font-size: 13px;
+  }
+
+  .mock-titlebar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--line);
+    background: var(--canvas-2);
+  }
+
+  .mock-source {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.4px;
+    color: var(--ink-subtle);
+  }
+
+  .mock-badge {
+    font-size: 10.5px;
+    font-weight: 500;
+    color: var(--caution);
+    background: var(--caution-soft);
+    border: 1px solid var(--line);
+    border-radius: var(--r-pill);
+    padding: 2px 9px;
+    white-space: nowrap;
+  }
+
+  .mock-body { padding: 16px; }
+
+  .mock-title { font-size: 14.5px; font-weight: 600; color: var(--ink); line-height: 1.4; }
+  .mock-sub { font-size: 12px; color: var(--ink-subtle); margin-top: 3px; }
+
+  .mock-section { margin-top: 14px; }
+
+  .mock-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--iris);
+    margin-bottom: 7px;
+  }
+
+  .mock-noticed { display: flex; flex-direction: column; gap: 5px; }
+
+  .mock-noticed span {
+    font-size: 12.5px;
+    color: var(--ink-muted);
+    padding-left: 14px;
+    position: relative;
+    line-height: 1.45;
+  }
+
+  .mock-noticed span::before {
+    content: '';
+    position: absolute;
+    left: 2px;
+    top: 7px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--iris);
+    opacity: 0.7;
+  }
+
+  .mock-draft {
+    background: var(--canvas-2);
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
+    padding: 10px 12px;
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--ink-muted);
+  }
+
+  .mock-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 14px;
+  }
+
+  .mock-approve {
+    background: var(--iris);
+    color: #fff;
+    font-size: 12.5px;
+    font-weight: 500;
+    border-radius: var(--r-sm);
+    padding: 7px 14px;
+  }
+
+  .mock-edit {
+    border: 1px solid var(--line-strong);
+    color: var(--ink-muted);
+    font-size: 12.5px;
+    font-weight: 500;
+    border-radius: var(--r-sm);
+    padding: 7px 14px;
+  }
+
+  .mock-note {
+    margin-left: auto;
+    font-size: 11px;
+    color: var(--ink-subtle);
+  }
+
+  /* ── FAQ ── */
+  .lp-faq { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+  .lp-faq-item {
+    border: 1px solid var(--line);
+    border-radius: var(--r-md);
+    background: var(--canvas-1);
+    padding: 20px 22px;
+  }
+
+  .lp-faq-q { font-size: 14px; font-weight: 600; color: var(--ink); margin-bottom: 8px; }
+  .lp-faq-a { font-size: 13px; line-height: 1.65; color: var(--ink-muted); }
+
   /* ── trust strip ── */
   .lp-trust {
     display: grid;
@@ -249,9 +380,10 @@ const css = `
   @media (max-width: 900px) {
     .lp-hero { grid-template-columns: 1fr; padding-top: 48px; padding-bottom: 64px; }
     .lp-hero-viz { order: -1; }
-    .lp-steps, .lp-grid { grid-template-columns: 1fr; }
+    .lp-steps, .lp-grid, .lp-faq { grid-template-columns: 1fr; }
     .lp-trust { grid-template-columns: 1fr 1fr; }
     .lp-section { padding: 56px 24px; }
+    .mock-note { display: none; }
   }
 `;
 
@@ -285,6 +417,47 @@ const ICONS = {
   check: "M20 6 9 17l-5-5",
   lock: "M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2z M7 11V7a5 5 0 0 1 10 0v4",
 };
+
+// A faithful, hand-built rendering of the real Inbox card — work order in,
+// cross-record context surfaced, reply drafted, human approves. This is the
+// product's entire pitch in one frame, so it lives in the hero.
+function InboxMock() {
+  return (
+    <div className="mock" aria-label="Example: a triaged work order in the Helixis inbox">
+      <div className="mock-titlebar">
+        <span className="mock-source">Buildium · Work order created</span>
+        <span className="mock-badge">Needs review</span>
+      </div>
+      <div className="mock-body">
+        <div className="mock-title">Leaking kitchen faucet — Unit 4B, Oakview Terrace</div>
+        <div className="mock-sub">Reported by Sarah Chen · 8:42 AM</div>
+
+        <div className="mock-section">
+          <div className="mock-label">What Helixis noticed</div>
+          <div className="mock-noticed">
+            <span>Second plumbing issue in this unit in 90 days</span>
+            <span>Lease ends Sep 30 — renewal window open</span>
+            <span>Rodriguez Plumbing closed the last work order</span>
+          </div>
+        </div>
+
+        <div className="mock-section">
+          <div className="mock-label">Drafted reply to Sarah</div>
+          <div className="mock-draft">
+            Hi Sarah — thanks for the report. We're scheduling a plumber for Unit 4B
+            and will confirm a time window with you today. Since this is the second…
+          </div>
+        </div>
+
+        <div className="mock-actions">
+          <span className="mock-approve">Approve &amp; send</span>
+          <span className="mock-edit">Edit</span>
+          <span className="mock-note">Nothing sends without you</span>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function useReveal() {
   const ref = useRef<HTMLDivElement>(null);
@@ -374,6 +547,25 @@ const FEATURES: {
   },
 ];
 
+const FAQ = [
+  {
+    q: "What data does Helixis access?",
+    a: "The Buildium data you connect — properties, leases, tenants, work orders, and bills — plus Gmail and Calendar if you authorize them through Google's consent screen with minimum scopes. API credentials are encrypted at rest and never shown again after setup.",
+  },
+  {
+    q: "Can I revoke access?",
+    a: "Yes, at any time. Rotate or remove your Buildium API keys, disconnect Google from Settings or your Google account's security page, and email us to erase your workspace's mirrored data and memory entirely.",
+  },
+  {
+    q: "What happens if I cancel?",
+    a: "Nothing is trapped. Buildium is always your system of record — Helixis holds a mirror, not the master. On request we delete the mirror, stored memory, and credentials, and your Buildium account is untouched.",
+  },
+  {
+    q: "What does it cost?",
+    a: "Free during early access while we build alongside our first teams. Design-partner pricing will be announced before billing turns on — no surprise charges, ever.",
+  },
+];
+
 const TRUST = [
   { icon: ICONS.lock, text: "Credentials encrypted at rest — keys are stored once and never shown again" },
   { icon: ICONS.check, text: "Every write to Buildium or Gmail is confirm-gated — you approve each action" },
@@ -420,7 +612,7 @@ export default function Landing() {
             The execution layer for Buildium teams
           </div>
           <h1 className="lp-h1 lp-rise" style={{ animationDelay: "0.15s" }}>
-            We help Buildium users turn maintenance chaos into completed work orders.
+            Turn Buildium maintenance chaos into completed work orders.
           </h1>
           <p className="lp-sub lp-rise" style={{ animationDelay: "0.25s" }}>
             Faster fixes, cleaner owner updates, fewer resident follow-ups — without
@@ -431,8 +623,8 @@ export default function Landing() {
             <a className="btn btn-primary" href="/start" style={{ padding: "12px 26px", fontSize: 15 }}>
               {start} →
             </a>
-            <a className="btn btn-secondary" href={APP_URL} style={{ padding: "12px 22px", fontSize: 15 }}>
-              Open Helixis
+            <a className="btn btn-secondary" href="#how" style={{ padding: "12px 22px", fontSize: 15 }}>
+              See how it works
             </a>
           </div>
           <div className="lp-hero-note lp-rise" style={{ animationDelay: "0.45s" }}>
@@ -441,11 +633,11 @@ export default function Landing() {
           </div>
         </div>
         <div className="lp-hero-viz lp-rise" style={{ animationDelay: "0.3s" }}>
-          <Helix width={280} height={400} />
+          <InboxMock />
         </div>
       </header>
 
-      <section className="lp-section">
+      <section className="lp-section" id="how">
         <Reveal>
           <div className="lp-kicker">How it works</div>
           <h2 className="lp-h2">From webhook to done, without the busywork.</h2>
@@ -514,10 +706,33 @@ export default function Landing() {
         </Reveal>
       </section>
 
+      <section className="lp-section">
+        <Reveal>
+          <div className="lp-kicker">Questions</div>
+          <h2 className="lp-h2">The things you should ask before handing over keys.</h2>
+          <p className="lp-section-sub">
+            Straight answers — the same ones we'd want before connecting our own accounts.
+          </p>
+        </Reveal>
+        <Reveal>
+          <div className="lp-faq">
+            {FAQ.map((f) => (
+              <div className="lp-faq-item" key={f.q}>
+                <div className="lp-faq-q">{f.q}</div>
+                <div className="lp-faq-a">{f.a}</div>
+              </div>
+            ))}
+          </div>
+        </Reveal>
+      </section>
+
       <section className="lp-section lp-cta-band">
         <Reveal>
           <h2 className="lp-h2">Set up in about ten minutes.</h2>
-          <p>Workspace, Buildium keys, webhooks, team — the wizard walks you through all of it.</p>
+          <p>
+            Workspace, Buildium keys, webhooks, team — the wizard walks you through all
+            of it. Free during early access; design-partner pricing when billing launches.
+          </p>
           <a className="btn btn-primary" href="/start" style={{ padding: "13px 30px", fontSize: 15 }}>
             {start} →
           </a>
@@ -526,7 +741,11 @@ export default function Landing() {
 
       <footer className="lp-footer">
         <span>© 2026 Helixis</span>
-        <a href="mailto:hello@helixis.com">hello@helixis.com</a>
+        <div style={{ display: "flex", gap: 20 }}>
+          <a href="/privacy">Privacy</a>
+          <a href="/terms">Terms</a>
+          <a href="mailto:hello@helixis.com">hello@helixis.com</a>
+        </div>
       </footer>
     </div>
   );
