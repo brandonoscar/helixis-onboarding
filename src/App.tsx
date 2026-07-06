@@ -5,11 +5,18 @@ import { loadWizard, saveWizard } from "./lib/persist";
 import Helix from "./Helix";
 
 // ─────────────────────────────────────────────────────────
-// TYPES
+// SETUP WIZARD — 4 steps + launch (2026-07 research rebuild):
+//   1 identify  — secure account: email OTP + company + doors/goal,
+//                 saved BEFORE any credential is asked for
+//   2 buildium  — the one high-friction required connection, with an
+//                 admin preflight + handoff and a value reveal on test
+//   3 live      — webhooks, reframed as "live Buildium updates", skippable
+//   4 channels  — Google OAuth, optional
+//   finish      — launch: what Helixis is scanning now, not a summary
+// Team invites moved to the in-app Getting Started checklist.
 // ─────────────────────────────────────────────────────────
 
-type Step = "workspace" | "auth" | "integration" | "webhooks" | "team" | "finish";
-type Role = "owner" | "manager" | "employee";
+type Step = "identify" | "buildium" | "live" | "channels" | "finish";
 
 interface WorkspaceData {
   name: string;
@@ -23,14 +30,17 @@ interface IntegrationState {
   lockedAt?: string;
   lastTested?: string;
   testMessage?: string;
-  latencyMs?: number;
+  count?: number | null;
 }
 
-interface TeamMember {
-  email: string;
-  role: Role;
-  status: "pending" | "sent";
-}
+const DOORS_OPTIONS = ["1–50", "50–200", "200–500", "500–2,000", "2,000+"];
+const GOAL_OPTIONS = [
+  { id: "maintenance", label: "Maintenance & work orders" },
+  { id: "owners", label: "Owner updates & reporting" },
+  { id: "rent", label: "Rent collection & follow-up" },
+  { id: "leasing", label: "Leasing & lead follow-up" },
+  { id: "everything", label: "All of it" },
+];
 
 // ─────────────────────────────────────────────────────────
 // WIZARD-SPECIFIC STYLES (tokens + primitives live in theme.ts)
@@ -66,13 +76,8 @@ const css = `
     text-decoration: none;
   }
 
-  .logo-text {
-    font-size: 16px;
-    font-weight: 600;
-    letter-spacing: -0.2px;
-  }
+  .logo-text { font-size: 16px; font-weight: 600; letter-spacing: -0.2px; }
 
-  /* steps with a vertical progress rail */
   .steps { display: flex; flex-direction: column; position: relative; }
 
   .step-item {
@@ -84,7 +89,6 @@ const css = `
     position: relative;
   }
 
-  /* rail segment under each dot (skip the last) */
   .step-item:not(:last-child)::before {
     content: '';
     position: absolute;
@@ -96,7 +100,6 @@ const css = `
   }
 
   .step-item.done:not(:last-child)::before { background: var(--iris); opacity: 0.5; }
-
   .step-item.active { background: var(--iris-soft); }
 
   .step-dot {
@@ -118,34 +121,16 @@ const css = `
     z-index: 1;
   }
 
-  .step-item.active .step-dot {
-    border-color: var(--iris);
-    background: var(--iris);
-    color: #fff;
-  }
+  .step-item.active .step-dot { border-color: var(--iris); background: var(--iris); color: #fff; }
+  .step-item.done .step-dot { border-color: var(--iris); background: var(--iris-soft); color: var(--iris); }
 
-  .step-item.done .step-dot {
-    border-color: var(--iris);
-    background: var(--iris-soft);
-    color: var(--iris);
-  }
-
-  .step-label {
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--ink-subtle);
-    transition: color 0.15s;
-  }
-
+  .step-label { font-size: 13px; font-weight: 500; color: var(--ink-subtle); transition: color 0.15s; }
   .step-item.active .step-label { color: var(--ink); }
   .step-item.done .step-label { color: var(--ink-muted); }
 
-  .sidebar-footer {
-    margin-top: auto;
-    padding-top: 20px;
-    border-top: 1px solid var(--line);
-  }
+  .step-tag { margin-left: auto; font-size: 10px; color: var(--ink-subtle); font-family: var(--font-mono); }
 
+  .sidebar-footer { margin-top: auto; padding-top: 20px; border-top: 1px solid var(--line); }
   .sidebar-footer p { font-size: 11px; color: var(--ink-subtle); line-height: 1.5; }
   .sidebar-footer a { color: var(--iris); text-decoration: none; }
 
@@ -163,7 +148,7 @@ const css = `
 
   .panel {
     width: 100%;
-    max-width: 520px;
+    max-width: 540px;
     animation: fadeUp 0.35s var(--ease-out) both;
   }
 
@@ -172,7 +157,7 @@ const css = `
     to { opacity: 1; transform: translateY(0); }
   }
 
-  .panel-header { margin-bottom: 32px; }
+  .panel-header { margin-bottom: 28px; }
 
   .panel-tag {
     font-size: 11px;
@@ -185,7 +170,7 @@ const css = `
   }
 
   .panel-title {
-    font-size: 26px;
+    font-size: 25px;
     font-weight: 600;
     letter-spacing: -0.02em;
     line-height: 1.25;
@@ -198,7 +183,108 @@ const css = `
 
   .btn-primary.wide { width: 100%; padding: 12px; font-size: 15px; font-weight: 500; margin-top: 8px; }
 
-  /* ── LOCKED STATE ── */
+  .trust-line {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 12px;
+    background: var(--canvas-1);
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
+    font-size: 11.5px;
+    color: var(--ink-subtle);
+    line-height: 1.5;
+    margin-bottom: 16px;
+  }
+
+  .trust-line svg { flex-shrink: 0; margin-top: 1px; color: var(--ink-subtle); }
+
+  /* ── PREFLIGHT (admin check) ── */
+  .preflight { display: flex; gap: 8px; margin-bottom: 16px; }
+
+  .preflight-opt {
+    flex: 1;
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
+    background: var(--canvas-2);
+    padding: 12px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink-muted);
+    cursor: pointer;
+    font-family: var(--font-sans);
+    text-align: left;
+    transition: border-color 0.15s, background 0.15s, color 0.15s;
+  }
+
+  .preflight-opt:hover { border-color: var(--line-strong); }
+  .preflight-opt.selected { border-color: var(--iris); background: var(--iris-soft); color: var(--ink); }
+
+  /* ── ADMIN HANDOFF ── */
+  .handoff {
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
+    background: var(--canvas-2);
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+
+  .handoff-title { font-size: 13.5px; font-weight: 600; color: var(--ink); margin-bottom: 6px; }
+  .handoff-body { font-size: 12.5px; color: var(--ink-muted); line-height: 1.6; margin-bottom: 12px; }
+
+  /* ── SAMPLE PREVIEW ── */
+  .sample-toggle {
+    background: none;
+    border: none;
+    color: var(--iris);
+    font-size: 12.5px;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: var(--font-sans);
+    padding: 0;
+    margin-bottom: 12px;
+  }
+
+  .sample {
+    border: 1px dashed var(--line-strong);
+    border-radius: var(--r-sm);
+    padding: 14px 16px;
+    margin-bottom: 16px;
+  }
+
+  .sample-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--ink-subtle);
+    margin-bottom: 10px;
+  }
+
+  .sample ul { list-style: none; display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+
+  .sample li {
+    font-size: 12.5px;
+    color: var(--ink-muted);
+    padding-left: 14px;
+    position: relative;
+  }
+
+  .sample li::before {
+    content: '';
+    position: absolute;
+    left: 2px;
+    top: 7px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--iris);
+    opacity: 0.7;
+  }
+
+  .sample-cta { font-size: 12px; color: var(--ink-subtle); }
+
+  /* ── LOCKED / SUCCESS ── */
   .locked-banner {
     background: var(--positive-soft);
     border: 1px solid rgba(111, 191, 143, 0.2);
@@ -262,36 +348,6 @@ const css = `
 
   .copy-btn:hover { background: var(--iris-soft); }
 
-  /* ── TEAM MEMBER LIST ── */
-  .member-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 0;
-    border-bottom: 1px solid var(--line);
-  }
-
-  .member-item:last-child { border-bottom: none; }
-
-  .member-avatar {
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    background: var(--iris-soft);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--iris);
-    flex-shrink: 0;
-    text-transform: uppercase;
-  }
-
-  .member-info { flex: 1; min-width: 0; }
-  .member-email { font-size: 13px; font-weight: 500; color: var(--ink); }
-  .member-status { font-size: 11px; color: var(--ink-subtle); }
-
   /* ── TEST RESULT ── */
   .test-result {
     padding: 12px 14px;
@@ -316,59 +372,53 @@ const css = `
     border: 1px solid rgba(201, 111, 111, 0.2);
   }
 
-  /* ── FINISH SCREEN ── */
-  .finish-hero { text-align: center; padding: 24px 0 32px; }
-
+  /* ── FINISH / LAUNCH ── */
+  .finish-hero { text-align: center; padding: 20px 0 28px; }
   .finish-viz { display: flex; justify-content: center; margin-bottom: 8px; }
 
-  .checklist { display: flex; flex-direction: column; gap: 10px; margin: 24px 0; }
+  .scan-cards { display: flex; flex-direction: column; gap: 10px; margin: 20px 0; }
 
-  .check-item {
+  .scan-card {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 12px 14px;
+    padding: 13px 14px;
     background: var(--canvas-1);
     border: 1px solid var(--line);
     border-radius: var(--r-sm);
   }
 
-  .check-icon {
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: var(--positive-soft);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 10px;
-    color: var(--positive);
-    flex-shrink: 0;
-  }
-
-  .check-label { font-size: 13px; font-weight: 500; color: var(--ink); }
-  .check-sub { font-size: 11px; color: var(--ink-subtle); }
-
-  .extension-steps { display: flex; gap: 8px; margin: 20px 0; }
-
-  .ext-step {
-    flex: 1;
-    background: var(--canvas-1);
-    border: 1px solid var(--line);
-    border-radius: var(--r-sm);
-    padding: 14px 12px;
+  .scan-num {
+    font-family: var(--font-mono);
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--iris);
+    min-width: 44px;
     text-align: center;
   }
 
-  .ext-num {
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--iris);
+  .scan-label { font-size: 13px; font-weight: 500; color: var(--ink); }
+  .scan-sub { font-size: 11px; color: var(--ink-subtle); }
+
+  /* ── OTP INPUT ── */
+  .otp-row { display: flex; gap: 8px; justify-content: center; margin: 20px 0; }
+
+  .otp-box {
+    width: 48px;
+    height: 56px;
+    text-align: center;
+    font-size: 22px;
+    font-weight: 600;
     font-family: var(--font-mono);
-    margin-bottom: 4px;
+    border-radius: var(--r-sm);
+    background: var(--canvas-2);
+    border: 1.5px solid var(--line);
+    color: var(--ink);
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
   }
 
-  .ext-label { font-size: 12px; color: var(--ink-muted); }
+  .otp-box:focus { border-color: var(--iris); box-shadow: 0 0 0 3px var(--iris-soft); }
 
   /* ── TOGGLE ── */
   .toggle-row {
@@ -396,111 +446,50 @@ const css = `
 
   .toggle-opt.active { background: var(--canvas-3); color: var(--ink); }
 
-  /* ── OTP INPUT ── */
-  .otp-row { display: flex; gap: 8px; justify-content: center; margin: 20px 0; }
+  .field-row { display: flex; gap: 12px; }
+  .field-row .field { flex: 1; }
 
-  .otp-box {
-    width: 48px;
-    height: 56px;
-    text-align: center;
-    font-size: 22px;
-    font-weight: 600;
-    font-family: var(--font-mono);
-    border-radius: var(--r-sm);
-    background: var(--canvas-2);
-    border: 1.5px solid var(--line);
-    color: var(--ink);
-    outline: none;
-    transition: border-color 0.15s, box-shadow 0.15s;
-  }
-
-  .otp-box:focus {
-    border-color: var(--iris);
-    box-shadow: 0 0 0 3px var(--iris-soft);
-  }
-
-  /* ── PROVIDER CARD ── */
-  .provider-card {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    padding: 16px;
-    border-radius: var(--r-sm);
-    border: 1px solid var(--line);
-    background: var(--canvas-2);
-    cursor: pointer;
-    transition: border-color 0.15s, background 0.15s;
-  }
-
-  .provider-card:hover { border-color: var(--iris); }
-  .provider-card.selected { border-color: var(--iris); background: var(--iris-soft); }
-
-  .provider-logo {
-    width: 38px;
-    height: 38px;
-    border-radius: var(--r-sm);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 15px;
-    font-weight: 600;
-    font-family: var(--font-mono);
-    background: var(--canvas-3);
-    color: var(--ink-muted);
-    flex-shrink: 0;
-  }
-
-  .provider-card.selected .provider-logo { background: var(--iris); color: #fff; }
-
-  .provider-label { font-size: 14px; font-weight: 600; color: var(--ink); }
-  .provider-sub { font-size: 12px; color: var(--ink-subtle); }
-
-  .provider-check {
-    margin-left: auto;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    border: 1.5px solid var(--line-strong);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 10px;
-    transition: background 0.15s, border-color 0.15s;
-  }
-
-  .provider-card.selected .provider-check {
-    background: var(--iris);
-    border-color: var(--iris);
-    color: #fff;
-  }
-
-  /* ── SECURITY NOTE ── */
-  .soc2-note {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    padding: 10px 12px;
-    background: var(--canvas-1);
-    border: 1px solid var(--line);
-    border-radius: var(--r-sm);
-    font-size: 11px;
-    color: var(--ink-subtle);
-    line-height: 1.5;
-    margin-bottom: 16px;
-  }
-
-  .soc2-note svg { flex-shrink: 0; margin-top: 1px; color: var(--ink-subtle); }
+  .waitlist-note { font-size: 11.5px; color: var(--ink-subtle); margin-top: 10px; }
+  .waitlist-note a { color: var(--iris); text-decoration: none; }
 
   /* ── RESPONSIVE ── */
   @media (max-width: 768px) {
     .sidebar { display: none; }
     .main { padding: 24px 20px; }
+    .field-row { flex-direction: column; gap: 0; }
   }
 `;
 
 // ─────────────────────────────────────────────────────────
 // UTILITY COMPONENTS
 // ─────────────────────────────────────────────────────────
+
+function LockIcon() {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2z M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  );
+}
+
+function TrustLine({ text }: { text: string }) {
+  return (
+    <div className="trust-line">
+      <LockIcon />
+      <span>{text}</span>
+    </div>
+  );
+}
 
 function CopyField({ label, value }: { label: string; value: string }) {
   const [copied, setCopied] = useState(false);
@@ -524,118 +513,61 @@ function CopyField({ label, value }: { label: string; value: string }) {
   );
 }
 
-function SOC2Note({ text }: { text: string }) {
+// "Preview with sample Buildium data" — a preview, never an alternate
+// activation path: it always points back at the real connection.
+function SamplePreview() {
   return (
-    <div className="soc2-note">
-      <svg
-        width="13"
-        height="13"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-      >
-        <path d="M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2z M7 11V7a5 5 0 0 1 10 0v4" />
-      </svg>
-      <span>{text}</span>
+    <div className="sample">
+      <div className="sample-label">Sample data — what your first scan looks like</div>
+      <ul>
+        <li>4 work orders open more than 7 days — 2 with no vendor assigned</li>
+        <li>3 owner updates ready to draft from this week's activity</li>
+        <li>2 tenants promised payment — follow-up drafted for Thursday</li>
+        <li>1 lease ending in 30 days with no renewal started</li>
+      </ul>
+      <div className="sample-cta">Connect Buildium to run this on your portfolio.</div>
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────
-// STEP 1: WORKSPACE SETUP
+// STEP 1: SECURE ACCOUNT (email + OTP + company + segmentation)
 // ─────────────────────────────────────────────────────────
 
-function StepWorkspace({ onNext }: { onNext: (data: WorkspaceData) => void }) {
-  const [name, setName] = useState("");
-  const [provider, setProvider] = useState("buildium");
-  const [loading, setLoading] = useState(false);
-
-  const slug = name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-
-  const providers = [
-    { id: "buildium", label: "Buildium", sub: "Full API integration available", mark: "B", ready: true },
-    { id: "appfolio", label: "AppFolio", sub: "Coming soon", mark: "A", ready: false },
-    { id: "yardi", label: "Yardi", sub: "Coming soon", mark: "Y", ready: false },
-  ];
-
-  const handleSubmit = async () => {
-    if (!name.trim()) return;
-    setLoading(true);
-    // Just collect name/slug — workspace is created in DB after auth
-    setLoading(false);
-    onNext({ name: name.trim(), slug });
-  };
-
-  return (
-    <div className="panel" key="workspace">
-      <div className="panel-header">
-        <div className="panel-tag">Step 1 of 6</div>
-        <h1 className="panel-title">Create your Helixis workspace</h1>
-        <p className="panel-desc">Your workspace is the central hub for your property management operations.</p>
-      </div>
-
-      <div className="card">
-        <div className="field">
-          <label>Company Name</label>
-          <input
-            type="text"
-            placeholder="Acme Property Management"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            autoFocus
-          />
-          {slug && <span className="hint">Workspace ID: <code className="mono" style={{ color: "var(--iris)" }}>{slug}</code></span>}
-        </div>
-
-        <div className="divider" />
-
-        <div className="card-title">Primary Software</div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {providers.map((p) => (
-            <div
-              key={p.id}
-              className={`provider-card ${provider === p.id ? "selected" : ""} ${!p.ready ? "disabled" : ""}`}
-              onClick={() => p.ready && setProvider(p.id)}
-              style={!p.ready ? { opacity: 0.45, cursor: "not-allowed" } : undefined}
-            >
-              <div className="provider-logo">{p.mark}</div>
-              <div>
-                <div className="provider-label">{p.label}</div>
-                <div className="provider-sub">{p.sub}</div>
-              </div>
-              <div className="provider-check">{provider === p.id ? "✓" : ""}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <SOC2Note text="Your workspace data is encrypted at rest and access-controlled. Helixis is working toward SOC 2 Type II compliance." />
-
-      <button className="btn btn-primary wide" onClick={handleSubmit} disabled={!name.trim() || loading}>
-        {loading ? <><span className="spinner" /> Creating workspace…</> : "Continue →"}
-      </button>
-    </div>
-  );
+interface Profile {
+  email: string;
+  name: string;
+  doors: string;
+  goal: string;
 }
 
-// ─────────────────────────────────────────────────────────
-// STEP 2: AUTH (Magic Link)
-// ─────────────────────────────────────────────────────────
-
-function StepAuth({ onNext }: { onNext: (email: string, accessToken: string) => void }) {
-  const [email, setEmail] = useState("");
+function StepIdentify({
+  initial,
+  onProfile,
+  onVerified,
+}: {
+  initial: Profile;
+  onProfile: (p: Profile) => void;
+  onVerified: (email: string, accessToken: string) => void;
+}) {
+  const [email, setEmail] = useState(initial.email);
+  const [name, setName] = useState(initial.name);
+  const [doors, setDoors] = useState(initial.doors);
+  const [goal, setGoal] = useState(initial.goal);
   const [sent, setSent] = useState(false);
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const sendLink = async () => {
-    if (!email.includes("@")) return;
+  const ready = email.includes("@") && name.trim().length > 0;
+
+  const sendCode = async () => {
+    if (!ready) return;
+    // Persist the profile BEFORE the OTP round-trip so a magic-link
+    // redirect (full SPA reload) resumes with the company name intact.
+    onProfile({ email, name: name.trim(), doors, goal });
     setLoading(true);
+    setError("");
     const { error: e } = await supabase.auth.signInWithOtp({
       email,
       options: { emailRedirectTo: window.location.origin + "/start" },
@@ -663,42 +595,81 @@ function StepAuth({ onNext }: { onNext: (email: string, accessToken: string) => 
     const { data, error: e } = await supabase.auth.verifyOtp({ email, token: code, type: "email" });
     setLoading(false);
     if (e || !data.session) { setError("Invalid code. Please try again."); return; }
-    onNext(email, data.session.access_token);
+    onVerified(email, data.session.access_token);
   };
 
   return (
-    <div className="panel" key="auth">
+    <div className="panel" key="identify">
       <div className="panel-header">
-        <div className="panel-tag">Step 2 of 6</div>
-        <h1 className="panel-title">{sent ? "Check your email" : "Create your owner account"}</h1>
+        <div className="panel-tag">Step 1 of 4</div>
+        <h1 className="panel-title">{sent ? "Check your email" : "Create your secure setup link"}</h1>
         <p className="panel-desc">
           {sent
             ? `We sent a 6-digit code to ${email}. Enter it below to continue.`
-            : "You'll be the workspace Owner with full administrative access."}
+            : "Tell us where to point Helixis. Your progress is saved before we ask for any Buildium credentials."}
         </p>
       </div>
 
-      <div className="card">
-        {!sent ? (
-          <div className="field">
-            <label>Work Email</label>
-            <input
-              type="email"
-              placeholder="you@yourcompany.com"
-              value={email}
-              onChange={(e) => { setEmail(e.target.value); setError(""); }}
-              onKeyDown={(e) => e.key === "Enter" && sendLink()}
-              autoFocus
-            />
-            <span className="hint">We'll send a one-time code. No password required.</span>
-            {error && (
-              <div className="test-result error" style={{ marginTop: 8 }}>
-                <span>⚠</span> {error}
+      {!sent ? (
+        <>
+          <div className="card">
+            <div className="field">
+              <label>Work Email</label>
+              <input
+                type="email"
+                placeholder="you@yourcompany.com"
+                value={email}
+                onChange={(e) => { setEmail(e.target.value); setError(""); }}
+                autoFocus
+              />
+            </div>
+            <div className="field">
+              <label>Company Name</label>
+              <input
+                type="text"
+                placeholder="Acme Property Management"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </div>
+            <div className="field-row">
+              <div className="field">
+                <label>Doors under management</label>
+                <select value={doors} onChange={(e) => setDoors(e.target.value)}>
+                  <option value="">Select…</option>
+                  {DOORS_OPTIONS.map((d) => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
               </div>
+              <div className="field">
+                <label>Where should Helixis help first?</label>
+                <select value={goal} onChange={(e) => setGoal(e.target.value)}>
+                  <option value="">Select…</option>
+                  {GOAL_OPTIONS.map((g) => (
+                    <option key={g.id} value={g.id}>{g.label}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="waitlist-note">
+              Runs on <strong>Buildium</strong>. On AppFolio or Yardi?{" "}
+              <a href="mailto:hello@helixis.com?subject=AppFolio%2FYardi%20waitlist">Join the waitlist</a>.
+            </div>
+            {error && (
+              <div className="test-result error"><span>⚠</span> {error}</div>
             )}
           </div>
-        ) : (
-          <div>
+
+          <TrustLine text="Passwordless login — we'll send a one-time code. Your setup is saved to your work email so you can come back later, or with your Buildium admin." />
+
+          <button className="btn btn-primary wide" onClick={sendCode} disabled={!ready || loading}>
+            {loading ? <><span className="spinner" /> Sending…</> : "Send secure code →"}
+          </button>
+        </>
+      ) : (
+        <>
+          <div className="card">
             <div className="otp-row">
               {otp.map((d, i) => (
                 <input
@@ -723,45 +694,61 @@ function StepAuth({ onNext }: { onNext: (email: string, accessToken: string) => 
               </div>
             )}
           </div>
-        )}
-      </div>
-
-      <SOC2Note text="All authentication events are logged for audit purposes. Email-based auth provides a strong security posture with no password storage." />
-
-      {!sent ? (
-        <button className="btn btn-primary wide" onClick={sendLink} disabled={!email.includes("@") || loading}>
-          {loading ? <><span className="spinner" /> Sending…</> : "Send verification code →"}
-        </button>
-      ) : (
-        <div>
           <button className="btn btn-primary wide" onClick={verifyOtp} disabled={otp.join("").length !== 6 || loading}>
             {loading ? <><span className="spinner" /> Verifying…</> : "Verify & continue →"}
           </button>
           <button className="btn btn-ghost" style={{ width: "100%", marginTop: 8 }} onClick={() => setSent(false)}>
             ← Use different email
           </button>
-        </div>
+        </>
       )}
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────
-// STEP 3: INTEGRATION SETUP
+// STEP 2: CONNECT BUILDIUM (preflight → credentials/handoff → test → reveal)
 // ─────────────────────────────────────────────────────────
 
-function StepIntegration({
+function StepBuildium({
+  userEmail,
+  workspaceName,
   onNext,
 }: {
-  onNext: (state: IntegrationState) => void;
+  userEmail: string;
+  workspaceName: string;
+  onNext: (count: number | null) => void;
 }) {
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [apiKey, setApiKey] = useState("");
   const [apiSecret, setApiSecret] = useState("");
   const [env, setEnv] = useState<"production" | "sandbox">("production");
   const [integration, setIntegration] = useState<IntegrationState>({ status: "idle" });
   const [locking, setLocking] = useState(false);
-  const [googleConnected, setGoogleConnected] = useState(false);
-  const [googleConnecting, setGoogleConnecting] = useState(false);
+  const [showSample, setShowSample] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handoffInstructions =
+    `Hi —\n\n` +
+    `We're connecting ${workspaceName || "our company"} to Helixis (an AI operations layer that runs on top of Buildium). ` +
+    `It needs a Buildium API key to read our portfolio.\n\n` +
+    `Steps (about 2 minutes):\n` +
+    `1. In Buildium, open Settings → API Settings\n` +
+    `2. Create an API key and copy the Client ID and Client Secret\n` +
+    `3. Send them to me securely, or finish the setup here: ${window.location.origin}/start\n\n` +
+    `Security: credentials are encrypted at rest, never displayed again after setup, ` +
+    `and access can be revoked from Buildium at any time. Every write Helixis makes is approved by a person first.\n\n` +
+    `Requested by ${userEmail}`;
+
+  const mailtoHref =
+    `mailto:?subject=${encodeURIComponent("Helixis needs a Buildium API key")}` +
+    `&body=${encodeURIComponent(handoffInstructions)}`;
+
+  const copyInstructions = async () => {
+    await navigator.clipboard.writeText(handoffInstructions);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const testConnection = async () => {
     if (!apiKey || !apiSecret) return;
@@ -786,11 +773,16 @@ function StepIntegration({
       }>("/api/v1/buildium/test", { method: "POST" });
 
       if (testData.ok) {
+        const n = testData.properties_count;
         setIntegration({
           status: "connected",
           keyHint: saved.client_id_last4 ? `...${saved.client_id_last4}` : undefined,
           lastTested: new Date().toLocaleTimeString(),
-          testMessage: `Connected${testData.properties_count != null ? ` — ${testData.properties_count} rental${testData.properties_count === 1 ? "" : "s"} visible` : ""}`,
+          count: n ?? null,
+          testMessage:
+            n != null
+              ? `Connected — found ${n} rental${n === 1 ? "" : "s"}. Ready to scan your portfolio.`
+              : "Connected. Ready to scan your portfolio.",
         });
       } else {
         setIntegration({ status: "error", testMessage: testData.error || "Connection failed" });
@@ -800,14 +792,221 @@ function StepIntegration({
     }
   };
 
-  const lockIntegration = async () => {
-    // UI-level acknowledgement: credentials are already encrypted
-    // server-side. A backend lock/immutability endpoint doesn't exist
-    // yet — when it does, call it here.
+  const lockAndContinue = async () => {
+    // Credentials are already encrypted server-side; this acknowledges and
+    // advances. A backend lock/immutability endpoint doesn't exist yet —
+    // when it does, call it here.
     setLocking(true);
     setIntegration((s) => ({ ...s, status: "locked", lockedAt: new Date().toLocaleString() }));
     setLocking(false);
+    onNext(integration.count ?? null);
   };
+
+  return (
+    <div className="panel" key="buildium">
+      <div className="panel-header">
+        <div className="panel-tag">Step 2 of 4</div>
+        <h1 className="panel-title">Connect Buildium so Helixis can scan your operations</h1>
+        <p className="panel-desc">
+          We test read access first and show you exactly what Helixis can see before anything launches.
+        </p>
+      </div>
+
+      {/* preflight: do you have API permission? */}
+      <div className="preflight">
+        <button
+          className={`preflight-opt ${isAdmin === true ? "selected" : ""}`}
+          onClick={() => setIsAdmin(true)}
+        >
+          I can generate Buildium API keys
+        </button>
+        <button
+          className={`preflight-opt ${isAdmin === false ? "selected" : ""}`}
+          onClick={() => setIsAdmin(false)}
+        >
+          I need my admin or partner
+        </button>
+      </div>
+
+      {isAdmin === false && (
+        <div className="handoff">
+          <div className="handoff-title">Send setup instructions to your Buildium admin</div>
+          <div className="handoff-body">
+            A short email that says why Helixis needs access, exactly where the API settings live, what
+            gets stored, and a link back here. Your progress is saved — come back anytime with the keys.
+          </div>
+          <div className="btn-row">
+            <a className="btn btn-secondary" href={mailtoHref} style={{ flex: 1 }}>
+              Email my admin
+            </a>
+            <button className="btn btn-secondary" onClick={copyInstructions} style={{ flex: 1 }}>
+              {copied ? "✓ Copied" : "Copy instructions"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {(isAdmin === true || isAdmin === null) && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+            <div className="card-title" style={{ marginBottom: 0 }}>Buildium API credentials</div>
+            <div className="toggle-row">
+              <button className={`toggle-opt ${env === "production" ? "active" : ""}`} onClick={() => setEnv("production")}>Production</button>
+              <button className={`toggle-opt ${env === "sandbox" ? "active" : ""}`} onClick={() => setEnv("sandbox")}>Sandbox</button>
+            </div>
+          </div>
+
+          <div className="field">
+            <label>Buildium Client ID</label>
+            <input className="secret-input" type="password" placeholder="••••••••••••••••••••" value={apiKey} onChange={(e) => setApiKey(e.target.value)} autoComplete="new-password" />
+          </div>
+          <div className="field">
+            <label>Buildium Client Secret</label>
+            <input className="secret-input" type="password" placeholder="••••••••••••••••••••" value={apiSecret} onChange={(e) => setApiSecret(e.target.value)} autoComplete="new-password" />
+            <span className="hint">Find these in Buildium → Settings → API Settings → Create API key.</span>
+          </div>
+
+          {integration.status === "testing" && (
+            <div className="test-result" style={{ background: "var(--canvas-2)", border: "1px solid var(--line)", color: "var(--ink-muted)" }}>
+              <span className="spinner accent" /> Testing read access to your Buildium account…
+            </div>
+          )}
+          {integration.status === "connected" && (
+            <div className="test-result success">
+              <span>✓</span>
+              <span>{integration.testMessage}</span>
+            </div>
+          )}
+          {integration.status === "error" && (
+            <div className="test-result error">
+              <span>⚠</span> {integration.testMessage}
+            </div>
+          )}
+
+          <div className="btn-row" style={{ marginTop: 12 }}>
+            <button className="btn btn-secondary" onClick={testConnection} disabled={!apiKey || !apiSecret || integration.status === "testing"} style={{ flex: 1 }}>
+              {integration.status === "testing" ? <><span className="spinner accent" /> Testing…</> : "Test Buildium connection"}
+            </button>
+            <button className="btn btn-primary" style={{ flex: 1, margin: 0 }} onClick={lockAndContinue} disabled={integration.status !== "connected" || locking}>
+              {locking ? <><span className="spinner" /> Saving…</> : "Save & scan my portfolio →"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      <TrustLine text="Credentials are encrypted at rest, masked in the browser, and never displayed again. You can revoke access from Buildium at any time. Every write Helixis makes needs your approval." />
+
+      <button className="sample-toggle" onClick={() => setShowSample((s) => !s)}>
+        {showSample ? "Hide sample preview" : "Not ready with API keys? Preview the first scan with sample data →"}
+      </button>
+      {showSample && <SamplePreview />}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────
+// STEP 3: LIVE BUILDIUM UPDATES (webhooks, reframed + skippable)
+// ─────────────────────────────────────────────────────────
+
+function StepLive({ onNext }: { onNext: (saved: boolean) => void }) {
+  // Buildium generates the signing secret when the user creates the
+  // webhook subscription on their side — Helixis cannot generate it.
+  const [secret, setSecret] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
+
+  const saveSecret = async () => {
+    if (secret.trim().length < 8) {
+      setError("That doesn't look like a Buildium signing secret (too short).");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      await apiFetch("/api/v1/buildium/webhook-secret", {
+        method: "PUT",
+        body: JSON.stringify({ secret: secret.trim() }),
+      });
+      setSecret("");
+      setSaved(true);
+    } catch (e: any) {
+      setError(e.message || "Failed to save the signing secret");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="panel" key="live">
+      <div className="panel-header">
+        <div className="panel-tag">Step 3 of 4 · Recommended</div>
+        <h1 className="panel-title">Turn on live Buildium updates</h1>
+        <p className="panel-desc">
+          Let Helixis react the moment a work order, resident message, lease event, or payment
+          changes in Buildium — instead of waiting for the next sync.
+        </p>
+      </div>
+
+      <div className="card">
+        <div className="card-title">1 · Add this endpoint in Buildium</div>
+        <CopyField label="Buildium → Settings → Webhooks" value={BUILDIUM_WEBHOOK_URL} />
+        <div className="hint">One endpoint for all events — Helixis routes them to your account automatically.</div>
+      </div>
+
+      <div className="card">
+        <div className="card-title">2 · Paste the signing secret Buildium gives you</div>
+        {saved ? (
+          <div className="locked-banner">
+            <div className="locked-info">
+              <div className="locked-icon">✓</div>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--positive)" }}>Live updates on</div>
+                <div style={{ fontSize: 11, color: "var(--ink-subtle)" }}>Buildium events now reach Helixis in real time.</div>
+              </div>
+            </div>
+            <span className="badge badge-positive">Secured</span>
+          </div>
+        ) : (
+          <>
+            <div className="field">
+              <label>Signing secret</label>
+              <input
+                className="secret-input"
+                type="password"
+                placeholder="••••••••••••••••••••"
+                value={secret}
+                onChange={(e) => setSecret(e.target.value)}
+                autoComplete="new-password"
+              />
+              <span className="hint">Buildium shows this once when you create the webhook subscription.</span>
+            </div>
+            {error && (
+              <div className="test-result error"><span>⚠</span> {error}</div>
+            )}
+            <button className="btn btn-secondary" onClick={saveSecret} disabled={saving || !secret.trim()} style={{ marginTop: 8 }}>
+              {saving ? <><span className="spinner accent" /> Saving…</> : "Save signing secret"}
+            </button>
+          </>
+        )}
+      </div>
+
+      <TrustLine text="The signing secret is encrypted server-side and used only to verify that events really came from Buildium. It never comes back to the browser." />
+
+      <button className="btn btn-primary wide" onClick={() => onNext(saved)}>
+        {saved ? "Continue →" : "Skip for now — run my first scan without live updates →"}
+      </button>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────
+// STEP 4: COMMUNICATION CHANNELS (Google OAuth, optional)
+// ─────────────────────────────────────────────────────────
+
+function StepChannels({ onNext }: { onNext: (connected: boolean) => void }) {
+  const [googleConnected, setGoogleConnected] = useState(false);
+  const [googleConnecting, setGoogleConnecting] = useState(false);
 
   const refreshGoogleState = useCallback(async () => {
     try {
@@ -845,90 +1044,23 @@ function StepIntegration({
     }
   };
 
-  // Check if Google is already connected (via Composio)
   useEffect(() => {
     refreshGoogleState().then((connected) => {
       if (connected) setGoogleConnected(true);
     });
   }, [refreshGoogleState]);
 
-  const allDone = integration.status === "locked" && googleConnected;
-  const canContinue = integration.status === "locked";
-
   return (
-    <div className="panel" key="integration">
+    <div className="panel" key="channels">
       <div className="panel-header">
-        <div className="panel-tag">Step 3 of 6</div>
-        <h1 className="panel-title">Connect your services</h1>
-        <p className="panel-desc">Link your property management platform and productivity tools to Helixis.</p>
+        <div className="panel-tag">Step 4 of 4 · Optional</div>
+        <h1 className="panel-title">Add Gmail &amp; Calendar context</h1>
+        <p className="panel-desc">
+          Helixis drafts cleaner owner updates and catches resident follow-ups when it can see the
+          communication trail around a Buildium issue.
+        </p>
       </div>
 
-      {/* ── Buildium ── */}
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: integration.status === "locked" ? 0 : 16 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div className="provider-logo" style={{ width: 34, height: 34, fontSize: 14 }}>B</div>
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 600 }}>Buildium</div>
-              <div style={{ fontSize: 11, color: "var(--ink-subtle)" }}>Property management platform</div>
-            </div>
-          </div>
-          {integration.status === "locked" ? (
-            <span className="badge badge-positive"><span className="dot pulse" /> Connected</span>
-          ) : (
-            <div className="toggle-row">
-              <button className={`toggle-opt ${env === "production" ? "active" : ""}`} onClick={() => setEnv("production")}>Production</button>
-              <button className={`toggle-opt ${env === "sandbox" ? "active" : ""}`} onClick={() => setEnv("sandbox")}>Sandbox</button>
-            </div>
-          )}
-        </div>
-
-        {integration.status === "locked" ? (
-          <div style={{ marginTop: 12, fontSize: 11, color: "var(--ink-subtle)" }}>
-            Key: {integration.keyHint} · Locked {integration.lockedAt}
-          </div>
-        ) : (
-          <>
-            <div className="field">
-              <label>Client ID</label>
-              <input className="secret-input" type="password" placeholder="••••••••••••••••••••" value={apiKey} onChange={(e) => setApiKey(e.target.value)} autoComplete="new-password" />
-            </div>
-            <div className="field">
-              <label>Client Secret</label>
-              <input className="secret-input" type="password" placeholder="••••••••••••••••••••" value={apiSecret} onChange={(e) => setApiSecret(e.target.value)} autoComplete="new-password" />
-              <span className="hint">Find these in Buildium → Settings → API Settings.</span>
-            </div>
-
-            {integration.status === "testing" && (
-              <div className="test-result" style={{ background: "var(--canvas-2)", border: "1px solid var(--line)", color: "var(--ink-muted)" }}>
-                <span className="spinner accent" /> Testing connection to Buildium API…
-              </div>
-            )}
-            {integration.status === "connected" && (
-              <div className="test-result success">
-                <span>✓</span>
-                <span>{integration.testMessage} · Last tested {integration.lastTested}</span>
-              </div>
-            )}
-            {integration.status === "error" && (
-              <div className="test-result error">
-                <span>⚠</span> {integration.testMessage}
-              </div>
-            )}
-
-            <div className="btn-row" style={{ marginTop: 8 }}>
-              <button className="btn btn-secondary" onClick={testConnection} disabled={!apiKey || !apiSecret || integration.status === "testing"} style={{ flex: 1 }}>
-                {integration.status === "testing" ? <><span className="spinner accent" /> Testing…</> : "Test connection"}
-              </button>
-              <button className="btn btn-primary" style={{ flex: 1, margin: 0 }} onClick={lockIntegration} disabled={integration.status !== "connected" || locking}>
-                {locking ? <><span className="spinner" /> Locking…</> : "Save & Lock"}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* ── Google ── */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -936,8 +1068,8 @@ function StepIntegration({
               <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59A14.5 14.5 0 0 1 9.5 24c0-1.59.28-3.14.76-4.59l-7.98-6.19A23.99 23.99 0 0 0 0 24c0 3.77.9 7.35 2.56 10.53l7.97-5.94z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 5.94C6.51 42.62 14.62 48 24 48z"/></svg>
             </div>
             <div>
-              <div style={{ fontSize: 14, fontWeight: 600 }}>Google</div>
-              <div style={{ fontSize: 11, color: "var(--ink-subtle)" }}>Gmail, Calendar, Contacts, Drive</div>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>Google Workspace</div>
+              <div style={{ fontSize: 11, color: "var(--ink-subtle)" }}>Gmail, Calendar, Drive</div>
             </div>
           </div>
           {googleConnected ? (
@@ -950,272 +1082,47 @@ function StepIntegration({
         </div>
         {googleConnected && (
           <div style={{ marginTop: 8, fontSize: 11, color: "var(--ink-subtle)" }}>
-            Access to Gmail, Google Calendar, and Contacts is authorized.
+            Access to Gmail, Google Calendar, and Drive is authorized.
           </div>
         )}
       </div>
 
-      {/* ── Microsoft ── */}
-      <div className="card" style={{ marginBottom: 16, opacity: 0.5 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ fontSize: 20 }}>
-              <svg width="20" height="20" viewBox="0 0 23 23"><rect x="1" y="1" width="10" height="10" fill="#f25022"/><rect x="12" y="1" width="10" height="10" fill="#7fba00"/><rect x="1" y="12" width="10" height="10" fill="#00a4ef"/><rect x="12" y="12" width="10" height="10" fill="#ffb900"/></svg>
-            </div>
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 600 }}>Microsoft</div>
-              <div style={{ fontSize: 11, color: "var(--ink-subtle)" }}>Outlook, Calendar, Teams, OneDrive</div>
-            </div>
-          </div>
-          <span style={{ fontSize: 11, color: "var(--ink-subtle)", fontWeight: 500 }}>Coming soon</span>
-        </div>
-      </div>
+      <TrustLine text="Helixis requests the minimum Google scopes needed. OAuth tokens are encrypted at rest and can be revoked from your Google account at any time. Helixis never auto-sends email." />
 
-      <SOC2Note text="OAuth tokens are encrypted at rest. Helixis requests only the minimum scopes needed. You can revoke access at any time from your Google or Microsoft account settings." />
-
-      <button className="btn btn-primary wide" onClick={() => onNext(integration)} disabled={!canContinue}>
-        {allDone ? "Continue →" : canContinue ? "Continue →" : "Complete Buildium setup to continue"}
+      <button className="btn btn-primary wide" onClick={() => onNext(googleConnected)}>
+        {googleConnected ? "Continue →" : "Skip — start with Buildium only →"}
       </button>
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────
-// STEP 4: WEBHOOKS
-// ─────────────────────────────────────────────────────────
-
-function StepWebhooks({ onNext }: { onNext: (saved: boolean) => void }) {
-  // Buildium generates the signing secret when the user creates the
-  // webhook subscription on their side — Helixis cannot generate it.
-  // The user registers our endpoint in Buildium, then pastes the secret
-  // Buildium showed them back here (PUT /buildium/webhook-secret).
-  const [secret, setSecret] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState("");
-
-  const saveSecret = async () => {
-    if (secret.trim().length < 8) {
-      setError("That doesn't look like a Buildium signing secret (too short).");
-      return;
-    }
-    setSaving(true);
-    setError("");
-    try {
-      await apiFetch("/api/v1/buildium/webhook-secret", {
-        method: "PUT",
-        body: JSON.stringify({ secret: secret.trim() }),
-      });
-      setSecret("");
-      setSaved(true);
-    } catch (e: any) {
-      setError(e.message || "Failed to save the signing secret");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="panel" key="webhooks">
-      <div className="panel-header">
-        <div className="panel-tag">Step 4 of 6</div>
-        <h1 className="panel-title">Configure webhooks</h1>
-        <p className="panel-desc">Helixis listens for real-time events from Buildium. Register the endpoint below in Buildium, then paste back the signing secret Buildium generates.</p>
-      </div>
-
-      <div className="card">
-        <div className="card-title">1 · Webhook Endpoint URL</div>
-        <CopyField label="Add this URL in Buildium → Settings → Webhooks" value={BUILDIUM_WEBHOOK_URL} />
-        <div className="hint">One endpoint for all events — Helixis routes them to your account automatically.</div>
-      </div>
-
-      <div className="card">
-        <div className="card-title">2 · Signing Secret</div>
-        {saved ? (
-          <div className="locked-banner">
-            <div className="locked-info">
-              <div className="locked-icon">✓</div>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--positive)" }}>Signing secret stored</div>
-                <div style={{ fontSize: 11, color: "var(--ink-subtle)" }}>Encrypted server-side. Used only to verify event authenticity.</div>
-              </div>
-            </div>
-            <span className="badge badge-positive">Secured</span>
-          </div>
-        ) : (
-          <>
-            <div className="field">
-              <label>Paste the secret Buildium showed you</label>
-              <input
-                className="secret-input"
-                type="password"
-                placeholder="••••••••••••••••••••"
-                value={secret}
-                onChange={(e) => setSecret(e.target.value)}
-                autoComplete="new-password"
-              />
-              <span className="hint">Buildium generates this when you create the webhook subscription. Helixis never displays it again.</span>
-            </div>
-            {error && (
-              <div className="test-result error"><span>⚠</span> {error}</div>
-            )}
-            <button className="btn btn-secondary" onClick={saveSecret} disabled={saving || !secret.trim()} style={{ marginTop: 8 }}>
-              {saving ? <><span className="spinner accent" /> Saving…</> : "Save signing secret"}
-            </button>
-          </>
-        )}
-      </div>
-
-      <div className="card">
-        <div className="card-title">Webhook Health</div>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div>
-            <span className="badge badge-muted"><span className="dot" style={{ background: "var(--ink-subtle)" }} /> Awaiting first event</span>
-            <div style={{ fontSize: 11, color: "var(--ink-subtle)", marginTop: 6 }}>Events will appear here once Buildium starts sending them.</div>
-          </div>
-        </div>
-      </div>
-
-      <SOC2Note text="Webhook signing secrets are stored encrypted and used server-side only to verify event authenticity (HMAC-SHA256). The secret itself is never sent back to the client." />
-
-      <button className="btn btn-primary wide" onClick={() => onNext(saved)} style={{ marginTop: 8 }}>
-        {saved ? "Continue →" : "Skip for now →"}
-      </button>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────
-// STEP 5: TEAM
-// ─────────────────────────────────────────────────────────
-
-function StepTeam({ onNext }: { onNext: (members: TeamMember[]) => void }) {
-  const [email, setEmail] = useState("");
-  const [role, setRole] = useState<Role>("employee");
-  const [members, setMembers] = useState<TeamMember[]>([]);
-  const [sending, setSending] = useState(false);
-
-  const addMember = async () => {
-    if (!email.includes("@") || members.find((m) => m.email === email)) return;
-    setSending(true);
-    try {
-      // GoTrue admin invite: Supabase emails the invitee and the
-      // membership row exists before their first sign-in.
-      await apiFetch("/api/v1/company/invite", {
-        method: "POST",
-        body: JSON.stringify({ email, role }),
-      });
-      setMembers((m) => [...m, { email, role, status: "sent" }]);
-      setEmail("");
-    } catch (e: any) {
-      alert(e.message || "Could not send the invite");
-    } finally {
-      setSending(false);
-    }
-  };
-
-  // 'owner' is intentionally not invitable — ownership is never granted
-  // by invitation (mirrors the backend's INVITABLE_ROLES guard).
-  const roleDesc: Record<Role, string> = {
-    owner: "Full access — billing, integrations, team",
-    manager: "Operations access — no billing",
-    employee: "Helixis workspace only — no admin",
-  };
-
-  return (
-    <div className="panel" key="team">
-      <div className="panel-header">
-        <div className="panel-tag">Step 5 of 6</div>
-        <h1 className="panel-title">Invite your team</h1>
-        <p className="panel-desc">Add teammates now or skip and do it later from Settings. Employees won't see integration screens.</p>
-      </div>
-
-      <div className="card">
-        <div className="field">
-          <label>Email address</label>
-          <input
-            type="email"
-            placeholder="colleague@yourcompany.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addMember()}
-          />
-        </div>
-
-        <div className="field">
-          <label>Role</label>
-          <select value={role} onChange={(e) => setRole(e.target.value as Role)}>
-            <option value="manager">Manager</option>
-            <option value="employee">Employee</option>
-          </select>
-          <span className="hint">{roleDesc[role]}</span>
-        </div>
-
-        <button
-          className="btn btn-secondary"
-          onClick={addMember}
-          disabled={!email.includes("@") || sending}
-          style={{ width: "100%" }}
-        >
-          {sending ? <><span className="spinner accent" /> Sending invite…</> : "+ Add team member"}
-        </button>
-      </div>
-
-      {members.length > 0 && (
-        <div className="card">
-          <div className="card-title">Invited ({members.length})</div>
-          {members.map((m) => (
-            <div className="member-item" key={m.email}>
-              <div className="member-avatar">{m.email[0]}</div>
-              <div className="member-info">
-                <div className="member-email">{m.email}</div>
-                <div className="member-status">Invite sent</div>
-              </div>
-              <span className={`badge ${m.role === "owner" ? "badge-iris" : m.role === "manager" ? "badge-caution" : "badge-muted"}`}>
-                {m.role}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-        <button className="btn btn-ghost" onClick={() => onNext(members)} style={{ flex: 1 }}>
-          Skip for now
-        </button>
-        <button className="btn btn-primary" onClick={() => onNext(members)} style={{ flex: 2, margin: 0 }}>
-          Continue →
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────
-// STEP 6: FINISH
+// LAUNCH: FIRST OPERATIONS SCAN
 // ─────────────────────────────────────────────────────────
 
 function StepFinish({
   workspace,
-  members,
-  webhooksConfigured,
+  buildiumCount,
+  liveUpdates,
+  googleConnected,
 }: {
   workspace: WorkspaceData;
-  members: TeamMember[];
-  webhooksConfigured: boolean;
+  buildiumCount: number | null;
+  liveUpdates: boolean;
+  googleConnected: boolean;
 }) {
-  // Each line reflects what the user actually did — reaching this step
-  // requires Buildium to be locked (StepIntegration gates Continue on it),
-  // but webhooks and team invites are skippable, so don't claim them.
-  const checks = [
-    { label: "Workspace created", sub: workspace.name, done: true },
-    { label: "Buildium connected & locked", sub: "API credentials encrypted", done: true },
-    webhooksConfigured
-      ? { label: "Webhooks configured", sub: "Buildium events flow to Helixis", done: true }
-      : { label: "Webhooks", sub: "Skipped — add the signing secret later from Settings", done: false },
-    members.length > 0
-      ? { label: "Team invited", sub: `${members.length} member${members.length > 1 ? "s" : ""} invited`, done: true }
-      : { label: "Team", sub: "No invites sent — add teammates later from Settings", done: false },
+  const cards = [
+    {
+      num: buildiumCount != null ? String(buildiumCount) : "✓",
+      label: buildiumCount != null ? `rental${buildiumCount === 1 ? "" : "s"} connected` : "Buildium connected",
+      sub: "Helixis is mirroring your properties, leases, tenants, work orders, and bills now.",
+    },
+    liveUpdates
+      ? { num: "on", label: "Live updates", sub: "New Buildium events land in your Inbox in real time." }
+      : { num: "off", label: "Live updates", sub: "Skipped — turn on later from Settings for real-time events." },
+    googleConnected
+      ? { num: "on", label: "Gmail & Calendar context", sub: "Important tenant emails will surface in your Inbox." }
+      : { num: "off", label: "Gmail & Calendar context", sub: "Skipped — connect later from Settings → Connectors." },
   ];
 
   return (
@@ -1224,43 +1131,45 @@ function StepFinish({
         <div className="finish-viz">
           <Helix width={80} height={110} dots={14} speed={0.5} />
         </div>
-        <h1 className="panel-title" style={{ textAlign: "center" }}>You're all set!</h1>
+        <h1 className="panel-title" style={{ textAlign: "center" }}>
+          {workspace.name || "Your workspace"} is live — first scan running
+        </h1>
         <p className="panel-desc" style={{ textAlign: "center" }}>
-          {workspace.name} is live on Helixis. Open the app and ask Helixis to run your first task.
+          Helixis is reading your portfolio now. Open the app to watch your Inbox fill in and ask
+          your first question.
         </p>
       </div>
 
-      <div className="checklist">
-        {checks.map((c) => (
-          <div className="check-item" key={c.label}>
-            <div className="check-icon" style={c.done ? undefined : { background: "var(--canvas-3)", color: "var(--ink-subtle)" }}>
-              {c.done ? "✓" : "–"}
-            </div>
+      <div className="scan-cards">
+        {cards.map((c) => (
+          <div className="scan-card" key={c.label}>
+            <div className="scan-num">{c.num}</div>
             <div>
-              <div className="check-label">{c.label}</div>
-              <div className="check-sub">{c.sub}</div>
+              <div className="scan-label">{c.label}</div>
+              <div className="scan-sub">{c.sub}</div>
             </div>
           </div>
         ))}
       </div>
 
-      <a className="btn btn-primary wide" href={APP_URL} style={{ marginTop: 8 }}>
-        Open Helixis →
+      <a className="btn btn-primary wide" href={APP_URL} style={{ marginTop: 4 }}>
+        Open Helixis → review your Inbox
       </a>
-
-      <div className="card" style={{ marginTop: 16 }}>
-        <div className="card-title">Also available — browser extension</div>
-        <div className="extension-steps">
-          {["Install extension", "Sign in", "You're connected"].map((label, i) => (
-            <div className="ext-step" key={label}>
-              <div className="ext-num">0{i + 1}</div>
-              <div className="ext-label">{label}</div>
-            </div>
-          ))}
-        </div>
-        <div className="hint" style={{ marginTop: 4 }}>
-          The Helixis side-panel rides along on any page. Coming soon to the Chrome Web Store.
-        </div>
+      <div className="btn-row" style={{ marginTop: 8 }}>
+        <a className="btn btn-ghost" href={APP_URL} style={{ flex: 1, textAlign: "center" }}>
+          Invite my team (in-app)
+        </a>
+        <a
+          className="btn btn-ghost"
+          href="mailto:hello@helixis.com?subject=15-minute%20setup%20help"
+          style={{ flex: 1, textAlign: "center" }}
+        >
+          Book 15-minute setup help
+        </a>
+      </div>
+      <div className="hint" style={{ textAlign: "center", marginTop: 12 }}>
+        The Getting Started checklist inside Helixis walks you through the rest — first question,
+        Gmail, team invites.
       </div>
     </div>
   );
@@ -1270,13 +1179,12 @@ function StepFinish({
 // SIDEBAR
 // ─────────────────────────────────────────────────────────
 
-const STEPS: { id: Step; label: string }[] = [
-  { id: "workspace", label: "Create workspace" },
-  { id: "auth", label: "Owner account" },
-  { id: "integration", label: "Connect" },
-  { id: "webhooks", label: "Webhooks" },
-  { id: "team", label: "Invite team" },
-  { id: "finish", label: "Launch" },
+const STEPS: { id: Step; label: string; tag?: string }[] = [
+  { id: "identify", label: "Secure account" },
+  { id: "buildium", label: "Connect Buildium" },
+  { id: "live", label: "Live updates", tag: "rec" },
+  { id: "channels", label: "Gmail & Calendar", tag: "opt" },
+  { id: "finish", label: "Launch scan" },
 ];
 
 function Sidebar({ current, completed }: { current: Step; completed: Set<Step> }) {
@@ -1295,6 +1203,7 @@ function Sidebar({ current, completed }: { current: Step; completed: Set<Step> }
             <div key={s.id} className={`step-item ${isActive ? "active" : ""} ${isDone ? "done" : ""}`}>
               <div className="step-dot">{isDone ? "✓" : i + 1}</div>
               <div className="step-label">{s.label}</div>
+              {s.tag && <div className="step-tag">{s.tag}</div>}
             </div>
           );
         })}
@@ -1316,7 +1225,7 @@ export default function App() {
   // Hydrate once from localStorage so a refresh / magic-link redirect resumes
   // where the user was instead of dropping them back at step 1.
   const [persisted] = useState(loadWizard);
-  const [step, setStep] = useState<Step>((persisted.step as Step) || "workspace");
+  const [step, setStep] = useState<Step>((persisted.step as Step) || "identify");
   const [completed, setCompleted] = useState<Set<Step>>(
     new Set((persisted.completed as Step[]) || []),
   );
@@ -1324,12 +1233,13 @@ export default function App() {
     persisted.workspace || { name: "", slug: "" },
   );
   const [userEmail, setUserEmail] = useState(persisted.userEmail || "");
-  const [members, setMembers] = useState<TeamMember[]>(
-    (persisted.members as TeamMember[]) || [],
+  const [doors, setDoors] = useState(persisted.doors || "");
+  const [goal, setGoal] = useState(persisted.goal || "");
+  const [buildiumCount, setBuildiumCount] = useState<number | null>(
+    persisted.buildiumCount ?? null,
   );
-  const [webhooksConfigured, setWebhooksConfigured] = useState(
-    persisted.webhooksConfigured || false,
-  );
+  const [liveUpdates, setLiveUpdates] = useState(persisted.webhooksConfigured || false);
+  const [googleConnected, setGoogleConnected] = useState(persisted.googleConnected || false);
   const [creatingWorkspace, setCreatingWorkspace] = useState(false);
   const didResume = useRef(false);
 
@@ -1341,15 +1251,18 @@ export default function App() {
       step,
       completed: [...completed],
       workspace,
-      members,
-      webhooksConfigured,
+      webhooksConfigured: liveUpdates,
       userEmail,
+      doors,
+      goal,
+      buildiumCount,
+      googleConnected,
     });
-  }, [step, completed, workspace, members, webhooksConfigured, userEmail]);
+  }, [step, completed, workspace, liveUpdates, userEmail, doors, goal, buildiumCount, googleConnected]);
 
   // Idempotently create the company + apply the workspace name. Shared by the
-  // inline-OTP path (handleAuth, explicit token) and the magic-link resume
-  // path (persisted session, no token needed). /auth/bootstrap is idempotent.
+  // inline-OTP path (explicit token) and the magic-link resume path
+  // (persisted session, no token needed). /auth/bootstrap is idempotent.
   const bootstrapWorkspace = useCallback(
     async (token: string | undefined, name: string): Promise<string> => {
       const data = await apiJson<{ company_id: string }>("/api/v1/auth/bootstrap", {
@@ -1369,22 +1282,22 @@ export default function App() {
   );
 
   // Recover an existing session on load (e.g. after a magic-link redirect,
-  // which reloads the SPA). The inline-OTP path runs handleAuth itself and
-  // marks 'auth' done; only resume-bootstrap when we're authenticated but
-  // 'auth' hasn't completed yet — i.e. we got here via the email link.
+  // which reloads the SPA). The inline-OTP path runs handleVerified itself
+  // and marks 'identify' done; only resume-bootstrap when we're authenticated
+  // but 'identify' hasn't completed yet — i.e. we got here via the email link.
   useEffect(() => {
     let active = true;
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!active || !session?.user) return;
       setUserEmail(session.user.email || "");
-      if (didResume.current || completed.has("auth")) return;
+      if (didResume.current || completed.has("identify")) return;
       didResume.current = true;
       setCreatingWorkspace(true);
       try {
         const companyId = await bootstrapWorkspace(undefined, workspace.name);
-        complete("auth");
+        complete("identify");
         setWorkspace((prev) => ({ ...prev, id: companyId }));
-        setStep((prev) => (prev === "workspace" || prev === "auth" ? "integration" : prev));
+        setStep((prev) => (prev === "identify" ? "buildium" : prev));
       } catch (e: any) {
         alert(e.message || "Failed to restore your workspace session");
       } finally {
@@ -1402,22 +1315,27 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleWorkspace = (data: WorkspaceData) => {
-    setWorkspace(data);
-    complete("workspace");
-    setStep("auth");
+  const handleProfile = (p: { email: string; name: string; doors: string; goal: string }) => {
+    setUserEmail(p.email);
+    setDoors(p.doors);
+    setGoal(p.goal);
+    setWorkspace((prev) => ({
+      ...prev,
+      name: p.name,
+      slug: p.name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, ""),
+    }));
   };
 
-  const handleAuth = async (email: string, accessToken: string) => {
+  const handleVerified = async (email: string, accessToken: string) => {
     setUserEmail(email);
     // Token passed explicitly — right after verifyOtp the persisted session
     // may not be readable yet.
     setCreatingWorkspace(true);
     try {
       const companyId = await bootstrapWorkspace(accessToken, workspace.name);
-      complete("auth");
+      complete("identify");
       setWorkspace((prev) => ({ ...prev, id: companyId }));
-      setStep("integration");
+      setStep("buildium");
     } catch (e: any) {
       alert(e.message || "Failed to set up your workspace");
     } finally {
@@ -1425,20 +1343,22 @@ export default function App() {
     }
   };
 
-  const handleIntegration = (state: IntegrationState) => {
-    complete("integration");
-    setStep("webhooks");
+  const handleBuildium = (count: number | null) => {
+    setBuildiumCount(count);
+    complete("buildium");
+    setStep("live");
   };
 
-  const handleWebhooks = (saved: boolean) => {
-    setWebhooksConfigured(saved);
-    complete("webhooks");
-    setStep("team");
+  const handleLive = (saved: boolean) => {
+    setLiveUpdates(saved);
+    complete("live");
+    setStep("channels");
   };
 
-  const handleTeam = (m: TeamMember[]) => {
-    setMembers(m);
-    complete("team");
+  const handleChannels = (connected: boolean) => {
+    setGoogleConnected(connected);
+    complete("channels");
+    complete("finish");
     setStep("finish");
   };
 
@@ -1448,20 +1368,34 @@ export default function App() {
       <div className="app">
         <Sidebar current={step} completed={completed} />
         <div className="main">
-          {step === "workspace" && <StepWorkspace onNext={handleWorkspace} />}
-          {step === "auth" && !creatingWorkspace && <StepAuth onNext={handleAuth} />}
+          {step === "identify" && !creatingWorkspace && (
+            <StepIdentify
+              initial={{ email: userEmail, name: workspace.name, doors, goal }}
+              onProfile={handleProfile}
+              onVerified={handleVerified}
+            />
+          )}
           {creatingWorkspace && (
             <div className="panel">
               <div className="panel-header">
                 <h1 className="panel-title"><span className="spinner" /> Setting up your workspace…</h1>
-                <p className="panel-desc">Creating {workspace.name} and configuring access controls.</p>
+                <p className="panel-desc">Creating {workspace.name || "your workspace"} and configuring access controls.</p>
               </div>
             </div>
           )}
-          {step === "integration" && <StepIntegration onNext={handleIntegration} />}
-          {step === "webhooks" && <StepWebhooks onNext={handleWebhooks} />}
-          {step === "team" && <StepTeam onNext={handleTeam} />}
-          {step === "finish" && <StepFinish workspace={workspace} members={members} webhooksConfigured={webhooksConfigured} />}
+          {step === "buildium" && (
+            <StepBuildium userEmail={userEmail} workspaceName={workspace.name} onNext={handleBuildium} />
+          )}
+          {step === "live" && <StepLive onNext={handleLive} />}
+          {step === "channels" && <StepChannels onNext={handleChannels} />}
+          {step === "finish" && (
+            <StepFinish
+              workspace={workspace}
+              buildiumCount={buildiumCount}
+              liveUpdates={liveUpdates}
+              googleConnected={googleConnected}
+            />
+          )}
         </div>
       </div>
     </>
