@@ -23,12 +23,33 @@ export interface PersistedWizard {
   members?: { email: string; role: string; status: string }[];
   webhooksConfigured?: boolean;
   userEmail?: string;
+  /** Segmentation collected in step 1 (research: 2 early questions max). */
+  doors?: string;
+  goal?: string;
+  /** Rentals count from the successful /buildium/test — the launch screen's value reveal. */
+  buildiumCount?: number | null;
+  googleConnected?: boolean;
 }
+
+/** The 2026-07 flow rename (6 steps → 4 + launch). Visitors who saved
+ *  progress under the old step ids resume at the equivalent new step. */
+const STEP_MIGRATION: Record<string, string> = {
+  workspace: "identify",
+  auth: "identify",
+  integration: "buildium",
+  webhooks: "live",
+  team: "channels",
+};
 
 export function loadWizard(): PersistedWizard {
   try {
     const raw = localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as PersistedWizard) : {};
+    const state = raw ? (JSON.parse(raw) as PersistedWizard) : {};
+    if (state.step && STEP_MIGRATION[state.step]) state.step = STEP_MIGRATION[state.step];
+    if (state.completed) {
+      state.completed = [...new Set(state.completed.map((s) => STEP_MIGRATION[s] || s))];
+    }
+    return state;
   } catch {
     // Corrupt JSON, private-mode storage block, etc. — start fresh.
     return {};
