@@ -4,9 +4,9 @@ import { APP_URL } from "./lib/api";
 import { loadWizard } from "./lib/persist";
 
 // ─────────────────────────────────────────────────────────
-// LANDING — the front door. One bold move (the live helix),
-// type-led everything else. Copy describes what the product
-// actually does today; no vapor.
+// LANDING — the front door. Show the product, not paragraphs:
+// real demo-mode screenshots carry the page; copy is one line
+// per idea. Everything shown ships today; no vapor.
 // ─────────────────────────────────────────────────────────
 
 const css = `
@@ -38,11 +38,8 @@ const css = `
   .lp-hero {
     max-width: 1080px;
     margin: 0 auto;
-    padding: 72px 32px 96px;
-    display: grid;
-    grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.75fr);
-    gap: 48px;
-    align-items: center;
+    padding: 64px 32px 40px;
+    text-align: center;
   }
 
   .lp-eyebrow {
@@ -56,35 +53,31 @@ const css = `
   }
 
   .lp-h1 {
-    font-size: clamp(38px, 5.2vw, 58px);
+    font-size: clamp(36px, 4.8vw, 56px);
     font-weight: 600;
-    line-height: 1.06;
+    line-height: 1.08;
     letter-spacing: -0.03em;
     color: var(--ink);
     text-wrap: balance;
-    margin-bottom: 22px;
+    max-width: 20ch;
+    margin: 0 auto 18px;
   }
 
   .lp-sub {
     font-size: 17px;
-    line-height: 1.65;
+    line-height: 1.6;
     color: var(--ink-muted);
-    max-width: 52ch;
-    margin-bottom: 32px;
+    max-width: 56ch;
+    margin: 0 auto 28px;
+    text-wrap: balance;
   }
 
-  .lp-hero-ctas { display: flex; gap: 10px; flex-wrap: wrap; }
+  .lp-hero-ctas { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 
   .lp-hero-note {
-    margin-top: 18px;
+    margin-top: 16px;
     font-size: 12.5px;
     color: var(--ink-subtle);
-  }
-
-  .lp-hero-viz {
-    display: flex;
-    justify-content: center;
-    min-width: 0;
   }
 
   /* staggered hero entrance */
@@ -94,16 +87,65 @@ const css = `
     animation: lp-rise 0.7s var(--ease-out) forwards;
   }
   @keyframes lp-rise {
-    to { opacity: 1; transform: translateY(0); }
+    to { opacity: 1; transform: none; }
   }
+
+  /* ── framed product screenshot ── */
+  .shot {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 0 32px;
+  }
+
+  .shot-frame {
+    border: 1px solid var(--line-strong);
+    border-radius: var(--r-lg);
+    overflow: hidden;
+    background: var(--canvas-1);
+  }
+
+  .shot-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--line);
+    background: var(--canvas-2);
+  }
+
+  .shot-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--canvas-3); }
+
+  .shot-url {
+    margin-left: 10px;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--ink-subtle);
+    background: var(--canvas-1);
+    border: 1px solid var(--line);
+    border-radius: var(--r-pill);
+    padding: 2px 12px;
+  }
+
+  .shot-frame img { width: 100%; display: block; }
+
+  .shot-caption {
+    text-align: center;
+    font-size: 13.5px;
+    color: var(--ink-muted);
+    margin-top: 14px;
+  }
+
+  .shot-caption strong { color: var(--ink); font-weight: 600; }
 
   /* ── sections ── */
   .lp-section {
     border-top: 1px solid var(--line);
     max-width: 1080px;
     margin: 0 auto;
-    padding: 80px 32px;
+    padding: 72px 32px;
   }
+
+  .lp-hero-section { border-top: none; padding-top: 32px; }
 
   .lp-kicker {
     font-family: var(--font-mono);
@@ -115,20 +157,20 @@ const css = `
   }
 
   .lp-h2 {
-    font-size: clamp(26px, 3.2vw, 34px);
+    font-size: clamp(24px, 3vw, 32px);
     font-weight: 600;
     letter-spacing: -0.02em;
     line-height: 1.2;
     color: var(--ink);
     text-wrap: balance;
-    margin-bottom: 12px;
+    margin-bottom: 10px;
   }
 
   .lp-section-sub {
     font-size: 15px;
     color: var(--ink-muted);
     max-width: 60ch;
-    margin-bottom: 44px;
+    margin-bottom: 36px;
   }
 
   /* scroll reveal */
@@ -146,18 +188,18 @@ const css = `
     border: 1px solid var(--line);
     border-radius: var(--r-md);
     background: var(--canvas-1);
-    padding: 26px 24px;
+    padding: 22px 22px;
   }
 
   .lp-step-num {
     font-family: var(--font-mono);
     font-size: 12px;
     color: var(--iris);
-    margin-bottom: 14px;
+    margin-bottom: 12px;
   }
 
-  .lp-step-title { font-size: 16px; font-weight: 600; color: var(--ink); margin-bottom: 8px; }
-  .lp-step-body { font-size: 13.5px; line-height: 1.65; color: var(--ink-muted); }
+  .lp-step-title { font-size: 15.5px; font-weight: 600; color: var(--ink); margin-bottom: 6px; }
+  .lp-step-body { font-size: 13.5px; line-height: 1.6; color: var(--ink-muted); }
 
   /* ── features ── */
   .lp-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
@@ -166,7 +208,7 @@ const css = `
     border: 1px solid var(--line);
     border-radius: var(--r-md);
     background: var(--canvas-1);
-    padding: 24px;
+    padding: 22px;
     transition: border-color 0.2s, transform 0.2s;
   }
   .lp-feature:hover { border-color: var(--line-strong); transform: translateY(-2px); }
@@ -176,12 +218,12 @@ const css = `
     align-items: flex-start;
     justify-content: space-between;
     gap: 8px;
-    margin-bottom: 16px;
+    margin-bottom: 14px;
   }
 
   .lp-feature-icon {
-    width: 34px;
-    height: 34px;
+    width: 32px;
+    height: 32px;
     border-radius: var(--r-sm);
     background: var(--iris-soft);
     color: var(--iris);
@@ -204,126 +246,8 @@ const css = `
     white-space: nowrap;
   }
 
-  .lp-feature-title { font-size: 14.5px; font-weight: 600; color: var(--ink); margin-bottom: 6px; }
-  .lp-feature-body { font-size: 13px; line-height: 1.6; color: var(--ink-muted); }
-
-  /* ── hero product mock (the inbox card) ── */
-  .mock {
-    width: 100%;
-    max-width: 440px;
-    background: var(--canvas-1);
-    border: 1px solid var(--line-strong);
-    border-radius: var(--r-lg);
-    overflow: hidden;
-    font-size: 13px;
-  }
-
-  .mock-titlebar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    padding: 10px 16px;
-    border-bottom: 1px solid var(--line);
-    background: var(--canvas-2);
-  }
-
-  .mock-source {
-    font-family: var(--font-mono);
-    font-size: 10.5px;
-    letter-spacing: 0.4px;
-    color: var(--ink-subtle);
-  }
-
-  .mock-badge {
-    font-size: 10.5px;
-    font-weight: 500;
-    color: var(--caution);
-    background: var(--caution-soft);
-    border: 1px solid var(--line);
-    border-radius: var(--r-pill);
-    padding: 2px 9px;
-    white-space: nowrap;
-  }
-
-  .mock-body { padding: 16px; }
-
-  .mock-title { font-size: 14.5px; font-weight: 600; color: var(--ink); line-height: 1.4; }
-  .mock-sub { font-size: 12px; color: var(--ink-subtle); margin-top: 3px; }
-
-  .mock-section { margin-top: 14px; }
-
-  .mock-label {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    color: var(--iris);
-    margin-bottom: 7px;
-  }
-
-  .mock-noticed { display: flex; flex-direction: column; gap: 5px; }
-
-  .mock-noticed span {
-    font-size: 12.5px;
-    color: var(--ink-muted);
-    padding-left: 14px;
-    position: relative;
-    line-height: 1.45;
-  }
-
-  .mock-noticed span::before {
-    content: '';
-    position: absolute;
-    left: 2px;
-    top: 7px;
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: var(--iris);
-    opacity: 0.7;
-  }
-
-  .mock-draft {
-    background: var(--canvas-2);
-    border: 1px solid var(--line);
-    border-radius: var(--r-sm);
-    padding: 10px 12px;
-    font-size: 12.5px;
-    line-height: 1.55;
-    color: var(--ink-muted);
-  }
-
-  .mock-actions {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-top: 14px;
-  }
-
-  .mock-approve {
-    background: var(--iris);
-    color: #fff;
-    font-size: 12.5px;
-    font-weight: 500;
-    border-radius: var(--r-sm);
-    padding: 7px 14px;
-  }
-
-  .mock-edit {
-    border: 1px solid var(--line-strong);
-    color: var(--ink-muted);
-    font-size: 12.5px;
-    font-weight: 500;
-    border-radius: var(--r-sm);
-    padding: 7px 14px;
-  }
-
-  .mock-note {
-    margin-left: auto;
-    font-size: 11px;
-    color: var(--ink-subtle);
-  }
+  .lp-feature-title { font-size: 14.5px; font-weight: 600; color: var(--ink); margin-bottom: 5px; }
+  .lp-feature-body { font-size: 13px; line-height: 1.55; color: var(--ink-muted); }
 
   /* ── FAQ ── */
   .lp-faq { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
@@ -332,11 +256,11 @@ const css = `
     border: 1px solid var(--line);
     border-radius: var(--r-md);
     background: var(--canvas-1);
-    padding: 20px 22px;
+    padding: 18px 20px;
   }
 
-  .lp-faq-q { font-size: 14px; font-weight: 600; color: var(--ink); margin-bottom: 8px; }
-  .lp-faq-a { font-size: 13px; line-height: 1.65; color: var(--ink-muted); }
+  .lp-faq-q { font-size: 14px; font-weight: 600; color: var(--ink); margin-bottom: 6px; }
+  .lp-faq-a { font-size: 13px; line-height: 1.6; color: var(--ink-muted); }
 
   /* ── trust strip ── */
   .lp-trust {
@@ -359,7 +283,7 @@ const css = `
   /* ── CTA band ── */
   .lp-cta-band { text-align: center; }
   .lp-cta-band .lp-h2 { margin-bottom: 10px; }
-  .lp-cta-band p { color: var(--ink-muted); font-size: 15px; margin-bottom: 28px; }
+  .lp-cta-band p { color: var(--ink-muted); font-size: 14.5px; margin-bottom: 26px; }
 
   /* ── footer ── */
   .lp-footer {
@@ -378,12 +302,11 @@ const css = `
   .lp-footer a:hover { color: var(--ink); }
 
   @media (max-width: 900px) {
-    .lp-hero { grid-template-columns: 1fr; padding-top: 48px; padding-bottom: 64px; }
-    .lp-hero-viz { order: -1; }
+    .lp-hero { padding-top: 40px; }
     .lp-steps, .lp-grid, .lp-faq { grid-template-columns: 1fr; }
     .lp-trust { grid-template-columns: 1fr 1fr; }
-    .lp-section { padding: 56px 24px; }
-    .mock-note { display: none; }
+    .lp-section { padding: 52px 24px; }
+    .shot { padding: 0 16px; }
   }
 `;
 
@@ -418,43 +341,30 @@ const ICONS = {
   lock: "M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2z M7 11V7a5 5 0 0 1 10 0v4",
 };
 
-// A faithful, hand-built rendering of the real Inbox card — work order in,
-// cross-record context surfaced, reply drafted, human approves. This is the
-// product's entire pitch in one frame, so it lives in the hero.
-function InboxMock() {
+// Framed, real screenshot of the product (captured from the live demo build).
+function Shot({
+  src,
+  alt,
+  caption,
+  eager,
+}: {
+  src: string;
+  alt: string;
+  caption?: React.ReactNode;
+  eager?: boolean;
+}) {
   return (
-    <div className="mock" aria-label="Example: a triaged work order in the Helixis inbox">
-      <div className="mock-titlebar">
-        <span className="mock-source">Buildium · Work order created</span>
-        <span className="mock-badge">Needs review</span>
+    <div className="shot">
+      <div className="shot-frame">
+        <div className="shot-bar">
+          <span className="shot-dot" />
+          <span className="shot-dot" />
+          <span className="shot-dot" />
+          <span className="shot-url">app.helixis.com</span>
+        </div>
+        <img src={src} alt={alt} loading={eager ? "eager" : "lazy"} />
       </div>
-      <div className="mock-body">
-        <div className="mock-title">Leaking kitchen faucet — Unit 4B, Oakview Terrace</div>
-        <div className="mock-sub">Reported by Sarah Chen · 8:42 AM</div>
-
-        <div className="mock-section">
-          <div className="mock-label">What Helixis noticed</div>
-          <div className="mock-noticed">
-            <span>Second plumbing issue in this unit in 90 days</span>
-            <span>Lease ends Sep 30 — renewal window open</span>
-            <span>Rodriguez Plumbing closed the last work order</span>
-          </div>
-        </div>
-
-        <div className="mock-section">
-          <div className="mock-label">Drafted reply to Sarah</div>
-          <div className="mock-draft">
-            Hi Sarah — thanks for the report. We're scheduling a plumber for Unit 4B
-            and will confirm a time window with you today. Since this is the second…
-          </div>
-        </div>
-
-        <div className="mock-actions">
-          <span className="mock-approve">Approve &amp; send</span>
-          <span className="mock-edit">Edit</span>
-          <span className="mock-note">Nothing sends without you</span>
-        </div>
-      </div>
+      {caption && <div className="shot-caption">{caption}</div>}
     </div>
   );
 }
@@ -493,17 +403,17 @@ const STEPS = [
   {
     num: "01",
     title: "Connect Buildium",
-    body: "Paste your API keys once. Helixis mirrors your properties, leases, tenants, work orders, and bills — then stays current on every webhook, in real time.",
+    body: "Paste your API keys once — Helixis mirrors your portfolio and stays current on every webhook.",
   },
   {
     num: "02",
     title: "Helixis runs the follow-up",
-    body: "New work orders and messages arrive triaged, with what Helixis noticed across your records — balances, promises, repeat issues — and the reply or task already drafted. You approve; nothing sends itself.",
+    body: "Events arrive triaged, with the reply or task already drafted. You approve; nothing sends itself.",
   },
   {
     num: "03",
     title: "Ask anything",
-    body: "One chat that answers across Buildium, Gmail, and Calendar — leases, ledgers, work orders, owner questions. Every write to your systems is confirmed by you first, every time.",
+    body: "One chat across Buildium, Gmail, and Calendar. Every write is confirmed by you first.",
   },
 ];
 
@@ -517,52 +427,52 @@ const FEATURES: {
     icon: ICONS.key,
     title: "Maintenance execution",
     alt: "Vendoroo alternative",
-    body: "Work orders arrive triaged, with resident updates and owner summaries already drafted — and get chased to closeout, not just logged.",
+    body: "Triage, drafted updates, and closeout chasing on every work order.",
   },
   {
     icon: ICONS.inbox,
     title: "An inbox that drafts the work",
-    body: "Buildium events and important tenant emails become cards with a suggested reply or task — edit, approve, done.",
+    body: "Buildium events and tenant emails become cards with the action attached.",
   },
   {
     icon: ICONS.eye,
     title: "“Helixis noticed”",
-    body: "Cross-record context on every event: an outstanding balance, a lease ending, a repeat maintenance issue — surfaced before you ask.",
+    body: "Balances, lease ends, repeat issues — surfaced before you ask.",
   },
   {
     icon: ICONS.chat,
     title: "Chat across your systems",
-    body: "Buildium, Gmail, Calendar, Drive, documents, and the public web — one conversation, routed to the right specialist.",
+    body: "Buildium, Gmail, Calendar, Drive, documents, and the web in one thread.",
   },
   {
     icon: ICONS.bell,
     title: "Rent reminders with judgment",
-    body: "Knows who already promised to pay, who you already emailed, and who actually needs the nudge.",
+    body: "Skips who already promised to pay and who you already emailed.",
   },
   {
     icon: ICONS.users,
     title: "Leasing, turnovers & renewals",
     alt: "LeadSimple alternative",
-    body: "Calls, texts, and emails become pipeline leads; move-out notices open a tracked turnover checklist; lease ends surface with renewal context.",
+    body: "Leads from calls and emails, applicant sync, turnover checklists, renewal windows.",
   },
 ];
 
 const FAQ = [
   {
     q: "What data does Helixis access?",
-    a: "The Buildium data you connect — properties, leases, tenants, work orders, and bills — plus Gmail and Calendar if you authorize them through Google's consent screen with minimum scopes. API credentials are encrypted at rest and never shown again after setup.",
+    a: "Only what you connect: your Buildium records (properties, leases, tenants, work orders, bills) and — if you authorize them — Gmail and Calendar with minimum scopes. Credentials are encrypted and never shown again.",
   },
   {
     q: "Can I revoke access?",
-    a: "Yes, at any time. Rotate or remove your Buildium API keys, disconnect Google from Settings or your Google account's security page, and email us to erase your workspace's mirrored data and memory entirely.",
+    a: "Yes, anytime. Rotate or remove your Buildium keys, disconnect Google, and email us to erase your workspace entirely.",
   },
   {
     q: "What happens if I cancel?",
-    a: "Nothing is trapped. Buildium is always your system of record — Helixis holds a mirror, not the master. On request we delete the mirror, stored memory, and credentials, and your Buildium account is untouched.",
+    a: "Nothing is trapped — Buildium is always your system of record. On request we delete the mirror, stored memory, and credentials.",
   },
   {
     q: "What does it cost?",
-    a: "Free during early access while we build alongside our first teams. Design-partner pricing will be announced before billing turns on — no surprise charges, ever.",
+    a: "Free during early access. Design-partner pricing will be announced before billing turns on — no surprise charges.",
   },
 ];
 
@@ -607,47 +517,50 @@ export default function Landing() {
       </nav>
 
       <header className="lp-hero">
-        <div>
-          <div className="lp-eyebrow lp-rise" style={{ animationDelay: "0.05s" }}>
-            The execution layer for Buildium teams
-          </div>
-          <h1 className="lp-h1 lp-rise" style={{ animationDelay: "0.15s" }}>
-            Turn Buildium maintenance chaos into completed work orders.
-          </h1>
-          <p className="lp-sub lp-rise" style={{ animationDelay: "0.25s" }}>
-            Faster fixes, cleaner owner updates, fewer resident follow-ups — without
-            hiring another coordinator. Buildium stays your system of record; Helixis
-            is the system of action that runs the next step.
-          </p>
-          <div className="lp-hero-ctas lp-rise" style={{ animationDelay: "0.35s" }}>
-            <a className="btn btn-primary" href="/start" style={{ padding: "12px 26px", fontSize: 15 }}>
-              {start} →
-            </a>
-            <a className="btn btn-secondary" href="#how" style={{ padding: "12px 22px", fontSize: 15 }}>
-              See how it works
-            </a>
-          </div>
-          <div className="lp-hero-note lp-rise" style={{ animationDelay: "0.45s" }}>
-            For property management companies already on Buildium that want more
-            execution per manager — no migration, no new platform.
-          </div>
+        <div className="lp-eyebrow lp-rise" style={{ animationDelay: "0.05s" }}>
+          The execution layer for Buildium teams
         </div>
-        <div className="lp-hero-viz lp-rise" style={{ animationDelay: "0.3s" }}>
-          <InboxMock />
+        <h1 className="lp-h1 lp-rise" style={{ animationDelay: "0.15s" }}>
+          Turn Buildium maintenance chaos into completed work orders.
+        </h1>
+        <p className="lp-sub lp-rise" style={{ animationDelay: "0.25s" }}>
+          Faster fixes, cleaner owner updates, fewer resident follow-ups — without
+          hiring another coordinator.
+        </p>
+        <div className="lp-hero-ctas lp-rise" style={{ animationDelay: "0.35s" }}>
+          <a className="btn btn-primary" href="/start" style={{ padding: "12px 26px", fontSize: 15 }}>
+            {start} →
+          </a>
+          <a className="btn btn-secondary" href="#how" style={{ padding: "12px 22px", fontSize: 15 }}>
+            See how it works
+          </a>
+        </div>
+        <div className="lp-hero-note lp-rise" style={{ animationDelay: "0.45s" }}>
+          For teams already on Buildium — no migration, no new platform.
         </div>
       </header>
 
-      <section className="lp-section" id="how">
+      <div className="lp-rise" style={{ animationDelay: "0.4s" }}>
+        <Shot
+          src="/shots/inbox.png"
+          alt="The Helixis inbox: an AC work order triaged with what Helixis noticed across records and a drafted reply ready to approve"
+          eager
+          caption={
+            <>
+              A real work order in Helixis — context surfaced, reply drafted, waiting on your approve.{" "}
+              <strong>Buildium stays your system of record; Helixis is the system of action.</strong>
+            </>
+          }
+        />
+      </div>
+
+      <section className="lp-section lp-hero-section" id="how">
         <Reveal>
           <div className="lp-kicker">How it works</div>
           <h2 className="lp-h2">From webhook to done, without the busywork.</h2>
-          <p className="lp-section-sub">
-            Helixis rides your existing Buildium data — no migration, no second system
-            of record, no double entry. Buildium records; Helixis executes.
-          </p>
         </Reveal>
         <Reveal>
-          <div className="lp-steps">
+          <div className="lp-steps" style={{ marginTop: 28 }}>
             {STEPS.map((s) => (
               <div className="lp-step" key={s.num}>
                 <div className="lp-step-num">{s.num}</div>
@@ -661,12 +574,42 @@ export default function Landing() {
 
       <section className="lp-section">
         <Reveal>
+          <div className="lp-kicker">Chat</div>
+          <h2 className="lp-h2">Ask anything. Approve before anything sends.</h2>
+          <p className="lp-section-sub">
+            "Who's behind on rent?" — answered from your live Buildium data, with the
+            follow-up ready behind a confirm gate.
+          </p>
+        </Reveal>
+        <Reveal>
+          <Shot
+            src="/shots/chat.png"
+            alt="Helixis chat answering who is behind on rent with a tenant table and a confirm gate before sending reminders"
+          />
+        </Reveal>
+      </section>
+
+      <section className="lp-section">
+        <Reveal>
+          <div className="lp-kicker">Team activity</div>
+          <h2 className="lp-h2">Every action logged — human or AI.</h2>
+          <p className="lp-section-sub">
+            One feed of who did what, across your team, the assistant, and Buildium.
+          </p>
+        </Reveal>
+        <Reveal>
+          <Shot
+            src="/shots/activity.png"
+            alt="Helixis team activity feed showing assistant and Buildium actions logged with timestamps"
+          />
+        </Reveal>
+      </section>
+
+      <section className="lp-section">
+        <Reveal>
           <div className="lp-kicker">What Helixis executes</div>
           <h2 className="lp-h2">A teammate, not another tab.</h2>
-          <p className="lp-section-sub">
-            One layer instead of a stack of add-ons — everything below ships today and
-            works off your live Buildium account.
-          </p>
+          <p className="lp-section-sub">Everything here ships today and works off your live Buildium account.</p>
         </Reveal>
         <Reveal>
           <div className="lp-grid">
@@ -690,9 +633,7 @@ export default function Landing() {
         <Reveal>
           <div className="lp-kicker">Trust</div>
           <h2 className="lp-h2">Careful by construction.</h2>
-          <p className="lp-section-sub">
-            Helixis acts on your systems, so the defaults are conservative.
-          </p>
+          <p className="lp-section-sub">Helixis acts on your systems, so the defaults are conservative.</p>
         </Reveal>
         <Reveal>
           <div className="lp-trust">
@@ -710,12 +651,9 @@ export default function Landing() {
         <Reveal>
           <div className="lp-kicker">Questions</div>
           <h2 className="lp-h2">The things you should ask before handing over keys.</h2>
-          <p className="lp-section-sub">
-            Straight answers — the same ones we'd want before connecting our own accounts.
-          </p>
         </Reveal>
         <Reveal>
-          <div className="lp-faq">
+          <div className="lp-faq" style={{ marginTop: 28 }}>
             {FAQ.map((f) => (
               <div className="lp-faq-item" key={f.q}>
                 <div className="lp-faq-q">{f.q}</div>
@@ -729,10 +667,7 @@ export default function Landing() {
       <section className="lp-section lp-cta-band">
         <Reveal>
           <h2 className="lp-h2">Set up in about ten minutes.</h2>
-          <p>
-            Workspace, Buildium keys, webhooks, team — the wizard walks you through all
-            of it. Free during early access; design-partner pricing when billing launches.
-          </p>
+          <p>Free during early access; design-partner pricing when billing launches.</p>
           <a className="btn btn-primary" href="/start" style={{ padding: "13px 30px", fontSize: 15 }}>
             {start} →
           </a>
