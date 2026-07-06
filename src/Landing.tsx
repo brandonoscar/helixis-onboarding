@@ -591,16 +591,19 @@ export default function Landing() {
 
       <section className="lp-section">
         <Reveal>
-          <div className="lp-kicker">Team activity</div>
-          <h2 className="lp-h2">Every action logged — human or AI.</h2>
+          <div className="lp-kicker">
+            Leasing CRM <span className="lp-alt" style={{ marginLeft: 10 }}>LeadSimple alternative</span>
+          </div>
+          <h2 className="lp-h2">Your leasing pipeline, already inside.</h2>
           <p className="lp-section-sub">
-            One feed of who did what, across your team, the assistant, and Buildium.
+            Calls, texts, and emails become leads; stages sync when an applicant appears
+            in Buildium; cold leads get flagged before they slip.
           </p>
         </Reveal>
         <Reveal>
           <Shot
-            src="/shots/activity.png"
-            alt="Helixis team activity feed showing assistant and Buildium actions logged with timestamps"
+            src="/shots/crm.png"
+            alt="Helixis leasing CRM: monthly lead metrics, conversion funnel, going-cold alert, and a five-stage pipeline board"
           />
         </Reveal>
       </section>
