@@ -1100,6 +1100,27 @@ function StepChannels({ onNext }: { onNext: (connected: boolean) => void }) {
 // LAUNCH: FIRST OPERATIONS SCAN
 // ─────────────────────────────────────────────────────────
 
+interface ScanData {
+  synced: boolean;
+  properties: number;
+  units: number;
+  tenants: number;
+  active_leases: number;
+  open_work_orders: number;
+  stalled_work_orders: number;
+  expiring_leases: number;
+  expiring_window_days: number;
+  delinquent_leases: number;
+  delinquent_total: number;
+  pending_promises: number;
+}
+
+const usd = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 0,
+});
+
 function StepFinish({
   workspace,
   buildiumCount,
@@ -1111,7 +1132,74 @@ function StepFinish({
   liveUpdates: boolean;
   googleConnected: boolean;
 }) {
-  const cards = [
+  // The real day-one scan (GET /reports/first-scan): deterministic mirror
+  // counts. Poll while the initial backfill fills the mirror (synced=false);
+  // any error falls back to the static setup-status cards so an older
+  // backend deploy can never break the launch screen.
+  const [scan, setScan] = useState<ScanData | null>(null);
+  const [scanning, setScanning] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    let attempts = 0;
+
+    const poll = async () => {
+      try {
+        const data = await apiJson<ScanData>("/api/v1/reports/first-scan");
+        if (!active) return;
+        setScan(data);
+        if (data.synced || attempts >= 11) {
+          setScanning(false);
+          return;
+        }
+      } catch {
+        if (!active) return;
+        setScanning(false); // endpoint missing/unreachable → static fallback
+        return;
+      }
+      attempts += 1;
+      setTimeout(poll, 5000);
+    };
+
+    poll();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const statusLine = [
+    liveUpdates ? "Live updates: on" : "Live updates: off — enable later in Settings",
+    googleConnected ? "Gmail & Calendar: connected" : "Gmail & Calendar: skipped",
+  ].join(" · ");
+
+  const findings =
+    scan && scan.synced
+      ? [
+          {
+            num: String(scan.open_work_orders),
+            label: `open work order${scan.open_work_orders === 1 ? "" : "s"}`,
+            sub:
+              scan.stalled_work_orders > 0
+                ? `${scan.stalled_work_orders} look stalled — no update in over 7 days.`
+                : "None look stalled right now.",
+          },
+          {
+            num: String(scan.expiring_leases),
+            label: `lease${scan.expiring_leases === 1 ? "" : "s"} ending in the next ${scan.expiring_window_days} days`,
+            sub: "Renewal windows Helixis will track for you.",
+          },
+          {
+            num: usd.format(scan.delinquent_total),
+            label: `owed across ${scan.delinquent_leases} lease${scan.delinquent_leases === 1 ? "" : "s"}`,
+            sub:
+              scan.pending_promises > 0
+                ? `${scan.pending_promises} tenant${scan.pending_promises === 1 ? " has" : "s have"} promised payment — Helixis is watching the dates.`
+                : "Rent reminders will chase these with judgment.",
+          },
+        ]
+      : null;
+
+  const fallbackCards = [
     {
       num: buildiumCount != null ? String(buildiumCount) : "✓",
       label: buildiumCount != null ? `rental${buildiumCount === 1 ? "" : "s"} connected` : "Buildium connected",
@@ -1132,16 +1220,34 @@ function StepFinish({
           <Helix width={80} height={110} dots={14} speed={0.5} />
         </div>
         <h1 className="panel-title" style={{ textAlign: "center" }}>
-          {workspace.name || "Your workspace"} is live — first scan running
+          {findings
+            ? `Here's what Helixis found in ${workspace.name || "your portfolio"}`
+            : `${workspace.name || "Your workspace"} is live — first scan running`}
         </h1>
         <p className="panel-desc" style={{ textAlign: "center" }}>
-          Helixis is reading your portfolio now. Open the app to watch your Inbox fill in and ask
-          your first question.
+          {findings ? (
+            <>
+              {scan!.properties} propert{scan!.properties === 1 ? "y" : "ies"} · {scan!.units} unit
+              {scan!.units === 1 ? "" : "s"} · {scan!.tenants} tenant{scan!.tenants === 1 ? "" : "s"} mirrored.
+              Every number below is read straight from your Buildium data.
+            </>
+          ) : (
+            "Helixis is reading your portfolio now. Open the app to watch your Inbox fill in and ask your first question."
+          )}
         </p>
       </div>
 
+      {scanning && !findings && (
+        <div className="scan-card" style={{ justifyContent: "center", gap: 10 }}>
+          <span className="spinner accent" />
+          <span style={{ fontSize: 13, color: "var(--ink-muted)" }}>
+            Scanning your portfolio — properties, leases, work orders, balances…
+          </span>
+        </div>
+      )}
+
       <div className="scan-cards">
-        {cards.map((c) => (
+        {(findings ?? fallbackCards).map((c) => (
           <div className="scan-card" key={c.label}>
             <div className="scan-num">{c.num}</div>
             <div>
@@ -1151,6 +1257,10 @@ function StepFinish({
           </div>
         ))}
       </div>
+
+      {findings && (
+        <div className="hint" style={{ textAlign: "center", marginBottom: 4 }}>{statusLine}</div>
+      )}
 
       <a className="btn btn-primary wide" href={APP_URL} style={{ marginTop: 4 }}>
         Open Helixis → review your Inbox
