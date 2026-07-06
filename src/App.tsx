@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "./lib/supabase";
 import { apiFetch, apiJson, APP_URL, BUILDIUM_WEBHOOK_URL } from "./lib/api";
 import { loadWizard, saveWizard } from "./lib/persist";
+import Helix from "./Helix";
 
 // ─────────────────────────────────────────────────────────
 // TYPES
@@ -32,47 +33,10 @@ interface TeamMember {
 }
 
 // ─────────────────────────────────────────────────────────
-// DESIGN TOKENS
+// WIZARD-SPECIFIC STYLES (tokens + primitives live in theme.ts)
 // ─────────────────────────────────────────────────────────
 
 const css = `
-  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&family=DM+Mono:wght@400;500&display=swap');
-
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-  :root {
-    --bg: #0a0a0f;
-    --surface: #111118;
-    --surface-2: #18181f;
-    --surface-3: #1e1e28;
-    --border: rgba(255,255,255,0.07);
-    --border-bright: rgba(255,255,255,0.13);
-    --accent: #7c6af7;
-    --accent-dim: rgba(124,106,247,0.15);
-    --accent-glow: rgba(124,106,247,0.35);
-    --green: #22c55e;
-    --green-dim: rgba(34,197,94,0.12);
-    --red: #ef4444;
-    --red-dim: rgba(239,68,68,0.12);
-    --yellow: #f59e0b;
-    --yellow-dim: rgba(245,158,11,0.12);
-    --text: #f0f0f8;
-    --text-2: #9090a8;
-    --text-3: #55556a;
-    --radius: 10px;
-    --radius-lg: 16px;
-  }
-
-  body {
-    background: var(--bg);
-    color: var(--text);
-    font-family: 'DM Sans', sans-serif;
-    font-size: 15px;
-    line-height: 1.6;
-    min-height: 100vh;
-    -webkit-font-smoothing: antialiased;
-  }
-
   .app {
     min-height: 100vh;
     display: flex;
@@ -80,147 +44,110 @@ const css = `
     overflow: hidden;
   }
 
-  /* Background grid */
-  .app::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background-image:
-      linear-gradient(rgba(124,106,247,0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(124,106,247,0.03) 1px, transparent 1px);
-    background-size: 40px 40px;
-    pointer-events: none;
-    z-index: 0;
-  }
-
-  /* Ambient glow */
-  .app::after {
-    content: '';
-    position: fixed;
-    top: -30%;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 600px;
-    height: 400px;
-    background: radial-gradient(ellipse, rgba(124,106,247,0.08) 0%, transparent 70%);
-    pointer-events: none;
-    z-index: 0;
-  }
-
   /* ── SIDEBAR ── */
   .sidebar {
-    width: 260px;
+    width: 264px;
     flex-shrink: 0;
-    padding: 32px 24px;
+    padding: 28px 24px;
     display: flex;
     flex-direction: column;
-    gap: 40px;
-    border-right: 1px solid var(--border);
+    gap: 36px;
+    border-right: 1px solid var(--line);
     position: relative;
     z-index: 1;
+    background: var(--canvas-1);
   }
 
   .logo {
     display: flex;
     align-items: center;
     gap: 10px;
-  }
-
-  .logo-mark {
-    width: 32px;
-    height: 32px;
-    background: linear-gradient(135deg, #7c6af7, #a78bfa);
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 16px;
-    font-weight: 700;
-    color: white;
-    letter-spacing: -1px;
+    color: var(--ink);
+    text-decoration: none;
   }
 
   .logo-text {
-    font-size: 17px;
+    font-size: 16px;
     font-weight: 600;
-    letter-spacing: -0.3px;
-    color: var(--text);
+    letter-spacing: -0.2px;
   }
 
-  .steps {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
+  /* steps with a vertical progress rail */
+  .steps { display: flex; flex-direction: column; position: relative; }
 
   .step-item {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 10px 12px;
-    border-radius: var(--radius);
-    cursor: default;
-    transition: background 0.15s;
+    padding: 9px 10px;
+    border-radius: var(--r-sm);
+    position: relative;
   }
 
-  .step-item.active {
-    background: var(--accent-dim);
+  /* rail segment under each dot (skip the last) */
+  .step-item:not(:last-child)::before {
+    content: '';
+    position: absolute;
+    left: 20px;
+    top: 32px;
+    bottom: -10px;
+    width: 1.5px;
+    background: var(--line);
   }
+
+  .step-item.done:not(:last-child)::before { background: var(--iris); opacity: 0.5; }
+
+  .step-item.active { background: var(--iris-soft); }
 
   .step-dot {
-    width: 22px;
-    height: 22px;
+    width: 21px;
+    height: 21px;
     border-radius: 50%;
-    border: 1.5px solid var(--border-bright);
+    border: 1.5px solid var(--line-strong);
+    background: var(--canvas-1);
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 10px;
-    font-weight: 600;
-    color: var(--text-3);
+    font-weight: 500;
+    color: var(--ink-subtle);
     flex-shrink: 0;
-    font-family: 'DM Mono', monospace;
-    transition: all 0.2s;
+    font-family: var(--font-mono);
+    transition: border-color 0.2s, background 0.2s, color 0.2s;
+    position: relative;
+    z-index: 1;
   }
 
   .step-item.active .step-dot {
-    border-color: var(--accent);
-    background: var(--accent);
-    color: white;
+    border-color: var(--iris);
+    background: var(--iris);
+    color: #fff;
   }
 
   .step-item.done .step-dot {
-    border-color: var(--green);
-    background: var(--green-dim);
-    color: var(--green);
+    border-color: var(--iris);
+    background: var(--iris-soft);
+    color: var(--iris);
   }
 
   .step-label {
     font-size: 13px;
     font-weight: 500;
-    color: var(--text-3);
+    color: var(--ink-subtle);
     transition: color 0.15s;
   }
 
-  .step-item.active .step-label { color: var(--text); }
-  .step-item.done .step-label { color: var(--text-2); }
+  .step-item.active .step-label { color: var(--ink); }
+  .step-item.done .step-label { color: var(--ink-muted); }
 
   .sidebar-footer {
     margin-top: auto;
-    padding-top: 24px;
-    border-top: 1px solid var(--border);
+    padding-top: 20px;
+    border-top: 1px solid var(--line);
   }
 
-  .sidebar-footer p {
-    font-size: 11px;
-    color: var(--text-3);
-    line-height: 1.5;
-  }
-
-  .sidebar-footer a {
-    color: var(--accent);
-    text-decoration: none;
-  }
+  .sidebar-footer p { font-size: 11px; color: var(--ink-subtle); line-height: 1.5; }
+  .sidebar-footer a { color: var(--iris); text-decoration: none; }
 
   /* ── MAIN ── */
   .main {
@@ -237,11 +164,11 @@ const css = `
   .panel {
     width: 100%;
     max-width: 520px;
-    animation: fadeUp 0.3s ease both;
+    animation: fadeUp 0.35s var(--ease-out) both;
   }
 
   @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(16px); }
+    from { opacity: 0; transform: translateY(14px); }
     to { opacity: 1; transform: translateY(0); }
   }
 
@@ -249,197 +176,33 @@ const css = `
 
   .panel-tag {
     font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 1.2px;
+    font-weight: 500;
+    letter-spacing: 1.4px;
     text-transform: uppercase;
-    color: var(--accent);
-    margin-bottom: 8px;
-    font-family: 'DM Mono', monospace;
+    color: var(--iris);
+    margin-bottom: 10px;
+    font-family: var(--font-mono);
   }
 
   .panel-title {
     font-size: 26px;
     font-weight: 600;
-    letter-spacing: -0.5px;
+    letter-spacing: -0.02em;
     line-height: 1.25;
-    color: var(--text);
+    color: var(--ink);
     margin-bottom: 8px;
+    text-wrap: balance;
   }
 
-  .panel-desc {
-    font-size: 14px;
-    color: var(--text-2);
-    line-height: 1.6;
-  }
+  .panel-desc { font-size: 14px; color: var(--ink-muted); line-height: 1.6; }
 
-  /* ── CARD ── */
-  .card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    padding: 24px;
-    margin-bottom: 16px;
-  }
-
-  .card-title {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text-2);
-    margin-bottom: 16px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-  }
-
-  /* ── FORM ── */
-  .field {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    margin-bottom: 16px;
-  }
-
-  .field:last-child { margin-bottom: 0; }
-
-  label {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text-2);
-    letter-spacing: 0.2px;
-  }
-
-  input, select {
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    color: var(--text);
-    font-family: 'DM Sans', sans-serif;
-    font-size: 14px;
-    outline: none;
-    padding: 10px 14px;
-    transition: border-color 0.15s, box-shadow 0.15s;
-    width: 100%;
-    -webkit-appearance: none;
-  }
-
-  input:focus, select:focus {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--accent-dim);
-  }
-
-  input::placeholder { color: var(--text-3); }
-
-  input.secret-input {
-    font-family: 'DM Mono', monospace;
-    font-size: 13px;
-    letter-spacing: 1px;
-  }
-
-  select {
-    cursor: pointer;
-    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239090a8' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
-    background-repeat: no-repeat;
-    background-position: right 10px center;
-    background-size: 16px;
-    padding-right: 36px;
-  }
-
-  /* ── BUTTONS ── */
-  .btn {
-    align-items: center;
-    border: none;
-    border-radius: var(--radius);
-    cursor: pointer;
-    display: inline-flex;
-    font-family: 'DM Sans', sans-serif;
-    font-size: 14px;
-    font-weight: 500;
-    gap: 8px;
-    justify-content: center;
-    outline: none;
-    padding: 10px 20px;
-    transition: all 0.15s;
-    white-space: nowrap;
-  }
-
-  .btn-primary {
-    background: var(--accent);
-    color: white;
-    width: 100%;
-    padding: 12px;
-    font-size: 15px;
-    font-weight: 600;
-    margin-top: 8px;
-  }
-
-  .btn-primary:hover:not(:disabled) {
-    background: #8b7af8;
-    transform: translateY(-1px);
-    box-shadow: 0 8px 24px var(--accent-glow);
-  }
-
-  .btn-primary:active:not(:disabled) { transform: translateY(0); }
-
-  .btn-secondary {
-    background: var(--surface-3);
-    border: 1px solid var(--border-bright);
-    color: var(--text);
-    flex: 1;
-  }
-
-  .btn-secondary:hover:not(:disabled) { background: var(--surface-2); border-color: var(--border-bright); }
-
-  .btn-ghost {
-    background: transparent;
-    color: var(--text-2);
-    padding: 8px 12px;
-    font-size: 13px;
-  }
-
-  .btn-ghost:hover { color: var(--text); background: var(--surface-2); }
-
-  .btn-danger {
-    background: var(--red-dim);
-    border: 1px solid rgba(239,68,68,0.2);
-    color: var(--red);
-    font-size: 13px;
-    padding: 8px 14px;
-  }
-
-  .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
-
-  .btn-row { display: flex; gap: 8px; }
-
-  /* ── STATUS BADGES ── */
-  .badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 3px 10px;
-    border-radius: 100px;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.3px;
-  }
-
-  .badge-green { background: var(--green-dim); color: var(--green); border: 1px solid rgba(34,197,94,0.2); }
-  .badge-red { background: var(--red-dim); color: var(--red); border: 1px solid rgba(239,68,68,0.2); }
-  .badge-yellow { background: var(--yellow-dim); color: var(--yellow); border: 1px solid rgba(245,158,11,0.2); }
-  .badge-purple { background: var(--accent-dim); color: var(--accent); border: 1px solid rgba(124,106,247,0.2); }
-  .badge-muted { background: var(--surface-3); color: var(--text-3); border: 1px solid var(--border); }
-
-  .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-  .dot.pulse { animation: pulse 2s infinite; }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
-  }
+  .btn-primary.wide { width: 100%; padding: 12px; font-size: 15px; font-weight: 500; margin-top: 8px; }
 
   /* ── LOCKED STATE ── */
   .locked-banner {
-    background: var(--green-dim);
-    border: 1px solid rgba(34,197,94,0.2);
-    border-radius: var(--radius);
+    background: var(--positive-soft);
+    border: 1px solid rgba(111, 191, 143, 0.2);
+    border-radius: var(--r-sm);
     padding: 14px 16px;
     display: flex;
     align-items: center;
@@ -450,21 +213,22 @@ const css = `
   .locked-info { display: flex; align-items: center; gap: 10px; }
 
   .locked-icon {
-    width: 32px;
-    height: 32px;
-    background: rgba(34,197,94,0.15);
-    border-radius: 8px;
+    width: 30px;
+    height: 30px;
+    background: rgba(111, 191, 143, 0.14);
+    color: var(--positive);
+    border-radius: var(--r-sm);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 14px;
+    font-size: 13px;
   }
 
   /* ── COPY FIELD ── */
   .copy-field {
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
+    background: var(--canvas-2);
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
     padding: 10px 14px;
     display: flex;
     align-items: center;
@@ -473,9 +237,9 @@ const css = `
 
   .copy-value {
     flex: 1;
-    font-family: 'DM Mono', monospace;
+    font-family: var(--font-mono);
     font-size: 12px;
-    color: var(--text-2);
+    color: var(--ink-muted);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -484,68 +248,19 @@ const css = `
 
   .copy-btn {
     font-size: 11px;
-    font-weight: 600;
-    color: var(--accent);
+    font-weight: 500;
+    color: var(--iris);
     cursor: pointer;
     padding: 4px 8px;
-    border-radius: 6px;
+    border-radius: var(--r-xs);
     transition: background 0.15s;
     white-space: nowrap;
     background: none;
     border: none;
-    font-family: 'DM Sans', sans-serif;
+    font-family: var(--font-sans);
   }
 
-  .copy-btn:hover { background: var(--accent-dim); }
-
-  /* ── SECRET REVEAL ── */
-  .secret-reveal {
-    background: #0d0d15;
-    border: 1px solid rgba(124,106,247,0.3);
-    border-radius: var(--radius);
-    padding: 16px;
-    position: relative;
-    overflow: hidden;
-  }
-
-  .secret-reveal::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(135deg, rgba(124,106,247,0.05), transparent);
-    pointer-events: none;
-  }
-
-  .secret-reveal-label {
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    color: var(--accent);
-    margin-bottom: 10px;
-    font-family: 'DM Mono', monospace;
-  }
-
-  .secret-value {
-    font-family: 'DM Mono', monospace;
-    font-size: 13px;
-    color: var(--text);
-    word-break: break-all;
-    line-height: 1.7;
-    margin-bottom: 12px;
-  }
-
-  .secret-warning {
-    font-size: 12px;
-    color: var(--yellow);
-    display: flex;
-    align-items: flex-start;
-    gap: 6px;
-    padding: 8px 12px;
-    background: var(--yellow-dim);
-    border-radius: 6px;
-    line-height: 1.5;
-  }
+  .copy-btn:hover { background: var(--iris-soft); }
 
   /* ── TEAM MEMBER LIST ── */
   .member-item {
@@ -553,221 +268,155 @@ const css = `
     align-items: center;
     gap: 12px;
     padding: 10px 0;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--line);
   }
 
   .member-item:last-child { border-bottom: none; }
 
   .member-avatar {
-    width: 32px;
-    height: 32px;
+    width: 30px;
+    height: 30px;
     border-radius: 50%;
-    background: var(--accent-dim);
+    background: var(--iris-soft);
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 12px;
-    font-weight: 700;
-    color: var(--accent);
+    font-weight: 600;
+    color: var(--iris);
     flex-shrink: 0;
     text-transform: uppercase;
   }
 
   .member-info { flex: 1; min-width: 0; }
-  .member-email { font-size: 13px; font-weight: 500; color: var(--text); truncate: clip; }
-  .member-status { font-size: 11px; color: var(--text-3); }
-
-  /* ── DIVIDER ── */
-  .divider {
-    height: 1px;
-    background: var(--border);
-    margin: 20px 0;
-  }
+  .member-email { font-size: 13px; font-weight: 500; color: var(--ink); }
+  .member-status { font-size: 11px; color: var(--ink-subtle); }
 
   /* ── TEST RESULT ── */
   .test-result {
     padding: 12px 14px;
-    border-radius: var(--radius);
+    border-radius: var(--r-sm);
     font-size: 13px;
     display: flex;
     align-items: center;
     gap: 8px;
     margin-top: 12px;
-    animation: fadeUp 0.2s ease both;
+    animation: fadeUp 0.2s var(--ease-out) both;
   }
 
   .test-result.success {
-    background: var(--green-dim);
-    color: var(--green);
-    border: 1px solid rgba(34,197,94,0.2);
+    background: var(--positive-soft);
+    color: var(--positive);
+    border: 1px solid rgba(111, 191, 143, 0.2);
   }
 
   .test-result.error {
-    background: var(--red-dim);
-    color: var(--red);
-    border: 1px solid rgba(239,68,68,0.2);
+    background: var(--danger-soft);
+    color: var(--danger);
+    border: 1px solid rgba(201, 111, 111, 0.2);
   }
 
   /* ── FINISH SCREEN ── */
-  .finish-hero {
-    text-align: center;
-    padding: 32px 0;
-  }
+  .finish-hero { text-align: center; padding: 24px 0 32px; }
 
-  .finish-icon {
-    width: 72px;
-    height: 72px;
-    border-radius: 50%;
-    background: var(--green-dim);
-    border: 1px solid rgba(34,197,94,0.3);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 28px;
-    margin: 0 auto 20px;
-  }
+  .finish-viz { display: flex; justify-content: center; margin-bottom: 8px; }
 
-  .checklist {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    margin: 24px 0;
-  }
+  .checklist { display: flex; flex-direction: column; gap: 10px; margin: 24px 0; }
 
   .check-item {
     display: flex;
     align-items: center;
     gap: 12px;
     padding: 12px 14px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
+    background: var(--canvas-1);
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
   }
 
   .check-icon {
     width: 20px;
     height: 20px;
     border-radius: 50%;
-    background: var(--green-dim);
+    background: var(--positive-soft);
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 10px;
-    color: var(--green);
+    color: var(--positive);
     flex-shrink: 0;
   }
 
-  .check-label { font-size: 13px; font-weight: 500; color: var(--text); }
-  .check-sub { font-size: 11px; color: var(--text-3); }
+  .check-label { font-size: 13px; font-weight: 500; color: var(--ink); }
+  .check-sub { font-size: 11px; color: var(--ink-subtle); }
 
-  .extension-steps {
-    display: flex;
-    gap: 8px;
-    margin: 20px 0;
-  }
+  .extension-steps { display: flex; gap: 8px; margin: 20px 0; }
 
   .ext-step {
     flex: 1;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
+    background: var(--canvas-1);
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
     padding: 14px 12px;
     text-align: center;
   }
 
   .ext-num {
     font-size: 11px;
-    font-weight: 700;
-    color: var(--accent);
-    font-family: 'DM Mono', monospace;
+    font-weight: 500;
+    color: var(--iris);
+    font-family: var(--font-mono);
     margin-bottom: 4px;
   }
 
-  .ext-label { font-size: 12px; color: var(--text-2); }
+  .ext-label { font-size: 12px; color: var(--ink-muted); }
 
   /* ── TOGGLE ── */
   .toggle-row {
     display: flex;
     gap: 4px;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 4px;
+    background: var(--canvas-2);
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
+    padding: 3px;
     width: fit-content;
   }
 
   .toggle-opt {
     padding: 6px 14px;
-    border-radius: 6px;
+    border-radius: var(--r-xs);
     font-size: 12px;
-    font-weight: 600;
+    font-weight: 500;
     cursor: pointer;
-    color: var(--text-3);
-    transition: all 0.15s;
+    color: var(--ink-subtle);
+    transition: background 0.15s, color 0.15s;
     border: none;
     background: none;
-    font-family: 'DM Sans', sans-serif;
+    font-family: var(--font-sans);
   }
 
-  .toggle-opt.active {
-    background: var(--surface-3);
-    color: var(--text);
-    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
-  }
+  .toggle-opt.active { background: var(--canvas-3); color: var(--ink); }
 
   /* ── OTP INPUT ── */
-  .otp-row {
-    display: flex;
-    gap: 8px;
-    justify-content: center;
-    margin: 20px 0;
-  }
+  .otp-row { display: flex; gap: 8px; justify-content: center; margin: 20px 0; }
 
   .otp-box {
     width: 48px;
     height: 56px;
     text-align: center;
     font-size: 22px;
-    font-weight: 700;
-    font-family: 'DM Mono', monospace;
-    border-radius: var(--radius);
-    background: var(--surface-2);
-    border: 1.5px solid var(--border);
-    color: var(--text);
+    font-weight: 600;
+    font-family: var(--font-mono);
+    border-radius: var(--r-sm);
+    background: var(--canvas-2);
+    border: 1.5px solid var(--line);
+    color: var(--ink);
     outline: none;
     transition: border-color 0.15s, box-shadow 0.15s;
   }
 
   .otp-box:focus {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--accent-dim);
-  }
-
-  /* ── SPINNER ── */
-  .spinner {
-    width: 14px;
-    height: 14px;
-    border: 2px solid rgba(255,255,255,0.2);
-    border-top-color: white;
-    border-radius: 50%;
-    animation: spin 0.6s linear infinite;
-    display: inline-block;
-    flex-shrink: 0;
-  }
-
-  .spinner.accent {
-    border: 2px solid var(--accent-dim);
-    border-top-color: var(--accent);
-  }
-
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  /* ── HINT ── */
-  .hint {
-    font-size: 12px;
-    color: var(--text-3);
-    margin-top: 6px;
-    line-height: 1.5;
+    border-color: var(--iris);
+    box-shadow: 0 0 0 3px var(--iris-soft);
   }
 
   /* ── PROVIDER CARD ── */
@@ -776,65 +425,71 @@ const css = `
     align-items: center;
     gap: 14px;
     padding: 16px;
-    border-radius: var(--radius);
-    border: 1px solid var(--border);
-    background: var(--surface-2);
+    border-radius: var(--r-sm);
+    border: 1px solid var(--line);
+    background: var(--canvas-2);
     cursor: pointer;
-    transition: all 0.15s;
+    transition: border-color 0.15s, background 0.15s;
   }
 
-  .provider-card:hover { border-color: var(--accent); background: var(--accent-dim); }
-  .provider-card.selected { border-color: var(--accent); background: var(--accent-dim); }
+  .provider-card:hover { border-color: var(--iris); }
+  .provider-card.selected { border-color: var(--iris); background: var(--iris-soft); }
 
   .provider-logo {
-    width: 40px;
-    height: 40px;
-    border-radius: 8px;
+    width: 38px;
+    height: 38px;
+    border-radius: var(--r-sm);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 16px;
-    background: var(--surface-3);
+    font-size: 15px;
+    font-weight: 600;
+    font-family: var(--font-mono);
+    background: var(--canvas-3);
+    color: var(--ink-muted);
     flex-shrink: 0;
   }
 
-  .provider-label { font-size: 14px; font-weight: 600; color: var(--text); }
-  .provider-sub { font-size: 12px; color: var(--text-3); }
+  .provider-card.selected .provider-logo { background: var(--iris); color: #fff; }
+
+  .provider-label { font-size: 14px; font-weight: 600; color: var(--ink); }
+  .provider-sub { font-size: 12px; color: var(--ink-subtle); }
 
   .provider-check {
     margin-left: auto;
     width: 20px;
     height: 20px;
     border-radius: 50%;
-    border: 1.5px solid var(--border-bright);
+    border: 1.5px solid var(--line-strong);
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 10px;
-    transition: all 0.15s;
+    transition: background 0.15s, border-color 0.15s;
   }
 
   .provider-card.selected .provider-check {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: white;
+    background: var(--iris);
+    border-color: var(--iris);
+    color: #fff;
   }
 
-  /* ── SOC2 NOTE ── */
+  /* ── SECURITY NOTE ── */
   .soc2-note {
     display: flex;
     align-items: flex-start;
     gap: 8px;
     padding: 10px 12px;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
+    background: var(--canvas-1);
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
     font-size: 11px;
-    color: var(--text-3);
+    color: var(--ink-subtle);
     line-height: 1.5;
+    margin-bottom: 16px;
   }
 
-  .soc2-icon { font-size: 13px; flex-shrink: 0; margin-top: 1px; }
+  .soc2-note svg { flex-shrink: 0; margin-top: 1px; color: var(--ink-subtle); }
 
   /* ── RESPONSIVE ── */
   @media (max-width: 768px) {
@@ -872,7 +527,19 @@ function CopyField({ label, value }: { label: string; value: string }) {
 function SOC2Note({ text }: { text: string }) {
   return (
     <div className="soc2-note">
-      <span className="soc2-icon">🔒</span>
+      <svg
+        width="13"
+        height="13"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2z M7 11V7a5 5 0 0 1 10 0v4" />
+      </svg>
       <span>{text}</span>
     </div>
   );
@@ -890,9 +557,9 @@ function StepWorkspace({ onNext }: { onNext: (data: WorkspaceData) => void }) {
   const slug = name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
 
   const providers = [
-    { id: "buildium", label: "Buildium", sub: "Full API integration available", emoji: "🏢", ready: true },
-    { id: "appfolio", label: "AppFolio", sub: "Coming soon", emoji: "🏠", ready: false },
-    { id: "yardi", label: "Yardi", sub: "Coming soon", emoji: "🏗", ready: false },
+    { id: "buildium", label: "Buildium", sub: "Full API integration available", mark: "B", ready: true },
+    { id: "appfolio", label: "AppFolio", sub: "Coming soon", mark: "A", ready: false },
+    { id: "yardi", label: "Yardi", sub: "Coming soon", mark: "Y", ready: false },
   ];
 
   const handleSubmit = async () => {
@@ -921,7 +588,7 @@ function StepWorkspace({ onNext }: { onNext: (data: WorkspaceData) => void }) {
             onChange={(e) => setName(e.target.value)}
             autoFocus
           />
-          {slug && <span className="hint">Workspace ID: <code style={{ fontFamily: "DM Mono", color: "var(--accent)" }}>{slug}</code></span>}
+          {slug && <span className="hint">Workspace ID: <code className="mono" style={{ color: "var(--iris)" }}>{slug}</code></span>}
         </div>
 
         <div className="divider" />
@@ -935,7 +602,7 @@ function StepWorkspace({ onNext }: { onNext: (data: WorkspaceData) => void }) {
               onClick={() => p.ready && setProvider(p.id)}
               style={!p.ready ? { opacity: 0.45, cursor: "not-allowed" } : undefined}
             >
-              <div className="provider-logo">{p.emoji}</div>
+              <div className="provider-logo">{p.mark}</div>
               <div>
                 <div className="provider-label">{p.label}</div>
                 <div className="provider-sub">{p.sub}</div>
@@ -948,7 +615,7 @@ function StepWorkspace({ onNext }: { onNext: (data: WorkspaceData) => void }) {
 
       <SOC2Note text="Your workspace data is encrypted at rest and access-controlled. Helixis is working toward SOC 2 Type II compliance." />
 
-      <button className="btn btn-primary" onClick={handleSubmit} disabled={!name.trim() || loading}>
+      <button className="btn btn-primary wide" onClick={handleSubmit} disabled={!name.trim() || loading}>
         {loading ? <><span className="spinner" /> Creating workspace…</> : "Continue →"}
       </button>
     </div>
@@ -971,7 +638,7 @@ function StepAuth({ onNext }: { onNext: (email: string, accessToken: string) => 
     setLoading(true);
     const { error: e } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: window.location.origin },
+      options: { emailRedirectTo: window.location.origin + "/start" },
     });
     setLoading(false);
     if (e) { setError(e.message); return; }
@@ -1062,12 +729,12 @@ function StepAuth({ onNext }: { onNext: (email: string, accessToken: string) => 
       <SOC2Note text="All authentication events are logged for audit purposes. Email-based auth provides a strong security posture with no password storage." />
 
       {!sent ? (
-        <button className="btn btn-primary" onClick={sendLink} disabled={!email.includes("@") || loading}>
+        <button className="btn btn-primary wide" onClick={sendLink} disabled={!email.includes("@") || loading}>
           {loading ? <><span className="spinner" /> Sending…</> : "Send verification code →"}
         </button>
       ) : (
         <div>
-          <button className="btn btn-primary" onClick={verifyOtp} disabled={otp.join("").length !== 6 || loading}>
+          <button className="btn btn-primary wide" onClick={verifyOtp} disabled={otp.join("").length !== 6 || loading}>
             {loading ? <><span className="spinner" /> Verifying…</> : "Verify & continue →"}
           </button>
           <button className="btn btn-ghost" style={{ width: "100%", marginTop: 8 }} onClick={() => setSent(false)}>
@@ -1200,14 +867,14 @@ function StepIntegration({
       <div className="card" style={{ marginBottom: 16 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: integration.status === "locked" ? 0 : 16 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ fontSize: 20 }}>🏢</div>
+            <div className="provider-logo" style={{ width: 34, height: 34, fontSize: 14 }}>B</div>
             <div>
               <div style={{ fontSize: 14, fontWeight: 600 }}>Buildium</div>
-              <div style={{ fontSize: 11, color: "var(--text-3)" }}>Property management platform</div>
+              <div style={{ fontSize: 11, color: "var(--ink-subtle)" }}>Property management platform</div>
             </div>
           </div>
           {integration.status === "locked" ? (
-            <span className="badge badge-green"><span className="dot pulse" /> Connected</span>
+            <span className="badge badge-positive"><span className="dot pulse" /> Connected</span>
           ) : (
             <div className="toggle-row">
               <button className={`toggle-opt ${env === "production" ? "active" : ""}`} onClick={() => setEnv("production")}>Production</button>
@@ -1217,7 +884,7 @@ function StepIntegration({
         </div>
 
         {integration.status === "locked" ? (
-          <div style={{ marginTop: 12, fontSize: 11, color: "var(--text-3)" }}>
+          <div style={{ marginTop: 12, fontSize: 11, color: "var(--ink-subtle)" }}>
             Key: {integration.keyHint} · Locked {integration.lockedAt}
           </div>
         ) : (
@@ -1233,7 +900,7 @@ function StepIntegration({
             </div>
 
             {integration.status === "testing" && (
-              <div className="test-result" style={{ background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--text-2)" }}>
+              <div className="test-result" style={{ background: "var(--canvas-2)", border: "1px solid var(--line)", color: "var(--ink-muted)" }}>
                 <span className="spinner accent" /> Testing connection to Buildium API…
               </div>
             )}
@@ -1250,7 +917,7 @@ function StepIntegration({
             )}
 
             <div className="btn-row" style={{ marginTop: 8 }}>
-              <button className="btn btn-secondary" onClick={testConnection} disabled={!apiKey || !apiSecret || integration.status === "testing"}>
+              <button className="btn btn-secondary" onClick={testConnection} disabled={!apiKey || !apiSecret || integration.status === "testing"} style={{ flex: 1 }}>
                 {integration.status === "testing" ? <><span className="spinner accent" /> Testing…</> : "Test connection"}
               </button>
               <button className="btn btn-primary" style={{ flex: 1, margin: 0 }} onClick={lockIntegration} disabled={integration.status !== "connected" || locking}>
@@ -1270,11 +937,11 @@ function StepIntegration({
             </div>
             <div>
               <div style={{ fontSize: 14, fontWeight: 600 }}>Google</div>
-              <div style={{ fontSize: 11, color: "var(--text-3)" }}>Gmail, Calendar, Contacts, Drive</div>
+              <div style={{ fontSize: 11, color: "var(--ink-subtle)" }}>Gmail, Calendar, Contacts, Drive</div>
             </div>
           </div>
           {googleConnected ? (
-            <span className="badge badge-green"><span className="dot pulse" /> Connected</span>
+            <span className="badge badge-positive"><span className="dot pulse" /> Connected</span>
           ) : (
             <button className="btn btn-secondary" style={{ margin: 0, padding: "6px 16px", fontSize: 12 }} onClick={connectGoogle} disabled={googleConnecting}>
               {googleConnecting ? <><span className="spinner accent" /> Connecting…</> : "Connect"}
@@ -1282,7 +949,7 @@ function StepIntegration({
           )}
         </div>
         {googleConnected && (
-          <div style={{ marginTop: 8, fontSize: 11, color: "var(--text-3)" }}>
+          <div style={{ marginTop: 8, fontSize: 11, color: "var(--ink-subtle)" }}>
             Access to Gmail, Google Calendar, and Contacts is authorized.
           </div>
         )}
@@ -1297,16 +964,16 @@ function StepIntegration({
             </div>
             <div>
               <div style={{ fontSize: 14, fontWeight: 600 }}>Microsoft</div>
-              <div style={{ fontSize: 11, color: "var(--text-3)" }}>Outlook, Calendar, Teams, OneDrive</div>
+              <div style={{ fontSize: 11, color: "var(--ink-subtle)" }}>Outlook, Calendar, Teams, OneDrive</div>
             </div>
           </div>
-          <span style={{ fontSize: 11, color: "var(--text-3)", fontWeight: 500 }}>Coming soon</span>
+          <span style={{ fontSize: 11, color: "var(--ink-subtle)", fontWeight: 500 }}>Coming soon</span>
         </div>
       </div>
 
       <SOC2Note text="OAuth tokens are encrypted at rest. Helixis requests only the minimum scopes needed. You can revoke access at any time from your Google or Microsoft account settings." />
 
-      <button className="btn btn-primary" onClick={() => onNext(integration)} disabled={!canContinue}>
+      <button className="btn btn-primary wide" onClick={() => onNext(integration)} disabled={!canContinue}>
         {allDone ? "Continue →" : canContinue ? "Continue →" : "Complete Buildium setup to continue"}
       </button>
     </div>
@@ -1369,11 +1036,11 @@ function StepWebhooks({ onNext }: { onNext: (saved: boolean) => void }) {
             <div className="locked-info">
               <div className="locked-icon">✓</div>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--green)" }}>Signing secret stored</div>
-                <div style={{ fontSize: 11, color: "var(--text-3)" }}>Encrypted server-side. Used only to verify event authenticity.</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--positive)" }}>Signing secret stored</div>
+                <div style={{ fontSize: 11, color: "var(--ink-subtle)" }}>Encrypted server-side. Used only to verify event authenticity.</div>
               </div>
             </div>
-            <span className="badge badge-green">Secured</span>
+            <span className="badge badge-positive">Secured</span>
           </div>
         ) : (
           <>
@@ -1403,15 +1070,15 @@ function StepWebhooks({ onNext }: { onNext: (saved: boolean) => void }) {
         <div className="card-title">Webhook Health</div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div>
-            <span className="badge badge-muted"><span className="dot" style={{ background: "var(--text-3)" }} /> Awaiting first event</span>
-            <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 6 }}>Events will appear here once Buildium starts sending them.</div>
+            <span className="badge badge-muted"><span className="dot" style={{ background: "var(--ink-subtle)" }} /> Awaiting first event</span>
+            <div style={{ fontSize: 11, color: "var(--ink-subtle)", marginTop: 6 }}>Events will appear here once Buildium starts sending them.</div>
           </div>
         </div>
       </div>
 
       <SOC2Note text="Webhook signing secrets are stored encrypted and used server-side only to verify event authenticity (HMAC-SHA256). The secret itself is never sent back to the client." />
 
-      <button className="btn btn-primary" onClick={() => onNext(saved)} style={{ marginTop: 8 }}>
+      <button className="btn btn-primary wide" onClick={() => onNext(saved)} style={{ marginTop: 8 }}>
         {saved ? "Continue →" : "Skip for now →"}
       </button>
     </div>
@@ -1504,7 +1171,7 @@ function StepTeam({ onNext }: { onNext: (members: TeamMember[]) => void }) {
                 <div className="member-email">{m.email}</div>
                 <div className="member-status">Invite sent</div>
               </div>
-              <span className={`badge ${m.role === "owner" ? "badge-purple" : m.role === "manager" ? "badge-yellow" : "badge-muted"}`}>
+              <span className={`badge ${m.role === "owner" ? "badge-iris" : m.role === "manager" ? "badge-caution" : "badge-muted"}`}>
                 {m.role}
               </span>
             </div>
@@ -1554,7 +1221,9 @@ function StepFinish({
   return (
     <div className="panel" key="finish">
       <div className="finish-hero">
-        <div className="finish-icon">✓</div>
+        <div className="finish-viz">
+          <Helix width={80} height={110} dots={14} speed={0.5} />
+        </div>
         <h1 className="panel-title" style={{ textAlign: "center" }}>You're all set!</h1>
         <p className="panel-desc" style={{ textAlign: "center" }}>
           {workspace.name} is live on Helixis. Open the app and ask Helixis to run your first task.
@@ -1564,7 +1233,7 @@ function StepFinish({
       <div className="checklist">
         {checks.map((c) => (
           <div className="check-item" key={c.label}>
-            <div className="check-icon" style={c.done ? undefined : { background: "var(--surface-3)", color: "var(--text-3)" }}>
+            <div className="check-icon" style={c.done ? undefined : { background: "var(--canvas-3)", color: "var(--ink-subtle)" }}>
               {c.done ? "✓" : "–"}
             </div>
             <div>
@@ -1575,7 +1244,7 @@ function StepFinish({
         ))}
       </div>
 
-      <a className="btn btn-primary" href={APP_URL} style={{ marginTop: 8, textDecoration: "none" }}>
+      <a className="btn btn-primary wide" href={APP_URL} style={{ marginTop: 8 }}>
         Open Helixis →
       </a>
 
@@ -1611,14 +1280,12 @@ const STEPS: { id: Step; label: string }[] = [
 ];
 
 function Sidebar({ current, completed }: { current: Step; completed: Set<Step> }) {
-  const currentIdx = STEPS.findIndex((s) => s.id === current);
-
   return (
     <div className="sidebar">
-      <div className="logo">
-        <div className="logo-mark">H</div>
+      <a className="logo" href="/">
+        <Helix width={22} height={30} dots={10} speed={0.5} />
         <div className="logo-text">Helixis</div>
-      </div>
+      </a>
 
       <div className="steps">
         {STEPS.map((s, i) => {
