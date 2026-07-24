@@ -28,6 +28,8 @@ export interface PersistedWizard {
   goal?: string;
   /** Rentals count from the successful /buildium/test — the launch screen's value reveal. */
   buildiumCount?: number | null;
+  /** False when step 2 was skipped — the launch screen stays honest about it. */
+  buildiumConnected?: boolean;
   googleConnected?: boolean;
 }
 
