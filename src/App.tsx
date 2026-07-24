@@ -1154,6 +1154,7 @@ function StepFinish({
   // backend deploy can never break the launch screen.
   const [scan, setScan] = useState<ScanData | null>(null);
   const [scanning, setScanning] = useState(true);
+  const [appHref, setAppHref] = useState(APP_URL);
 
   useEffect(() => {
     let active = true;
@@ -1189,12 +1190,37 @@ function StepFinish({
     };
   }, []);
 
-  // Setup is done — hand the user to the app instead of stranding them on
-  // the wizard. Short delay so the launch screen registers; the primary
-  // button remains for anyone who clicks first.
+  // Setup is done — hand the user to the app SIGNED IN, not at its login
+  // form. The app is a different origin, so its Supabase client can't see
+  // the wizard's session; it is, however, created with
+  // ``detectSessionInUrl: true``, so an implicit-grant-shaped URL fragment
+  // signs the user straight in (the exact mechanism its own Google OAuth
+  // return uses) and supabase-js scrubs the tokens from the URL on load.
+  // Fragments never reach any server. Short delay so the launch screen
+  // registers; the primary button remains for anyone who clicks first.
   useEffect(() => {
-    const t = setTimeout(() => window.location.assign(APP_URL), 6000);
-    return () => clearTimeout(t);
+    let cancelled = false;
+    let t: number | undefined;
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (cancelled) return;
+      let url = APP_URL;
+      if (session?.access_token && session.refresh_token) {
+        const frag = new URLSearchParams({
+          access_token: session.access_token,
+          refresh_token: session.refresh_token,
+          expires_in: String(session.expires_in ?? 3600),
+          token_type: session.token_type || "bearer",
+        });
+        if (session.expires_at) frag.set("expires_at", String(session.expires_at));
+        url = `${APP_URL}/#${frag.toString()}`;
+      }
+      setAppHref(url);
+      t = window.setTimeout(() => window.location.assign(url), 6000);
+    });
+    return () => {
+      cancelled = true;
+      if (t) clearTimeout(t);
+    };
   }, []);
 
   const statusLine = [
@@ -1304,14 +1330,14 @@ function StepFinish({
         <div className="hint" style={{ textAlign: "center", marginBottom: 4 }}>{statusLine}</div>
       )}
 
-      <a className="btn btn-primary wide" href={APP_URL} style={{ marginTop: 4 }}>
+      <a className="btn btn-primary wide" href={appHref} style={{ marginTop: 4 }}>
         Open Helixis → review your Inbox
       </a>
       <div className="hint" style={{ textAlign: "center", marginTop: 8 }}>
         Taking you to Helixis automatically…
       </div>
       <div className="btn-row" style={{ marginTop: 8 }}>
-        <a className="btn btn-ghost" href={APP_URL} style={{ flex: 1, textAlign: "center" }}>
+        <a className="btn btn-ghost" href={appHref} style={{ flex: 1, textAlign: "center" }}>
           Invite my team (in-app)
         </a>
         <a
