@@ -714,10 +714,12 @@ function StepBuildium({
   userEmail,
   workspaceName,
   onNext,
+  onSkip,
 }: {
   userEmail: string;
   workspaceName: string;
   onNext: (count: number | null) => void;
+  onSkip: () => void;
 }) {
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [apiKey, setApiKey] = useState("");
@@ -900,6 +902,15 @@ function StepBuildium({
         {showSample ? "Hide sample preview" : "Not ready with API keys? Preview the first scan with sample data →"}
       </button>
       {showSample && <SamplePreview />}
+
+      <button
+        className="btn btn-ghost"
+        style={{ width: "100%", marginTop: 8 }}
+        onClick={onSkip}
+        disabled={integration.status === "testing" || locking}
+      >
+        Skip for now — connect Buildium later from Settings →
+      </button>
     </div>
   );
 }
@@ -1124,11 +1135,13 @@ const usd = new Intl.NumberFormat("en-US", {
 function StepFinish({
   workspace,
   buildiumCount,
+  buildiumConnected,
   liveUpdates,
   googleConnected,
 }: {
   workspace: WorkspaceData;
   buildiumCount: number | null;
+  buildiumConnected: boolean;
   liveUpdates: boolean;
   googleConnected: boolean;
 }) {
@@ -1142,6 +1155,12 @@ function StepFinish({
   useEffect(() => {
     let active = true;
     let attempts = 0;
+
+    // No Buildium yet → nothing to scan; go straight to the setup cards.
+    if (!buildiumConnected) {
+      setScanning(false);
+      return;
+    }
 
     const poll = async () => {
       try {
@@ -1200,11 +1219,17 @@ function StepFinish({
       : null;
 
   const fallbackCards = [
-    {
-      num: buildiumCount != null ? String(buildiumCount) : "✓",
-      label: buildiumCount != null ? `rental${buildiumCount === 1 ? "" : "s"} connected` : "Buildium connected",
-      sub: "Helixis is mirroring your properties, leases, tenants, work orders, and bills now.",
-    },
+    buildiumConnected
+      ? {
+          num: buildiumCount != null ? String(buildiumCount) : "✓",
+          label: buildiumCount != null ? `rental${buildiumCount === 1 ? "" : "s"} connected` : "Buildium connected",
+          sub: "Helixis is mirroring your properties, leases, tenants, work orders, and bills now.",
+        }
+      : {
+          num: "off",
+          label: "Buildium",
+          sub: "Skipped — connect from Settings → Connectors to run your first scan.",
+        },
     liveUpdates
       ? { num: "on", label: "Live updates", sub: "New Buildium events land in your Inbox in real time." }
       : { num: "off", label: "Live updates", sub: "Skipped — turn on later from Settings for real-time events." },
@@ -1222,7 +1247,9 @@ function StepFinish({
         <h1 className="panel-title" style={{ textAlign: "center" }}>
           {findings
             ? `Here's what Helixis found in ${workspace.name || "your portfolio"}`
-            : `${workspace.name || "Your workspace"} is live — first scan running`}
+            : buildiumConnected
+              ? `${workspace.name || "Your workspace"} is live — first scan running`
+              : `${workspace.name || "Your workspace"} is live`}
         </h1>
         <p className="panel-desc" style={{ textAlign: "center" }}>
           {findings ? (
@@ -1231,8 +1258,10 @@ function StepFinish({
               {scan!.units === 1 ? "" : "s"} · {scan!.tenants} tenant{scan!.tenants === 1 ? "" : "s"} mirrored.
               Every number below is read straight from your Buildium data.
             </>
-          ) : (
+          ) : buildiumConnected ? (
             "Helixis is reading your portfolio now. Open the app to watch your Inbox fill in and ask your first question."
+          ) : (
+            "Open the app and connect Buildium whenever you're ready — your first scan runs the moment it's linked."
           )}
         </p>
       </div>
@@ -1348,6 +1377,9 @@ export default function App() {
   const [buildiumCount, setBuildiumCount] = useState<number | null>(
     persisted.buildiumCount ?? null,
   );
+  const [buildiumConnected, setBuildiumConnected] = useState(
+    persisted.buildiumConnected || false,
+  );
   const [liveUpdates, setLiveUpdates] = useState(persisted.webhooksConfigured || false);
   const [googleConnected, setGoogleConnected] = useState(persisted.googleConnected || false);
   const [creatingWorkspace, setCreatingWorkspace] = useState(false);
@@ -1366,9 +1398,10 @@ export default function App() {
       doors,
       goal,
       buildiumCount,
+      buildiumConnected,
       googleConnected,
     });
-  }, [step, completed, workspace, liveUpdates, userEmail, doors, goal, buildiumCount, googleConnected]);
+  }, [step, completed, workspace, liveUpdates, userEmail, doors, goal, buildiumCount, buildiumConnected, googleConnected]);
 
   // Idempotently create the company + apply the workspace name. Shared by the
   // inline-OTP path (explicit token) and the magic-link resume path
@@ -1455,8 +1488,17 @@ export default function App() {
 
   const handleBuildium = (count: number | null) => {
     setBuildiumCount(count);
+    setBuildiumConnected(true);
     complete("buildium");
     setStep("live");
+  };
+
+  // Skipping Buildium also bypasses live updates (webhooks are meaningless
+  // without credentials); Gmail & Calendar still stand on their own.
+  const handleBuildiumSkip = () => {
+    complete("buildium");
+    complete("live");
+    setStep("channels");
   };
 
   const handleLive = (saved: boolean) => {
@@ -1494,7 +1536,7 @@ export default function App() {
             </div>
           )}
           {step === "buildium" && (
-            <StepBuildium userEmail={userEmail} workspaceName={workspace.name} onNext={handleBuildium} />
+            <StepBuildium userEmail={userEmail} workspaceName={workspace.name} onNext={handleBuildium} onSkip={handleBuildiumSkip} />
           )}
           {step === "live" && <StepLive onNext={handleLive} />}
           {step === "channels" && <StepChannels onNext={handleChannels} />}
@@ -1502,6 +1544,7 @@ export default function App() {
             <StepFinish
               workspace={workspace}
               buildiumCount={buildiumCount}
+              buildiumConnected={buildiumConnected}
               liveUpdates={liveUpdates}
               googleConnected={googleConnected}
             />
