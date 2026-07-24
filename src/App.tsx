@@ -781,10 +781,10 @@ function StepBuildium({
           keyHint: saved.client_id_last4 ? `...${saved.client_id_last4}` : undefined,
           lastTested: new Date().toLocaleTimeString(),
           count: n ?? null,
-          testMessage:
-            n != null
-              ? `Connected — found ${n} rental${n === 1 ? "" : "s"}. Ready to scan your portfolio.`
-              : "Connected. Ready to scan your portfolio.",
+          // Deliberately no count here — /buildium/test's properties_count
+          // is a shallow probe that can undercount, and a wrong number at
+          // the moment of connection reads as a broken product.
+          testMessage: "Connected. Ready to scan your portfolio.",
         });
       } else {
         setIntegration({ status: "error", testMessage: testData.error || "Connection failed" });
@@ -1034,9 +1034,12 @@ function StepChannels({ onNext }: { onNext: (connected: boolean) => void }) {
     setGoogleConnecting(true);
     try {
       // Composio-managed OAuth — the same connection the agent's Gmail /
-      // Calendar / Drive specialists use at tool time.
+      // Calendar / Drive specialists use at tool time. callbackUrl sends the
+      // popup back to our own /oauth/callback (which auto-closes) instead of
+      // parking on Composio's hosted "Successfully connected" page.
       const data = await apiJson<{ redirectUrl: string }>("/api/v1/connectors/gmail/connect", {
         method: "POST",
+        body: JSON.stringify({ callbackUrl: `${window.location.origin}/oauth/callback` }),
       });
       window.open(data.redirectUrl, "_blank", "noopener");
 
@@ -1186,6 +1189,14 @@ function StepFinish({
     };
   }, []);
 
+  // Setup is done — hand the user to the app instead of stranding them on
+  // the wizard. Short delay so the launch screen registers; the primary
+  // button remains for anyone who clicks first.
+  useEffect(() => {
+    const t = setTimeout(() => window.location.assign(APP_URL), 6000);
+    return () => clearTimeout(t);
+  }, []);
+
   const statusLine = [
     liveUpdates ? "Live updates: on" : "Live updates: off — enable later in Settings",
     googleConnected ? "Gmail & Calendar: connected" : "Gmail & Calendar: skipped",
@@ -1221,8 +1232,10 @@ function StepFinish({
   const fallbackCards = [
     buildiumConnected
       ? {
-          num: buildiumCount != null ? String(buildiumCount) : "✓",
-          label: buildiumCount != null ? `rental${buildiumCount === 1 ? "" : "s"} connected` : "Buildium connected",
+          // No count — the shallow test probe undercounts (see StepBuildium);
+          // real numbers come from the mirror-backed scan `findings` above.
+          num: "✓",
+          label: "Buildium connected",
           sub: "Helixis is mirroring your properties, leases, tenants, work orders, and bills now.",
         }
       : {
@@ -1294,6 +1307,9 @@ function StepFinish({
       <a className="btn btn-primary wide" href={APP_URL} style={{ marginTop: 4 }}>
         Open Helixis → review your Inbox
       </a>
+      <div className="hint" style={{ textAlign: "center", marginTop: 8 }}>
+        Taking you to Helixis automatically…
+      </div>
       <div className="btn-row" style={{ marginTop: 8 }}>
         <a className="btn btn-ghost" href={APP_URL} style={{ flex: 1, textAlign: "center" }}>
           Invite my team (in-app)
