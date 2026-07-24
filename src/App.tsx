@@ -403,13 +403,15 @@ const css = `
   /* ── OTP INPUT ── */
   .otp-row { display: flex; gap: 8px; justify-content: center; margin: 20px 0; }
 
-  .otp-box {
-    width: 48px;
+  .otp-input {
+    width: 100%;
+    max-width: 280px;
     height: 56px;
     text-align: center;
     font-size: 22px;
     font-weight: 600;
     font-family: var(--font-mono);
+    letter-spacing: 8px;
     border-radius: var(--r-sm);
     background: var(--canvas-2);
     border: 1.5px solid var(--line);
@@ -418,7 +420,7 @@ const css = `
     transition: border-color 0.15s, box-shadow 0.15s;
   }
 
-  .otp-box:focus { border-color: var(--iris); box-shadow: 0 0 0 3px var(--iris-soft); }
+  .otp-input:focus { border-color: var(--iris); box-shadow: 0 0 0 3px var(--iris-soft); }
 
   /* ── TOGGLE ── */
   .toggle-row {
@@ -555,7 +557,11 @@ function StepIdentify({
   const [doors, setDoors] = useState(initial.doors);
   const [goal, setGoal] = useState(initial.goal);
   const [sent, setSent] = useState(false);
-  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
+  // The code as one string. Supabase's email OTP length is a per-project
+  // dashboard setting (6-10 digits) — the input accepts the full range so a
+  // config change there can never lock users out of the wizard again (the
+  // 2026-07-24 onboarding run hit exactly that: 8-digit emails vs 6 boxes).
+  const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -577,19 +583,9 @@ function StepIdentify({
     setSent(true);
   };
 
-  const handleOtpChange = (i: number, val: string) => {
-    if (!/^\d*$/.test(val)) return;
-    const next = [...otp];
-    next[i] = val.slice(-1);
-    setOtp(next);
-    if (val && i < 5) {
-      document.getElementById(`otp-${i + 1}`)?.focus();
-    }
-  };
-
   const verifyOtp = async () => {
-    const code = otp.join("");
-    if (code.length !== 6) return;
+    const code = otp.trim();
+    if (code.length < 6) return;
     setLoading(true);
     setError("");
     const { data, error: e } = await supabase.auth.verifyOtp({ email, token: code, type: "email" });
@@ -605,7 +601,7 @@ function StepIdentify({
         <h1 className="panel-title">{sent ? "Check your email" : "Create your secure setup link"}</h1>
         <p className="panel-desc">
           {sent
-            ? `We sent a 6-digit code to ${email}. Enter it below to continue.`
+            ? `We sent a sign-in code to ${email}. Enter it below to continue.`
             : "Tell us where to point Helixis. Your progress is saved before we ask for any Buildium credentials."}
         </p>
       </div>
@@ -671,22 +667,20 @@ function StepIdentify({
         <>
           <div className="card">
             <div className="otp-row">
-              {otp.map((d, i) => (
-                <input
-                  key={i}
-                  id={`otp-${i}`}
-                  className="otp-box"
-                  maxLength={1}
-                  value={d}
-                  onChange={(e) => handleOtpChange(i, e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Backspace" && !d && i > 0) {
-                      document.getElementById(`otp-${i - 1}`)?.focus();
-                    }
-                  }}
-                  autoFocus={i === 0}
-                />
-              ))}
+              <input
+                id="otp-input"
+                className="otp-input"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={10}
+                placeholder="••••••"
+                value={otp}
+                onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && otp.length >= 6 && !loading) void verifyOtp();
+                }}
+                autoFocus
+              />
             </div>
             {error && (
               <div className="test-result error" style={{ marginTop: 0, marginBottom: 12 }}>
@@ -694,10 +688,17 @@ function StepIdentify({
               </div>
             )}
           </div>
-          <button className="btn btn-primary wide" onClick={verifyOtp} disabled={otp.join("").length !== 6 || loading}>
+          <button className="btn btn-primary wide" onClick={verifyOtp} disabled={otp.length < 6 || loading}>
             {loading ? <><span className="spinner" /> Verifying…</> : "Verify & continue →"}
           </button>
-          <button className="btn btn-ghost" style={{ width: "100%", marginTop: 8 }} onClick={() => setSent(false)}>
+          <button
+            className="btn btn-ghost"
+            style={{ width: "100%", marginTop: 8 }}
+            onClick={() => {
+              setSent(false);
+              setOtp("");
+            }}
+          >
             ← Use different email
           </button>
         </>
