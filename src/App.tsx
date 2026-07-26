@@ -558,6 +558,16 @@ function StepIdentify({
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  // Resend: Supabase rate-limits OTP sends (~60s), so gate resends behind a
+  // cooldown countdown to avoid a rejected-for-spamming error.
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resendMsg, setResendMsg] = useState("");
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const t = setInterval(() => setResendCooldown((s) => (s <= 1 ? 0 : s - 1)), 1000);
+    return () => clearInterval(t);
+  }, [resendCooldown]);
 
   const ready = email.includes("@") && name.trim().length > 0;
 
@@ -575,6 +585,22 @@ function StepIdentify({
     setLoading(false);
     if (e) { setError(e.message); return; }
     setSent(true);
+    setResendCooldown(45);
+  };
+
+  const resendCode = async () => {
+    if (resendCooldown > 0 || loading) return;
+    setLoading(true);
+    setError("");
+    setResendMsg("");
+    const { error: e } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: window.location.origin + "/start" },
+    });
+    setLoading(false);
+    if (e) { setError(e.message); return; }
+    setResendMsg("New code sent — check your inbox (and spam).");
+    setResendCooldown(45);
   };
 
   const handleOtpChange = (i: number, val: string) => {
@@ -697,7 +723,20 @@ function StepIdentify({
           <button className="btn btn-primary wide" onClick={verifyOtp} disabled={otp.join("").length !== 6 || loading}>
             {loading ? <><span className="spinner" /> Verifying…</> : "Verify & continue →"}
           </button>
-          <button className="btn btn-ghost" style={{ width: "100%", marginTop: 8 }} onClick={() => setSent(false)}>
+          {resendMsg && !error && (
+            <div className="test-result" style={{ marginTop: 8, marginBottom: 0 }}>
+              <span>✓</span> {resendMsg}
+            </div>
+          )}
+          <button
+            className="btn btn-ghost"
+            style={{ width: "100%", marginTop: 8 }}
+            onClick={resendCode}
+            disabled={resendCooldown > 0 || loading}
+          >
+            {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : "Didn't get it? Resend code"}
+          </button>
+          <button className="btn btn-ghost" style={{ width: "100%", marginTop: 8 }} onClick={() => { setSent(false); setResendMsg(""); }}>
             ← Use different email
           </button>
         </>
