@@ -403,11 +403,11 @@ const STEPS = [
   {
     num: "01",
     title: "Connect Buildium",
-    body: "Paste your API keys once — Helixis mirrors your portfolio and stays current on every webhook.",
+    body: "Paste your API keys once — Occupella mirrors your portfolio and stays current on every webhook.",
   },
   {
     num: "02",
-    title: "Helixis runs the follow-up",
+    title: "Occupella runs the follow-up",
     body: "Events arrive triaged, with the reply or task already drafted. You approve; nothing sends itself.",
   },
   {
@@ -436,7 +436,7 @@ const FEATURES: {
   },
   {
     icon: ICONS.eye,
-    title: "“Helixis noticed”",
+    title: "“Occupella noticed”",
     body: "Balances, lease ends, repeat issues — surfaced before you ask.",
   },
   {
@@ -459,7 +459,7 @@ const FEATURES: {
 
 const FAQ = [
   {
-    q: "What data does Helixis access?",
+    q: "What data does Occupella access?",
     a: "Only what you connect: your Buildium records (properties, leases, tenants, work orders, bills) and — if you authorize them — Gmail and Calendar with minimum scopes. Credentials are encrypted and never shown again.",
   },
   {
@@ -480,7 +480,7 @@ const TRUST = [
   { icon: ICONS.lock, text: "Credentials encrypted at rest — keys are stored once and never shown again" },
   { icon: ICONS.check, text: "Every write to Buildium or Gmail is confirm-gated — you approve each action" },
   { icon: ICONS.shield, text: "Company-scoped isolation across data, memory, and files" },
-  { icon: ICONS.bell, text: "Helixis never auto-sends email — drafts wait for you" },
+  { icon: ICONS.bell, text: "Occupella never auto-sends email — drafts wait for you" },
 ];
 
 export default function Landing() {
@@ -504,7 +504,7 @@ export default function Landing() {
       <nav className="lp-nav">
         <a className="lp-wordmark" href="/">
           <Helix width={22} height={30} dots={10} speed={0.5} />
-          Helixis
+          Occupella
         </a>
         <div className="lp-nav-links">
           <a className="btn btn-ghost" href={APP_URL}>
@@ -543,12 +543,12 @@ export default function Landing() {
       <div className="lp-rise" style={{ animationDelay: "0.4s" }}>
         <Shot
           src="/shots/inbox.png"
-          alt="The Helixis inbox: an AC work order triaged with what Helixis noticed across records and a drafted reply ready to approve"
+          alt="The Occupella inbox: an AC work order triaged with what Occupella noticed across records and a drafted reply ready to approve"
           eager
           caption={
             <>
-              A real work order in Helixis — context surfaced, reply drafted, waiting on your approve.{" "}
-              <strong>Buildium stays your system of record; Helixis is the system of action.</strong>
+              A real work order in Occupella — context surfaced, reply drafted, waiting on your approve.{" "}
+              <strong>Buildium stays your system of record; Occupella is the system of action.</strong>
             </>
           }
         />
@@ -584,7 +584,7 @@ export default function Landing() {
         <Reveal>
           <Shot
             src="/shots/chat.png"
-            alt="Helixis chat answering who is behind on rent with a tenant table and a confirm gate before sending reminders"
+            alt="Occupella chat answering who is behind on rent with a tenant table and a confirm gate before sending reminders"
           />
         </Reveal>
       </section>
@@ -603,14 +603,14 @@ export default function Landing() {
         <Reveal>
           <Shot
             src="/shots/crm.png"
-            alt="Helixis leasing CRM: monthly lead metrics, conversion funnel, going-cold alert, and a five-stage pipeline board"
+            alt="Occupella leasing CRM: monthly lead metrics, conversion funnel, going-cold alert, and a five-stage pipeline board"
           />
         </Reveal>
       </section>
 
       <section className="lp-section">
         <Reveal>
-          <div className="lp-kicker">What Helixis executes</div>
+          <div className="lp-kicker">What Occupella executes</div>
           <h2 className="lp-h2">A teammate, not another tab.</h2>
           <p className="lp-section-sub">Everything here ships today and works off your live Buildium account.</p>
         </Reveal>
@@ -636,7 +636,7 @@ export default function Landing() {
         <Reveal>
           <div className="lp-kicker">Trust</div>
           <h2 className="lp-h2">Careful by construction.</h2>
-          <p className="lp-section-sub">Helixis acts on your systems, so the defaults are conservative.</p>
+          <p className="lp-section-sub">Occupella acts on your systems, so the defaults are conservative.</p>
         </Reveal>
         <Reveal>
           <div className="lp-trust">
@@ -678,7 +678,7 @@ export default function Landing() {
       </section>
 
       <footer className="lp-footer">
-        <span>© 2026 Helixis</span>
+        <span>© 2026 Helixis Systems, Inc.</span>
         <div style={{ display: "flex", gap: 20 }}>
           <a href="/privacy">Privacy</a>
           <a href="/terms">Terms</a>
