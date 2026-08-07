@@ -678,7 +678,6 @@ export default function Landing() {
       </section>
 
       <footer className="lp-footer">
-        <span>© 2026 Helixis Systems, Inc.</span>
         <div style={{ display: "flex", gap: 20 }}>
           <a href="/privacy">Privacy</a>
           <a href="/terms">Terms</a>
