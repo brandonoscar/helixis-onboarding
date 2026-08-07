@@ -12,7 +12,7 @@ import Helix from "./Helix";
 //                 admin preflight + handoff and a value reveal on test
 //   3 live      — webhooks, reframed as "live Buildium updates", skippable
 //   4 channels  — Google OAuth, optional
-//   finish      — launch: what Helixis is scanning now, not a summary
+//   finish      — launch: what Occupella is scanning now, not a summary
 // Team invites moved to the in-app Getting Started checklist.
 // ─────────────────────────────────────────────────────────
 
@@ -632,7 +632,7 @@ function StepIdentify({
         <p className="panel-desc">
           {sent
             ? `We sent a 6-digit code to ${email}. Enter it below to continue.`
-            : "Tell us where to point Helixis. Your progress is saved before we ask for any Buildium credentials."}
+            : "Tell us where to point Occupella. Your progress is saved before we ask for any Buildium credentials."}
         </p>
       </div>
 
@@ -669,7 +669,7 @@ function StepIdentify({
                 </select>
               </div>
               <div className="field">
-                <label>Where should Helixis help first?</label>
+                <label>Where should Occupella help first?</label>
                 <select value={goal} onChange={(e) => setGoal(e.target.value)}>
                   <option value="">Select…</option>
                   {GOAL_OPTIONS.map((g) => (
@@ -771,18 +771,18 @@ function StepBuildium({
 
   const handoffInstructions =
     `Hi —\n\n` +
-    `We're connecting ${workspaceName || "our company"} to Helixis (an AI operations layer that runs on top of Buildium). ` +
+    `We're connecting ${workspaceName || "our company"} to Occupella (an AI operations layer that runs on top of Buildium). ` +
     `It needs a Buildium API key to read our portfolio.\n\n` +
     `Steps (about 2 minutes):\n` +
     `1. In Buildium, open Settings → API Settings\n` +
     `2. Create an API key and copy the Client ID and Client Secret\n` +
     `3. Send them to me securely, or finish the setup here: ${window.location.origin}/start\n\n` +
     `Security: credentials are encrypted at rest, never displayed again after setup, ` +
-    `and access can be revoked from Buildium at any time. Every write Helixis makes is approved by a person first.\n\n` +
+    `and access can be revoked from Buildium at any time. Every write Occupella makes is approved by a person first.\n\n` +
     `Requested by ${userEmail}`;
 
   const mailtoHref =
-    `mailto:?subject=${encodeURIComponent("Helixis needs a Buildium API key")}` +
+    `mailto:?subject=${encodeURIComponent("Occupella needs a Buildium API key")}` +
     `&body=${encodeURIComponent(handoffInstructions)}`;
 
   const copyInstructions = async () => {
@@ -847,9 +847,9 @@ function StepBuildium({
     <div className="panel" key="buildium">
       <div className="panel-header">
         <div className="panel-tag">Step 2 of 4</div>
-        <h1 className="panel-title">Connect Buildium so Helixis can scan your operations</h1>
+        <h1 className="panel-title">Connect Buildium so Occupella can scan your operations</h1>
         <p className="panel-desc">
-          We test read access first and show you exactly what Helixis can see before anything launches.
+          We test read access first and show you exactly what Occupella can see before anything launches.
         </p>
       </div>
 
@@ -873,7 +873,7 @@ function StepBuildium({
         <div className="handoff">
           <div className="handoff-title">Send setup instructions to your Buildium admin</div>
           <div className="handoff-body">
-            A short email that says why Helixis needs access, exactly where the API settings live, what
+            A short email that says why Occupella needs access, exactly where the API settings live, what
             gets stored, and a link back here. Your progress is saved — come back anytime with the keys.
           </div>
           <div className="btn-row">
@@ -935,7 +935,7 @@ function StepBuildium({
         </div>
       )}
 
-      <TrustLine text="Credentials are encrypted at rest, masked in the browser, and never displayed again. You can revoke access from Buildium at any time. Every write Helixis makes needs your approval." />
+      <TrustLine text="Credentials are encrypted at rest, masked in the browser, and never displayed again. You can revoke access from Buildium at any time. Every write Occupella makes needs your approval." />
 
       <button className="sample-toggle" onClick={() => setShowSample((s) => !s)}>
         {showSample ? "Hide sample preview" : "Not ready with API keys? Preview the first scan with sample data →"}
@@ -960,7 +960,7 @@ function StepBuildium({
 
 function StepLive({ onNext }: { onNext: (saved: boolean) => void }) {
   // Buildium generates the signing secret when the user creates the
-  // webhook subscription on their side — Helixis cannot generate it.
+  // webhook subscription on their side — Occupella cannot generate it.
   const [secret, setSecret] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -993,7 +993,7 @@ function StepLive({ onNext }: { onNext: (saved: boolean) => void }) {
         <div className="panel-tag">Step 3 of 4 · Recommended</div>
         <h1 className="panel-title">Turn on live Buildium updates</h1>
         <p className="panel-desc">
-          Let Helixis react the moment a work order, resident message, lease event, or payment
+          Let Occupella react the moment a work order, resident message, lease event, or payment
           changes in Buildium — instead of waiting for the next sync.
         </p>
       </div>
@@ -1001,7 +1001,7 @@ function StepLive({ onNext }: { onNext: (saved: boolean) => void }) {
       <div className="card">
         <div className="card-title">1 · Add this endpoint in Buildium</div>
         <CopyField label="Buildium → Settings → Webhooks" value={BUILDIUM_WEBHOOK_URL} />
-        <div className="hint">One endpoint for all events — Helixis routes them to your account automatically.</div>
+        <div className="hint">One endpoint for all events — Occupella routes them to your account automatically.</div>
       </div>
 
       <div className="card">
@@ -1012,7 +1012,7 @@ function StepLive({ onNext }: { onNext: (saved: boolean) => void }) {
               <div className="locked-icon">✓</div>
               <div>
                 <div style={{ fontSize: 13, fontWeight: 600, color: "var(--positive)" }}>Live updates on</div>
-                <div style={{ fontSize: 11, color: "var(--ink-subtle)" }}>Buildium events now reach Helixis in real time.</div>
+                <div style={{ fontSize: 11, color: "var(--ink-subtle)" }}>Buildium events now reach Occupella in real time.</div>
               </div>
             </div>
             <span className="badge badge-positive">Secured</span>
@@ -1109,7 +1109,7 @@ function StepChannels({ onNext }: { onNext: (connected: boolean) => void }) {
         <div className="panel-tag">Step 4 of 4 · Optional</div>
         <h1 className="panel-title">Add Gmail &amp; Calendar context</h1>
         <p className="panel-desc">
-          Helixis drafts cleaner owner updates and catches resident follow-ups when it can see the
+          Occupella drafts cleaner owner updates and catches resident follow-ups when it can see the
           communication trail around a Buildium issue.
         </p>
       </div>
@@ -1140,7 +1140,7 @@ function StepChannels({ onNext }: { onNext: (connected: boolean) => void }) {
         )}
       </div>
 
-      <TrustLine text="Helixis requests the minimum Google scopes needed. OAuth tokens are encrypted at rest and can be revoked from your Google account at any time. Helixis never auto-sends email." />
+      <TrustLine text="Occupella requests the minimum Google scopes needed. OAuth tokens are encrypted at rest and can be revoked from your Google account at any time. Occupella never auto-sends email." />
 
       <button className="btn btn-primary wide" onClick={() => onNext(googleConnected)}>
         {googleConnected ? "Continue →" : "Skip — start with Buildium only →"}
@@ -1281,14 +1281,14 @@ function StepFinish({
           {
             num: String(scan.expiring_leases),
             label: `lease${scan.expiring_leases === 1 ? "" : "s"} ending in the next ${scan.expiring_window_days} days`,
-            sub: "Renewal windows Helixis will track for you.",
+            sub: "Renewal windows Occupella will track for you.",
           },
           {
             num: usd.format(scan.delinquent_total),
             label: `owed across ${scan.delinquent_leases} lease${scan.delinquent_leases === 1 ? "" : "s"}`,
             sub:
               scan.pending_promises > 0
-                ? `${scan.pending_promises} tenant${scan.pending_promises === 1 ? " has" : "s have"} promised payment — Helixis is watching the dates.`
+                ? `${scan.pending_promises} tenant${scan.pending_promises === 1 ? " has" : "s have"} promised payment — Occupella is watching the dates.`
                 : "Rent reminders will chase these with judgment.",
           },
         ]
@@ -1301,7 +1301,7 @@ function StepFinish({
           // real numbers come from the mirror-backed scan `findings` above.
           num: "✓",
           label: "Buildium connected",
-          sub: "Helixis is mirroring your properties, leases, tenants, work orders, and bills now.",
+          sub: "Occupella is mirroring your properties, leases, tenants, work orders, and bills now.",
         }
       : {
           num: "off",
@@ -1324,7 +1324,7 @@ function StepFinish({
         </div>
         <h1 className="panel-title" style={{ textAlign: "center" }}>
           {findings
-            ? `Here's what Helixis found in ${workspace.name || "your portfolio"}`
+            ? `Here's what Occupella found in ${workspace.name || "your portfolio"}`
             : buildiumConnected
               ? `${workspace.name || "Your workspace"} is live — first scan running`
               : `${workspace.name || "Your workspace"} is live`}
@@ -1337,7 +1337,7 @@ function StepFinish({
               Every number below is read straight from your Buildium data.
             </>
           ) : buildiumConnected ? (
-            "Helixis is reading your portfolio now. Open the app to watch your Inbox fill in and ask your first question."
+            "Occupella is reading your portfolio now. Open the app to watch your Inbox fill in and ask your first question."
           ) : (
             "Open the app and connect Buildium whenever you're ready — your first scan runs the moment it's linked."
           )}
@@ -1370,10 +1370,10 @@ function StepFinish({
       )}
 
       <a className="btn btn-primary wide" href={appHref} style={{ marginTop: 4 }}>
-        Open Helixis → review your Inbox
+        Open Occupella → review your Inbox
       </a>
       <div className="hint" style={{ textAlign: "center", marginTop: 8 }}>
-        Taking you to Helixis automatically…
+        Taking you to Occupella automatically…
       </div>
       <div className="btn-row" style={{ marginTop: 8 }}>
         <a className="btn btn-ghost" href={appHref} style={{ flex: 1, textAlign: "center" }}>
@@ -1388,7 +1388,7 @@ function StepFinish({
         </a>
       </div>
       <div className="hint" style={{ textAlign: "center", marginTop: 12 }}>
-        The Getting Started checklist inside Helixis walks you through the rest — first question,
+        The Getting Started checklist inside Occupella walks you through the rest — first question,
         Gmail, team invites.
       </div>
     </div>
@@ -1412,7 +1412,7 @@ function Sidebar({ current, completed }: { current: Step; completed: Set<Step> }
     <div className="sidebar">
       <a className="logo" href="/">
         <Helix width={22} height={30} dots={10} speed={0.5} />
-        <div className="logo-text">Helixis</div>
+        <div className="logo-text">Occupella</div>
       </a>
 
       <div className="steps">
