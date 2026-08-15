@@ -1432,6 +1432,8 @@ function Sidebar({ current, completed }: { current: Step; completed: Set<Step> }
       <div className="sidebar-footer">
         <p>Need help? <a href="https://docs.helixis.com" target="_blank" rel="noopener noreferrer">docs.helixis.com</a></p>
         <p style={{ marginTop: 6 }}>Onboarding support: <a href="mailto:hello@helixis.com">hello@helixis.com</a></p>
+        {/* Legal-entity attribution (A2P/Twilio verification crawls). */}
+        <p style={{ marginTop: 6 }}>Occupella is operated by Oscar Ventures LLC.</p>
       </div>
     </div>
   );

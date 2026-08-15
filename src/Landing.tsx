@@ -678,10 +678,12 @@ export default function Landing() {
       </section>
 
       <footer className="lp-footer">
-        <div style={{ display: "flex", gap: 20 }}>
+        <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
           <a href="/privacy">Privacy</a>
           <a href="/terms">Terms</a>
           <a href="mailto:hello@helixis.com">hello@helixis.com</a>
+          {/* Legal-entity attribution (A2P/Twilio verification crawls). */}
+          <span>Occupella is operated by Oscar Ventures LLC.</span>
         </div>
       </footer>
     </div>
