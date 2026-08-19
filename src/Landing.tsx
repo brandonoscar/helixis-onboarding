@@ -1,490 +1,339 @@
 import { useEffect, useRef, useState } from "react";
-import Helix from "./Helix";
+import Mark from "./Mark";
 import { APP_URL } from "./lib/api";
 import { loadWizard } from "./lib/persist";
+import {
+  type DesktopBuild,
+  type OS,
+  detectOS,
+  fetchDesktopBuilds,
+  formatSize,
+} from "./lib/download";
 
-// ─────────────────────────────────────────────────────────
-// LANDING — the front door. Show the product, not paragraphs:
-// real demo-mode screenshots carry the page; copy is one line
-// per idea. Everything shown ships today; no vapor.
-// ─────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────
+// LANDING — the front door.
+//
+// Built to a measured spec rather than a vibe (research pass 2026-08-19,
+// against Linear / Vercel / Ramp / Cursor / Warp production frontends):
+//
+//   · Type — weight ceiling 600, negative tracking scaled to size
+//     (-0.036em display → 0 at body), display line-height 1.05 against
+//     body 1.5, POSITIVE tracking on the small caps eyebrow.
+//   · Depth — surface ladder + 1px hairlines. One soft shadow, on the
+//     product panel only. No glassmorphism, no gradient fills, one
+//     chromatic accent (--iris) and nothing else.
+//   · Motion — ONE choreographed entrance (4 elements, 200ms stagger,
+//     translateY(-10px): content settles DOWN into place, it doesn't
+//     fly up); the product panel tilts up once at threshold 0.4; below
+//     the fold, 12px reveals on headers and cards only — never on
+//     paragraphs, never re-triggered. Hover changes background or
+//     hairline, never scale.
+//   · Copy — sentence case, terminal period, ≤8-word headline, concrete
+//     nouns, no adjectives.
+//
+// Everything shown ships today; the screenshots are captures of the real
+// app, not mockups.
+// ─────────────────────────────────────────────────────────────────────
 
 const css = `
-  .lp { position: relative; overflow-x: hidden; }
+  .lp { position: relative; overflow-x: clip; }
+  .lp-wrap { max-width: 1120px; margin: 0 auto; padding: 0 32px; }
 
-  .lp-nav {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    max-width: 1080px;
-    margin: 0 auto;
-    padding: 22px 32px;
-  }
-
-  .lp-wordmark {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 16px;
+  /* ── type scale ── */
+  .lp-h1 {
+    font-size: clamp(38px, 6.2vw, 76px);
     font-weight: 600;
-    letter-spacing: -0.2px;
-    color: var(--ink);
-    text-decoration: none;
+    line-height: 1.05;
+    letter-spacing: -0.036em;
+    text-wrap: balance;
+    max-width: 17ch;
+    /* Luminance gradient, not a hue gradient — reads as light falling
+       across the type rather than as decoration. */
+    background: linear-gradient(to right bottom, var(--ink) 34%, rgba(14, 22, 32, 0.58));
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
   }
 
-  .lp-nav-links { display: flex; align-items: center; gap: 8px; }
-
-  /* ── hero ── */
-  .lp-hero {
-    max-width: 1080px;
-    margin: 0 auto;
-    padding: 64px 32px 40px;
-    text-align: center;
+  .lp-h2 {
+    font-size: clamp(28px, 3.4vw, 40px);
+    font-weight: 600;
+    line-height: 1.15;
+    letter-spacing: -0.026em;
+    color: var(--ink);
+    text-wrap: balance;
+    max-width: 20ch;
   }
 
   .lp-eyebrow {
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 500;
-    letter-spacing: 1.6px;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: var(--iris);
-    margin-bottom: 20px;
+    color: var(--ink-faint);
   }
 
-  .lp-h1 {
-    font-size: clamp(36px, 4.8vw, 56px);
-    font-weight: 600;
-    line-height: 1.08;
-    letter-spacing: -0.03em;
-    color: var(--ink);
-    text-wrap: balance;
-    max-width: 20ch;
-    margin: 0 auto 18px;
-  }
-
-  .lp-sub {
-    font-size: 17px;
-    line-height: 1.6;
+  .lp-lede {
+    font-size: 18px;
+    line-height: 1.55;
+    letter-spacing: -0.006em;
     color: var(--ink-muted);
-    max-width: 56ch;
-    margin: 0 auto 28px;
-    text-wrap: balance;
+    max-width: 54ch;
   }
 
-  .lp-hero-ctas { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .lp-body { font-size: 15.5px; line-height: 1.6; color: var(--ink-muted); max-width: 58ch; }
 
-  .lp-hero-note {
-    margin-top: 16px;
-    font-size: 12.5px;
-    color: var(--ink-subtle);
+  /* ── nav ── */
+  .lp-nav {
+    position: sticky; top: 0; z-index: 20;
+    height: 56px;
+    display: flex; align-items: center; justify-content: space-between;
+    background: rgba(255, 255, 255, 0.86);
+    backdrop-filter: saturate(180%) blur(12px);
+    border-bottom: 1px solid transparent;
+    transition: border-color var(--dur-state) var(--ease-std);
+  }
+  .lp-nav[data-stuck="true"] { border-bottom-color: var(--line); }
+  .lp-nav-inner {
+    max-width: 1120px; margin: 0 auto; padding: 0 32px; width: 100%;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .lp-wordmark {
+    display: inline-flex; align-items: center; gap: 9px;
+    font-size: 15px; font-weight: 600; letter-spacing: -0.02em;
+    color: var(--ink); text-decoration: none;
+  }
+  .lp-nav-right { display: flex; align-items: center; gap: 4px; }
+  /* Below ~560px the four nav items no longer fit and "Start setup" clips off
+     the right edge. Drop the "Desktop app" jump link first — the #get band it
+     points at is a full section of the page anyway — and keep sign-in and the
+     one CTA that matters. */
+  @media (max-width: 560px) {
+    .lp-nav-inner { padding: 0 20px; }
+    .lp-nav-desktop-link { display: none; }
   }
 
-  /* staggered hero entrance */
-  .lp-rise {
-    opacity: 0;
-    transform: translateY(18px);
-    animation: lp-rise 0.7s var(--ease-out) forwards;
+  /* ── hero ── */
+  .lp-hero { padding: clamp(56px, 9vw, 104px) 0 0; }
+  .lp-hero-ctas { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .lp-textlink {
+    font-size: 14.5px; font-weight: 500; color: var(--ink-muted);
+    text-decoration: none; transition: color var(--dur-state) var(--ease-std);
   }
-  @keyframes lp-rise {
-    to { opacity: 1; transform: none; }
-  }
+  .lp-textlink:hover { color: var(--ink); }
+  .lp-note { font-size: 13px; color: var(--ink-subtle); }
 
-  /* ── framed product screenshot ── */
-  .shot {
-    max-width: 1080px;
-    margin: 0 auto;
-    padding: 0 32px;
-  }
+  /* ── the entrance: 4 elements, 200ms apart, settling DOWN ── */
+  .rise { opacity: 0; transform: translateY(-10px); animation: rise var(--dur-entrance) var(--ease-out) var(--d, 0ms) forwards; }
+  @keyframes rise { to { opacity: 1; transform: none; } }
 
-  .shot-frame {
-    border: 1px solid var(--line-strong);
-    border-radius: var(--r-lg);
+  /* ── product panel ── */
+  .lp-stage { position: relative; perspective: 2000px; margin-top: clamp(40px, 6vw, 72px); }
+  .lp-stage::before {
+    content: ""; position: absolute; inset: 12% 8% 28%;
+    background: radial-gradient(ellipse at 50% 40%, var(--iris) 0%, transparent 68%);
+    filter: blur(120px); opacity: 0; z-index: 0;
+    animation: glow 4100ms 600ms ease-out forwards;
+  }
+  @keyframes glow {
+    0%   { opacity: 0; animation-timing-function: cubic-bezier(0.74, 0.25, 0.76, 1); }
+    10%  { opacity: 0.5; animation-timing-function: cubic-bezier(0.12, 0.01, 0.08, 0.99); }
+    100% { opacity: 0.16; }
+  }
+  .lp-panel {
+    position: relative; z-index: 1;
+    border-radius: var(--r-panel);
+    border: 1px solid var(--card-edge);
+    background: var(--canvas);
     overflow: hidden;
-    background: var(--canvas-1);
+    box-shadow: 0 1px 2px rgba(14,22,32,0.04), 0 24px 64px -28px rgba(14,22,32,0.28);
+    transform: rotateX(22deg);
   }
-
-  .shot-bar {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 9px 14px;
-    border-bottom: 1px solid var(--line);
-    background: var(--canvas-2);
+  .lp-panel[data-in="true"] { animation: tilt 1400ms var(--ease-out) forwards; }
+  /* Hold at the tilt, dip, then land flat — the hold is what makes it read
+     mechanical rather than floaty. */
+  @keyframes tilt {
+    0%   { transform: rotateX(22deg); }
+    25%  { transform: rotateX(22deg) scale(0.94); }
+    60%  { transform: none; }
+    100% { transform: none; }
   }
-
-  .shot-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--canvas-3); }
-
-  .shot-url {
-    margin-left: 10px;
-    font-family: var(--font-mono);
-    font-size: 10.5px;
-    color: var(--ink-subtle);
-    background: var(--canvas-1);
-    border: 1px solid var(--line);
-    border-radius: var(--r-pill);
-    padding: 2px 12px;
+  .lp-panel img { display: block; width: 100%; height: auto; }
+  .lp-panel-bar {
+    display: flex; align-items: center; gap: 7px;
+    padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--canvas-1);
   }
-
-  .shot-frame img { width: 100%; display: block; }
-
-  .shot-caption {
-    text-align: center;
-    font-size: 13.5px;
-    color: var(--ink-muted);
-    margin-top: 14px;
+  .lp-panel-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--line-strong); }
+  .lp-panel-url {
+    margin-left: 8px; font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-faint);
   }
+  .lp-caption { margin-top: 14px; font-size: 13px; color: var(--ink-subtle); text-align: center; }
 
-  .shot-caption strong { color: var(--ink); font-weight: 600; }
+  /* ── proof strip ── */
+  .lp-proof {
+    display: flex; flex-wrap: wrap; gap: 10px 28px; justify-content: center;
+    padding: clamp(40px, 5vw, 64px) 0 0;
+    font-size: 13px; color: var(--ink-subtle);
+  }
+  .lp-proof span { display: inline-flex; align-items: center; gap: 8px; }
+  .lp-proof i { width: 3px; height: 3px; border-radius: 50%; background: var(--iris); opacity: 0.7; }
 
   /* ── sections ── */
-  .lp-section {
-    border-top: 1px solid var(--line);
-    max-width: 1080px;
-    margin: 0 auto;
-    padding: 72px 32px;
+  .lp-section { padding: clamp(64px, 9vw, 96px) 0 0; }
+  .lp-section-head { display: flex; flex-direction: column; gap: 14px; }
+
+  /* ── steps: a real sequence, so it's numbered and asymmetric ── */
+  .lp-steps { display: grid; gap: 1px; margin-top: 36px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; }
+  @media (min-width: 860px) { .lp-steps { grid-template-columns: repeat(3, 1fr); } }
+  .lp-step { background: var(--canvas); padding: 24px 22px 26px; }
+  .lp-step-n {
+    font-family: var(--font-mono); font-size: 11.5px; color: var(--iris);
+    letter-spacing: 0.1em;
   }
+  .lp-step-t { margin-top: 12px; font-size: 16px; font-weight: 600; letter-spacing: -0.012em; color: var(--ink); }
+  .lp-step-b { margin-top: 7px; font-size: 14px; line-height: 1.55; color: var(--ink-muted); }
 
-  .lp-hero-section { border-top: none; padding-top: 32px; }
-
-  .lp-kicker {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    letter-spacing: 1.6px;
-    text-transform: uppercase;
-    color: var(--ink-subtle);
-    margin-bottom: 14px;
+  /* ── alternating feature bands ── */
+  .lp-band { display: grid; gap: clamp(28px, 4vw, 56px); align-items: center; margin-top: 36px; }
+  @media (min-width: 900px) { .lp-band { grid-template-columns: 0.85fr 1.15fr; } .lp-band[data-flip="true"] > *:first-child { order: 2; } }
+  .lp-shot {
+    border-radius: var(--r-lg); border: 1px solid var(--card-edge); overflow: hidden;
+    background: var(--canvas); box-shadow: 0 18px 44px -30px rgba(14,22,32,0.35);
   }
+  .lp-shot img { display: block; width: 100%; height: auto; }
 
-  .lp-h2 {
-    font-size: clamp(24px, 3vw, 32px);
-    font-weight: 600;
-    letter-spacing: -0.02em;
-    line-height: 1.2;
-    color: var(--ink);
-    text-wrap: balance;
-    margin-bottom: 10px;
+  /* ── trust ── */
+  .lp-trust { display: grid; gap: 1px; margin-top: 32px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; }
+  @media (min-width: 760px) { .lp-trust { grid-template-columns: 1fr 1fr; } }
+  .lp-trust-item { background: var(--canvas); padding: 18px 20px; display: flex; gap: 12px; align-items: flex-start; font-size: 14px; line-height: 1.5; color: var(--ink-secondary, var(--ink-muted)); }
+  .lp-trust-item svg { flex: none; margin-top: 2px; color: var(--iris); }
+
+  /* ── get-it band (web vs desktop) ── */
+  .lp-get { display: grid; gap: 16px; margin-top: 36px; }
+  @media (min-width: 820px) { .lp-get { grid-template-columns: 1fr 1fr; } }
+  .lp-get-card {
+    background: var(--canvas); border: 1px solid var(--card-edge); border-radius: var(--r-lg);
+    padding: 26px 24px 24px; display: flex; flex-direction: column; gap: 10px;
+    transition: border-color var(--dur-state) var(--ease-std), background var(--dur-state) var(--ease-std);
   }
+  .lp-get-card:hover { border-color: var(--line-strong); background: var(--canvas-1); }
+  .lp-get-k { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-faint); }
+  .lp-get-t { font-size: 19px; font-weight: 600; letter-spacing: -0.018em; color: var(--ink); }
+  .lp-get-b { font-size: 14px; line-height: 1.55; color: var(--ink-muted); flex: 1; }
+  .lp-get-cta { margin-top: 8px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .lp-get-meta { font-size: 12.5px; color: var(--ink-subtle); }
+  .lp-alt { font-size: 12.5px; color: var(--ink-subtle); }
+  .lp-alt a { color: var(--ink-muted); text-decoration: none; border-bottom: 1px solid var(--line-strong); }
+  .lp-alt a:hover { color: var(--ink); }
 
-  .lp-section-sub {
-    font-size: 15px;
-    color: var(--ink-muted);
-    max-width: 60ch;
-    margin-bottom: 36px;
+  /* ── closing band — the one polarity flip on the page ── */
+  .lp-close { margin-top: clamp(72px, 10vw, 120px); background: var(--deep); }
+  .lp-close-inner {
+    max-width: 1120px; margin: 0 auto; padding: clamp(64px, 8vw, 96px) 32px;
+    display: flex; flex-direction: column; align-items: flex-start; gap: 18px;
   }
-
-  /* scroll reveal */
-  .lp-reveal {
-    opacity: 0;
-    transform: translateY(20px);
-    transition: opacity 0.6s var(--ease-out), transform 0.6s var(--ease-out);
-  }
-  .lp-reveal.on { opacity: 1; transform: none; }
-
-  /* ── how it works ── */
-  .lp-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
-
-  .lp-step {
-    border: 1px solid var(--line);
-    border-radius: var(--r-md);
-    background: var(--canvas-1);
-    padding: 22px 22px;
-  }
-
-  .lp-step-num {
-    font-family: var(--font-mono);
-    font-size: 12px;
-    color: var(--iris);
-    margin-bottom: 12px;
-  }
-
-  .lp-step-title { font-size: 15.5px; font-weight: 600; color: var(--ink); margin-bottom: 6px; }
-  .lp-step-body { font-size: 13.5px; line-height: 1.6; color: var(--ink-muted); }
-
-  /* ── features ── */
-  .lp-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
-
-  .lp-feature {
-    border: 1px solid var(--line);
-    border-radius: var(--r-md);
-    background: var(--canvas-1);
-    padding: 22px;
-    transition: border-color 0.2s, transform 0.2s;
-  }
-  .lp-feature:hover { border-color: var(--line-strong); transform: translateY(-2px); }
-
-  .lp-feature-head {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 8px;
-    margin-bottom: 14px;
-  }
-
-  .lp-feature-icon {
-    width: 32px;
-    height: 32px;
-    border-radius: var(--r-sm);
-    background: var(--iris-soft);
-    color: var(--iris);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-  }
-
-  /* competitor-alternative tag — positioning, not decoration */
-  .lp-alt {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    letter-spacing: 0.6px;
-    text-transform: uppercase;
-    color: var(--ink-muted);
-    border: 1px solid var(--line-strong);
-    border-radius: var(--r-pill);
-    padding: 3px 9px;
-    white-space: nowrap;
-  }
-
-  .lp-feature-title { font-size: 14.5px; font-weight: 600; color: var(--ink); margin-bottom: 5px; }
-  .lp-feature-body { font-size: 13px; line-height: 1.55; color: var(--ink-muted); }
-
-  /* ── FAQ ── */
-  .lp-faq { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-
-  .lp-faq-item {
-    border: 1px solid var(--line);
-    border-radius: var(--r-md);
-    background: var(--canvas-1);
-    padding: 18px 20px;
-  }
-
-  .lp-faq-q { font-size: 14px; font-weight: 600; color: var(--ink); margin-bottom: 6px; }
-  .lp-faq-a { font-size: 13px; line-height: 1.6; color: var(--ink-muted); }
-
-  /* ── trust strip ── */
-  .lp-trust {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
-  }
-
-  .lp-trust-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 10px;
-    font-size: 13px;
-    line-height: 1.55;
-    color: var(--ink-muted);
-  }
-
-  .lp-trust-item svg { flex-shrink: 0; margin-top: 2px; color: var(--iris); }
-
-  /* ── CTA band ── */
-  .lp-cta-band { text-align: center; }
-  .lp-cta-band .lp-h2 { margin-bottom: 10px; }
-  .lp-cta-band p { color: var(--ink-muted); font-size: 14.5px; margin-bottom: 26px; }
+  .lp-close h2 { font-size: clamp(28px, 3.6vw, 42px); font-weight: 600; line-height: 1.1; letter-spacing: -0.03em; color: var(--deep-ink); max-width: 18ch; }
+  .lp-close p { font-size: 16px; line-height: 1.55; color: var(--deep-muted); max-width: 52ch; }
+  .lp-close .btn-primary { background: var(--canvas); color: var(--deep); }
+  .lp-close .btn-primary:hover { background: #E8F0F9; }
 
   /* ── footer ── */
-  .lp-footer {
-    border-top: 1px solid var(--line);
-    max-width: 1080px;
-    margin: 0 auto;
-    padding: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-size: 12.5px;
-    color: var(--ink-subtle);
+  .lp-footer { background: var(--deep); border-top: 1px solid var(--deep-line); }
+  .lp-footer-inner {
+    max-width: 1120px; margin: 0 auto; padding: 40px 32px 56px;
+    display: flex; flex-wrap: wrap; gap: 16px 28px; align-items: center;
+    font-size: 12.5px; color: var(--deep-muted);
   }
+  .lp-footer a { color: var(--deep-muted); text-decoration: none; }
+  .lp-footer a:hover { color: var(--deep-ink); }
 
-  .lp-footer a { color: var(--ink-muted); text-decoration: none; }
-  .lp-footer a:hover { color: var(--ink); }
+  /* ── scroll reveals: headers + cards only, 12px, once ── */
+  .reveal { opacity: 0; transform: translateY(12px); transition: opacity var(--dur-reveal) var(--ease-out), transform var(--dur-reveal) var(--ease-out); }
+  .reveal[data-in="true"] { opacity: 1; transform: none; }
 
-  @media (max-width: 900px) {
-    .lp-hero { padding-top: 40px; }
-    .lp-steps, .lp-grid, .lp-faq { grid-template-columns: 1fr; }
-    .lp-trust { grid-template-columns: 1fr 1fr; }
-    .lp-section { padding: 52px 24px; }
-    .shot { padding: 0 16px; }
+  @media (prefers-reduced-motion: reduce) {
+    .lp-panel { transform: none !important; animation: none !important; }
+    .lp-stage::before { opacity: 0.16 !important; animation: none !important; }
   }
 `;
 
-// tiny inline icon set — stroke style matches the product's lucide icons
-function Icon({ d, size = 16 }: { d: string; size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d={d} />
-    </svg>
-  );
-}
-
-const ICONS = {
-  inbox: "M22 12h-6l-2 3h-4l-2-3H2 M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z",
-  eye: "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
-  chat: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z",
-  bell: "M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9 M13.73 21a2 2 0 0 1-3.46 0",
-  users: "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2 M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8 M23 21v-2a4 4 0 0 0-3-3.87 M16 3.13a4 4 0 0 1 0 7.75",
-  key: "M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4",
-  shield: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z",
-  check: "M20 6 9 17l-5-5",
-  lock: "M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2z M7 11V7a5 5 0 0 1 10 0v4",
-};
-
-// Framed, real screenshot of the product (captured from the live demo build).
-function Shot({
-  src,
-  alt,
-  caption,
-  eager,
-}: {
-  src: string;
-  alt: string;
-  caption?: React.ReactNode;
-  eager?: boolean;
-}) {
-  return (
-    <div className="shot">
-      <div className="shot-frame">
-        <div className="shot-bar">
-          <span className="shot-dot" />
-          <span className="shot-dot" />
-          <span className="shot-dot" />
-          <span className="shot-url">app.helixis.com</span>
-        </div>
-        <img src={src} alt={alt} loading={eager ? "eager" : "lazy"} />
-      </div>
-      {caption && <div className="shot-caption">{caption}</div>}
-    </div>
-  );
-}
-
-function useReveal() {
+// ── scroll reveal ────────────────────────────────────────────────────
+// threshold 0.25 + triggerOnce: the reveal fires once you have committed to
+// looking at the element, and never re-fires. Applied to section heads and
+// cards — never to body copy.
+function Reveal({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [on, setOn] = useState(false);
+  const [seen, setSeen] = useState(false);
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
+    if (!el || seen) return;
+    if (typeof IntersectionObserver === "undefined") return setSeen(true);
     const io = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setOn(true);
+      ([e]) => {
+        if (e.isIntersecting) {
+          setSeen(true);
           io.disconnect();
         }
       },
-      { threshold: 0.15 },
+      { threshold: 0.25 },
     );
     io.observe(el);
     return () => io.disconnect();
-  }, []);
-  return { ref, className: `lp-reveal ${on ? "on" : ""}` };
-}
-
-function Reveal({ children }: { children: React.ReactNode }) {
-  const { ref, className } = useReveal();
+  }, [seen]);
   return (
-    <div ref={ref} className={className}>
+    <div ref={ref} className="reveal" data-in={seen} style={{ transitionDelay: `${delay}ms` }}>
       {children}
     </div>
   );
 }
 
+function Icon({ d, size = 15 }: { d: string; size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d={d} />
+    </svg>
+  );
+}
+
+const CHECK = "M20 6L9 17l-5-5";
+const LOCK = "M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2z M7 11V7a5 5 0 0 1 10 0v4";
+const SHIELD = "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z";
+const BELL = "M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9 M13.7 21a2 2 0 0 1-3.4 0";
+
 const STEPS = [
   {
-    num: "01",
-    title: "Connect Buildium",
-    body: "Paste your API keys once — Occupella mirrors your portfolio and stays current on every webhook.",
+    n: "01",
+    t: "Connect Buildium.",
+    b: "One API key, ten minutes. Occupella mirrors your properties, leases, work orders, and contacts — Buildium stays the system of record.",
   },
   {
-    num: "02",
-    title: "Occupella runs the follow-up",
-    body: "Events arrive triaged, with the reply or task already drafted. You approve; nothing sends itself.",
+    n: "02",
+    t: "It reads every event.",
+    b: "New work order, late payment, lease expiring, tenant email. Occupella pulls the history around it and tells you what it noticed.",
   },
   {
-    num: "03",
-    title: "Ask anything",
-    body: "One chat across Buildium, Gmail, and Calendar. Every write is confirmed by you first.",
-  },
-];
-
-const FEATURES: {
-  icon: string;
-  title: string;
-  body: string;
-  alt?: string;
-}[] = [
-  {
-    icon: ICONS.key,
-    title: "Maintenance execution",
-    alt: "Vendoroo alternative",
-    body: "Triage, drafted updates, and closeout chasing on every work order.",
-  },
-  {
-    icon: ICONS.inbox,
-    title: "An inbox that drafts the work",
-    body: "Buildium events and tenant emails become cards with the action attached.",
-  },
-  {
-    icon: ICONS.eye,
-    title: "“Occupella noticed”",
-    body: "Balances, lease ends, repeat issues — surfaced before you ask.",
-  },
-  {
-    icon: ICONS.chat,
-    title: "Chat across your systems",
-    body: "Buildium, Gmail, Calendar, Drive, documents, and the web in one thread.",
-  },
-  {
-    icon: ICONS.bell,
-    title: "Rent reminders with judgment",
-    body: "Skips who already promised to pay and who you already emailed.",
-  },
-  {
-    icon: ICONS.users,
-    title: "Leasing, turnovers & renewals",
-    alt: "LeadSimple alternative",
-    body: "Leads from calls and emails, applicant sync, turnover checklists, renewal windows.",
-  },
-];
-
-const FAQ = [
-  {
-    q: "What data does Occupella access?",
-    a: "Only what you connect: your Buildium records (properties, leases, tenants, work orders, bills) and — if you authorize them — Gmail and Calendar with minimum scopes. Credentials are encrypted and never shown again.",
-  },
-  {
-    q: "Can I revoke access?",
-    a: "Yes, anytime. Rotate or remove your Buildium keys, disconnect Google, and email us to erase your workspace entirely.",
-  },
-  {
-    q: "What happens if I cancel?",
-    a: "Nothing is trapped — Buildium is always your system of record. On request we delete the mirror, stored memory, and credentials.",
-  },
-  {
-    q: "What does it cost?",
-    a: "Free during early access. Design-partner pricing will be announced before billing turns on — no surprise charges.",
+    n: "03",
+    t: "You approve the work.",
+    b: "It drafts the reply, the work order, the owner update — and holds. Nothing reaches a tenant, an owner, or Buildium until you say so.",
   },
 ];
 
 const TRUST = [
-  { icon: ICONS.lock, text: "Credentials encrypted at rest — keys are stored once and never shown again" },
-  { icon: ICONS.check, text: "Every write to Buildium or Gmail is confirm-gated — you approve each action" },
-  { icon: ICONS.shield, text: "Company-scoped isolation across data, memory, and files" },
-  { icon: ICONS.bell, text: "Occupella never auto-sends email — drafts wait for you" },
+  { icon: LOCK, text: "Credentials are encrypted at rest — keys are entered once and never shown again." },
+  { icon: CHECK, text: "Every write to Buildium or Gmail passes a confirmation gate you can edit before approving." },
+  { icon: SHIELD, text: "Company-scoped isolation across data, memory, and files." },
+  { icon: BELL, text: "Nothing auto-sends. Drafts wait for a person." },
 ];
 
 export default function Landing() {
   const [hasProgress, setHasProgress] = useState(false);
+  const [stuck, setStuck] = useState(false);
+  const [os, setOs] = useState<OS | null>(null);
+  const [builds, setBuilds] = useState<Partial<Record<OS, DesktopBuild>>>({});
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [panelIn, setPanelIn] = useState(false);
 
   useEffect(() => {
     try {
@@ -493,197 +342,336 @@ export default function Landing() {
     } catch {
       /* fresh visitor */
     }
+    setOs(detectOS());
+    void fetchDesktopBuilds().then(setBuilds);
+  }, []);
+
+  // Nav hairline appears only once the page has moved.
+  useEffect(() => {
+    const onScroll = () => setStuck(window.scrollY > 8);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // Product panel tilts up once, at 40% visible.
+  useEffect(() => {
+    const el = panelRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return setPanelIn(true);
+    const io = new IntersectionObserver(
+      ([e]) => {
+        if (e.isIntersecting) {
+          setPanelIn(true);
+          io.disconnect();
+        }
+      },
+      { threshold: 0.4 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
   }, []);
 
   const start = hasProgress ? "Resume setup" : "Start setup";
+  const mine = os ? builds[os] : undefined;
+  const anyBuild = Object.values(builds)[0];
+  const others = (Object.keys(builds) as OS[]).filter((k) => k !== os);
 
   return (
     <div className="lp">
       <style>{css}</style>
 
-      <nav className="lp-nav">
-        <a className="lp-wordmark" href="/">
-          <Helix width={22} height={30} dots={10} speed={0.5} />
-          Occupella
-        </a>
-        <div className="lp-nav-links">
-          <a className="btn btn-ghost" href={APP_URL}>
-            Sign in
+      <nav className="lp-nav" data-stuck={stuck}>
+        <div className="lp-nav-inner">
+          <a className="lp-wordmark" href="/">
+            <Mark size={20} />
+            Occupella
           </a>
-          <a className="btn btn-primary" href="/start" style={{ padding: "8px 16px", fontSize: 13 }}>
-            {start}
-          </a>
+          <div className="lp-nav-right">
+            <a className="btn btn-ghost lp-nav-desktop-link" href="#get">Desktop app</a>
+            <a className="btn btn-ghost" href={APP_URL}>Sign in</a>
+            <a className="btn btn-primary" href="/start" style={{ padding: "8px 16px", fontSize: 13.5 }}>
+              {start}
+            </a>
+          </div>
         </div>
       </nav>
 
       <header className="lp-hero">
-        <div className="lp-eyebrow lp-rise" style={{ animationDelay: "0.05s" }}>
-          The execution layer for Buildium teams
-        </div>
-        <h1 className="lp-h1 lp-rise" style={{ animationDelay: "0.15s" }}>
-          Turn Buildium maintenance chaos into completed work orders.
-        </h1>
-        <p className="lp-sub lp-rise" style={{ animationDelay: "0.25s" }}>
-          Faster fixes, cleaner owner updates, fewer resident follow-ups — without
-          hiring another coordinator.
-        </p>
-        <div className="lp-hero-ctas lp-rise" style={{ animationDelay: "0.35s" }}>
-          <a className="btn btn-primary" href="/start" style={{ padding: "12px 26px", fontSize: 15 }}>
-            {start} →
-          </a>
-          <a className="btn btn-secondary" href="#how" style={{ padding: "12px 22px", fontSize: 15 }}>
-            See how it works
-          </a>
-        </div>
-        <div className="lp-hero-note lp-rise" style={{ animationDelay: "0.45s" }}>
-          For teams already on Buildium — no migration, no new platform.
+        <div className="lp-wrap">
+          <div className="lp-eyebrow rise" style={{ "--d": "0ms" } as React.CSSProperties}>
+            For teams running Buildium
+          </div>
+          <h1 className="lp-h1 rise" style={{ "--d": "200ms", marginTop: 18 } as React.CSSProperties}>
+            Buildium keeps the records. Occupella does the work.
+          </h1>
+          <p className="lp-lede rise" style={{ "--d": "400ms", marginTop: 20 } as React.CSSProperties}>
+            It reads every Buildium event, pulls the history around it, and drafts what comes
+            next — the reply, the work order, the owner update. Then it waits for you.
+          </p>
+          <div className="lp-hero-ctas rise" style={{ "--d": "600ms", marginTop: 30 } as React.CSSProperties}>
+            <a className="btn btn-primary" href="/start" style={{ padding: "12px 24px", fontSize: 15 }}>
+              {start} →
+            </a>
+            <a className="lp-textlink" href="#work">See it work</a>
+          </div>
+          <div className="lp-note rise" style={{ "--d": "600ms", marginTop: 16 } as React.CSSProperties}>
+            Ten minutes to connect. Nothing sends without your approval.
+          </div>
+
+          <div className="lp-stage" ref={panelRef}>
+            <div className="lp-panel" data-in={panelIn}>
+              <div className="lp-panel-bar">
+                <span className="lp-panel-dot" />
+                <span className="lp-panel-dot" />
+                <span className="lp-panel-dot" />
+                <span className="lp-panel-url">occupella.com</span>
+              </div>
+              <img
+                src="/shots/inbox.png"
+                alt="Occupella's inbox: an AC work order triaged, with what Occupella noticed across the unit's history and a drafted tenant reply waiting for approval"
+                width={2880}
+                height={1800}
+                fetchPriority="high"
+              />
+            </div>
+            <div className="lp-caption">
+              A real work order — context gathered, reply drafted, waiting on your approval.
+            </div>
+          </div>
+
+          <div className="lp-proof">
+            <span><i />Works on your live Buildium account</span>
+            <span><i />No migration, no new system of record</span>
+            <span><i />Nothing auto-sends</span>
+          </div>
         </div>
       </header>
 
-      <div className="lp-rise" style={{ animationDelay: "0.4s" }}>
-        <Shot
-          src="/shots/inbox.png"
-          alt="The Occupella inbox: an AC work order triaged with what Occupella noticed across records and a drafted reply ready to approve"
-          eager
-          caption={
-            <>
-              A real work order in Occupella — context surfaced, reply drafted, waiting on your approve.{" "}
-              <strong>Buildium stays your system of record; Occupella is the system of action.</strong>
-            </>
-          }
-        />
-      </div>
-
-      <section className="lp-section lp-hero-section" id="how">
-        <Reveal>
-          <div className="lp-kicker">How it works</div>
-          <h2 className="lp-h2">From webhook to done, without the busywork.</h2>
-        </Reveal>
-        <Reveal>
-          <div className="lp-steps" style={{ marginTop: 28 }}>
-            {STEPS.map((s) => (
-              <div className="lp-step" key={s.num}>
-                <div className="lp-step-num">{s.num}</div>
-                <div className="lp-step-title">{s.title}</div>
-                <div className="lp-step-body">{s.body}</div>
-              </div>
-            ))}
-          </div>
-        </Reveal>
-      </section>
-
-      <section className="lp-section">
-        <Reveal>
-          <div className="lp-kicker">Chat</div>
-          <h2 className="lp-h2">Ask anything. Approve before anything sends.</h2>
-          <p className="lp-section-sub">
-            "Who's behind on rent?" — answered from your live Buildium data, with the
-            follow-up ready behind a confirm gate.
-          </p>
-        </Reveal>
-        <Reveal>
-          <Shot
-            src="/shots/chat.png"
-            alt="Occupella chat answering who is behind on rent with a tenant table and a confirm gate before sending reminders"
-          />
-        </Reveal>
-      </section>
-
-      <section className="lp-section">
-        <Reveal>
-          <div className="lp-kicker">
-            Leasing CRM <span className="lp-alt" style={{ marginLeft: 10 }}>LeadSimple alternative</span>
-          </div>
-          <h2 className="lp-h2">Your leasing pipeline, already inside.</h2>
-          <p className="lp-section-sub">
-            Calls, texts, and emails become leads; stages sync when an applicant appears
-            in Buildium; cold leads get flagged before they slip.
-          </p>
-        </Reveal>
-        <Reveal>
-          <Shot
-            src="/shots/crm.png"
-            alt="Occupella leasing CRM: monthly lead metrics, conversion funnel, going-cold alert, and a five-stage pipeline board"
-          />
-        </Reveal>
-      </section>
-
-      <section className="lp-section">
-        <Reveal>
-          <div className="lp-kicker">What Occupella executes</div>
-          <h2 className="lp-h2">A teammate, not another tab.</h2>
-          <p className="lp-section-sub">Everything here ships today and works off your live Buildium account.</p>
-        </Reveal>
-        <Reveal>
-          <div className="lp-grid">
-            {FEATURES.map((f) => (
-              <div className="lp-feature" key={f.title}>
-                <div className="lp-feature-head">
-                  <div className="lp-feature-icon">
-                    <Icon d={f.icon} />
-                  </div>
-                  {f.alt && <span className="lp-alt">{f.alt}</span>}
+      <section className="lp-section" id="work">
+        <div className="lp-wrap">
+          <Reveal>
+            <div className="lp-section-head">
+              <div className="lp-eyebrow">How it works</div>
+              <h2 className="lp-h2">From webhook to done, without the busywork.</h2>
+            </div>
+          </Reveal>
+          <Reveal delay={60}>
+            <div className="lp-steps">
+              {STEPS.map((s) => (
+                <div className="lp-step" key={s.n}>
+                  <div className="lp-step-n">{s.n}</div>
+                  <div className="lp-step-t">{s.t}</div>
+                  <div className="lp-step-b">{s.b}</div>
                 </div>
-                <div className="lp-feature-title">{f.title}</div>
-                <div className="lp-feature-body">{f.body}</div>
-              </div>
-            ))}
-          </div>
-        </Reveal>
+              ))}
+            </div>
+          </Reveal>
+        </div>
       </section>
 
       <section className="lp-section">
-        <Reveal>
-          <div className="lp-kicker">Trust</div>
-          <h2 className="lp-h2">Careful by construction.</h2>
-          <p className="lp-section-sub">Occupella acts on your systems, so the defaults are conservative.</p>
-        </Reveal>
-        <Reveal>
-          <div className="lp-trust">
-            {TRUST.map((t) => (
-              <div className="lp-trust-item" key={t.text}>
-                <Icon d={t.icon} size={15} />
-                <span>{t.text}</span>
+        <div className="lp-wrap">
+          <div className="lp-band">
+            <div>
+              <Reveal>
+                <div className="lp-section-head">
+                  <div className="lp-eyebrow">Drafting</div>
+                  <h2 className="lp-h2">It writes the email. You pick the tone.</h2>
+                  <p className="lp-body">
+                    When there is more than one sensible way to answer a tenant, Occupella
+                    drafts each one and names the approach. Slide through, edit any word,
+                    approve the one you want.
+                  </p>
+                </div>
+              </Reveal>
+            </div>
+            <Reveal delay={60}>
+              <div className="lp-shot">
+                <img
+                  src="/shots/drafts.png"
+                  alt="Three composed reply drafts for a lease renewal, shown as numbered options a manager can slide through"
+                  loading="lazy"
+                />
               </div>
-            ))}
+            </Reveal>
           </div>
-        </Reveal>
+        </div>
       </section>
 
       <section className="lp-section">
-        <Reveal>
-          <div className="lp-kicker">Questions</div>
-          <h2 className="lp-h2">The things you should ask before handing over keys.</h2>
-        </Reveal>
-        <Reveal>
-          <div className="lp-faq" style={{ marginTop: 28 }}>
-            {FAQ.map((f) => (
-              <div className="lp-faq-item" key={f.q}>
-                <div className="lp-faq-q">{f.q}</div>
-                <div className="lp-faq-a">{f.a}</div>
+        <div className="lp-wrap">
+          <div className="lp-band" data-flip="true">
+            <div>
+              <Reveal>
+                <div className="lp-section-head">
+                  <div className="lp-eyebrow">Owner reporting</div>
+                  <h2 className="lp-h2">Ask in English. Get the numbers.</h2>
+                  <p className="lp-body">
+                    Collections, NOI, work-order age, delinquency — pulled from your ledger and
+                    rendered, not pasted into a paragraph. Every figure traces back to Buildium.
+                  </p>
+                </div>
+              </Reveal>
+            </div>
+            <Reveal delay={60}>
+              <div className="lp-shot">
+                <img
+                  src="/shots/report.png"
+                  alt="A monthly owner report in Occupella: an NOI trend chart and a portfolio summary card"
+                  loading="lazy"
+                />
               </div>
-            ))}
+            </Reveal>
           </div>
-        </Reveal>
+        </div>
       </section>
 
-      <section className="lp-section lp-cta-band">
-        <Reveal>
-          <h2 className="lp-h2">Set up in about ten minutes.</h2>
-          <p>Free during early access; design-partner pricing when billing launches.</p>
-          <a className="btn btn-primary" href="/start" style={{ padding: "13px 30px", fontSize: 15 }}>
-            {start} →
-          </a>
-        </Reveal>
+      <section className="lp-section">
+        <div className="lp-wrap">
+          <Reveal>
+            <div className="lp-section-head">
+              <div className="lp-eyebrow">Trust</div>
+              <h2 className="lp-h2">Careful by construction.</h2>
+              <p className="lp-body">
+                Occupella acts on your systems, so the defaults are conservative.
+              </p>
+            </div>
+          </Reveal>
+          <Reveal delay={60}>
+            <div className="lp-trust">
+              {TRUST.map((t) => (
+                <div className="lp-trust-item" key={t.text}>
+                  <Icon d={t.icon} />
+                  <span>{t.text}</span>
+                </div>
+              ))}
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      <section className="lp-section" id="get">
+        <div className="lp-wrap">
+          <Reveal>
+            <div className="lp-section-head">
+              <div className="lp-eyebrow">Get Occupella</div>
+              <h2 className="lp-h2">In your browser, or on your desktop.</h2>
+              <p className="lp-body">
+                Same account either way. Start in the browser in ten minutes; add the desktop
+                app when you want Occupella docked beside the tabs you already work in.
+              </p>
+            </div>
+          </Reveal>
+          <Reveal delay={60}>
+            <div className="lp-get">
+              <div className="lp-get-card">
+                <div className="lp-get-k">Web app</div>
+                <div className="lp-get-t">Start in the browser</div>
+                <div className="lp-get-b">
+                  Nothing to install. Connect Buildium, invite your team, and Occupella is
+                  working on your account the same afternoon.
+                </div>
+                <div className="lp-get-cta">
+                  <a className="btn btn-primary" href="/start" style={{ padding: "11px 22px" }}>
+                    {start} →
+                  </a>
+                  <span className="lp-get-meta">Free during early access</span>
+                </div>
+              </div>
+
+              <div className="lp-get-card">
+                <div className="lp-get-k">Desktop app</div>
+                <div className="lp-get-t">
+                  {mine ? `Download for ${mine.os}` : "The Occupella browser"}
+                </div>
+                <div className="lp-get-b">
+                  A browser with Occupella docked beside it — Buildium in one pane, the
+                  assistant in the other, on the same page you are already looking at.
+                </div>
+                <div className="lp-get-cta">
+                  {mine ? (
+                    <>
+                      <a
+                        className="btn btn-secondary"
+                        href={mine.url}
+                        download
+                        style={{ padding: "11px 22px" }}
+                      >
+                        Download for {mine.os}
+                      </a>
+                      <span className="lp-get-meta">
+                        {mine.version && `v${mine.version}`}
+                        {mine.size ? ` · ${formatSize(mine.size)}` : ""}
+                      </span>
+                    </>
+                  ) : anyBuild ? (
+                    <>
+                      <a
+                        className="btn btn-secondary"
+                        href={anyBuild.url}
+                        download
+                        style={{ padding: "11px 22px" }}
+                      >
+                        Download for {anyBuild.os}
+                      </a>
+                      <span className="lp-get-meta">
+                        {anyBuild.version && `v${anyBuild.version}`}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="btn btn-secondary" aria-disabled="true" style={{ padding: "11px 22px", opacity: 0.55, cursor: "default" }}>
+                        Desktop app — coming soon
+                      </span>
+                      <span className="lp-get-meta">Start in the browser today</span>
+                    </>
+                  )}
+                </div>
+                {others.length > 0 && (
+                  <div className="lp-alt">
+                    Also for{" "}
+                    {others.map((o, i) => (
+                      <span key={o}>
+                        {i > 0 && " and "}
+                        <a href={builds[o]!.url} download>
+                          {o}
+                        </a>
+                      </span>
+                    ))}
+                    .
+                  </div>
+                )}
+              </div>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      <section className="lp-close">
+        <div className="lp-close-inner">
+          <Reveal>
+            <h2>Set up in about ten minutes.</h2>
+          </Reveal>
+          <Reveal delay={60}>
+            <p>
+              Connect Buildium, watch it triage your first real work order, and decide from
+              there. Free during early access.
+            </p>
+          </Reveal>
+          <Reveal delay={120}>
+            <a className="btn btn-primary" href="/start" style={{ padding: "13px 28px", fontSize: 15 }}>
+              {start} →
+            </a>
+          </Reveal>
+        </div>
       </section>
 
       <footer className="lp-footer">
-        <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
+        <div className="lp-footer-inner">
           <a href="/privacy">Privacy</a>
           <a href="/terms">Terms</a>
-          <a href="mailto:hello@helixis.com">hello@helixis.com</a>
-          {/* Legal-entity attribution (A2P/Twilio verification crawls). */}
-          <span>Occupella is operated by Oscar Ventures LLC.</span>
+          <a href="mailto:team@occupella.com">team@occupella.com</a>
+          <span style={{ marginLeft: "auto" }}>Occupella is operated by Oscar Ventures LLC.</span>
         </div>
       </footer>
     </div>

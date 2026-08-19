@@ -1,56 +1,74 @@
-// Shared design tokens + primitives for every helixis-onboarding surface
-// (landing page + setup wizard). Mirrors the product design system in
-// AgenticHelixis/DESIGN.md: Geist type, iris #8676c6 accent used sparingly,
-// violet-biased neutrals, 1px hairline borders instead of shadows/glows,
-// graduated radius, muted semantic colors. Values here should track
-// frontend/src/styles/globals.css in the authority repo.
+// Shared design tokens + primitives for every Occupella surface (landing
+// page + setup wizard). Mirrors the product's LIVE palette in
+// AgenticHelixis/frontend/src/styles/globals.css — white canvas, blue
+// accent #1E73BC, ink #0E1620, hairline borders, graduated radius,
+// muted semantic color.
+//
+// 2026-08-19: these were the retired Helixis dark/violet tokens (#0a0910
+// canvas, #8676c6 iris). The product moved to a light system; the marketing
+// surface now matches it, so the screenshots on the landing page sit in the
+// same world as the page around them. Track globals.css when it changes.
 
 export const tokensCss = `
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    /* canvas ramp — near-black with a faint violet bias (chosen, not slate) */
-    --canvas:    #0a0910;
-    --canvas-1:  #100e17;
-    --canvas-2:  #16141f;
-    --canvas-3:  #1c1a27;
+    /* canvas ramp — pure white content, faint cool-blue raised surfaces */
+    --canvas:    #FFFFFF;
+    --canvas-1:  #F7FAFD;
+    --canvas-2:  #F0F5FB;
+    --canvas-3:  #E6EEF8;
+
+    /* deep surface — the one dark band (matches the app's chrome ink) */
+    --deep:      #101E31;
+    --deep-1:    #17293F;
+    --deep-ink:  #EAF1F9;
+    --deep-muted:#9FB3CA;
+    --deep-line: rgba(255, 255, 255, 0.10);
 
     /* ink */
-    --ink:        #ecebf4;
-    --ink-muted:  #9a97ad;
-    --ink-subtle: #5d5a70;
+    --ink:        #0E1620;
+    --ink-muted:  #55606E;
+    --ink-subtle: #6B7481;
+    --ink-faint:  #98A1AE;
 
-    /* hairlines */
-    --line:        rgba(236, 235, 244, 0.07);
-    --line-strong: rgba(236, 235, 244, 0.14);
+    /* hairlines — depth is carried by these, not by shadows */
+    --line:        rgba(14, 22, 32, 0.10);
+    --line-strong: rgba(14, 22, 32, 0.18);
+    --card-edge:   rgba(14, 22, 32, 0.14);
 
-    /* accent — desaturated iris in the hue of the brand mark #4C3B8F */
-    --iris:       #8676c6;
-    --iris-hover: #958ad2;
-    --iris-press: #776ab3;
-    --iris-soft:  rgba(134, 118, 198, 0.13);
-    --iris-ring:  rgba(134, 118, 198, 0.35);
-    --brand-deep: #4c3b8f;
+    /* accent — the product's blue, the ONE chromatic accent on the page */
+    --iris:       #1E73BC;
+    --iris-hover: #2A80CC;
+    --iris-press: #0B4F78;
+    --iris-soft:  rgba(30, 115, 188, 0.10);
+    --iris-ring:  rgba(30, 115, 188, 0.32);
 
     /* semantic — muted, only for real state */
-    --positive:      #6fbf8f;
-    --positive-soft: rgba(111, 191, 143, 0.11);
-    --caution:       #c9a35f;
-    --caution-soft:  rgba(201, 163, 95, 0.11);
-    --danger:        #c96f6f;
-    --danger-soft:   rgba(201, 111, 111, 0.11);
+    --positive:      #1D7A4C;
+    --positive-soft: #E7F4EC;
+    --caution:       #A8631A;
+    --caution-soft:  #FAF0E1;
+    --danger:        #B3261E;
+    --danger-soft:   #F9E9E7;
 
-    /* radius — graduated */
+    /* radius — graduated vocabulary: chips / controls / cards / panels */
     --r-xs: 4px;
     --r-sm: 6px;
     --r-md: 8px;
     --r-lg: 12px;
+    --r-panel: 16px;
     --r-pill: 9999px;
 
     --font-sans: 'Geist Variable', 'Geist', Inter, system-ui, sans-serif;
     --font-mono: 'Geist Mono Variable', 'Geist Mono', 'JetBrains Mono', monospace;
 
+    /* motion — expo-out for entrances/reveals, standard for state */
     --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-std: cubic-bezier(0.2, 0, 0, 1);
+    --dur-state: 150ms;
+    --dur-reveal: 500ms;
+    --dur-entrance: 900ms;
   }
 
   html { scroll-behavior: smooth; }
@@ -94,11 +112,11 @@ export const tokensCss = `
   .btn-primary:active:not(:disabled) { background: var(--iris-press); }
 
   .btn-secondary {
-    background: var(--canvas-2);
-    border-color: var(--line-strong);
+    background: var(--canvas);
+    border-color: var(--card-edge);
     color: var(--ink);
   }
-  .btn-secondary:hover:not(:disabled) { background: var(--canvas-3); }
+  .btn-secondary:hover:not(:disabled) { background: var(--canvas-2); }
 
   .btn-ghost { background: transparent; color: var(--ink-muted); padding: 8px 12px; font-size: 13px; }
   .btn-ghost:hover { color: var(--ink); background: var(--canvas-2); }
@@ -119,7 +137,7 @@ export const tokensCss = `
   }
 
   input, select {
-    background: var(--canvas-2);
+    background: var(--canvas);
     border: 1px solid var(--line);
     border-radius: var(--r-sm);
     color: var(--ink);
@@ -143,7 +161,7 @@ export const tokensCss = `
 
   select {
     cursor: pointer;
-    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239a97ad' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2355606E' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
     background-repeat: no-repeat;
     background-position: right 10px center;
     background-size: 16px;
@@ -152,8 +170,8 @@ export const tokensCss = `
 
   /* ── card ── */
   .card {
-    background: var(--canvas-1);
-    border: 1px solid var(--line);
+    background: var(--canvas);
+    border: 1px solid var(--card-edge);
     border-radius: var(--r-md);
     padding: 24px;
     margin-bottom: 16px;
@@ -186,7 +204,7 @@ export const tokensCss = `
   .badge-danger   { background: var(--danger-soft);   color: var(--danger); }
   .badge-caution  { background: var(--caution-soft);  color: var(--caution); }
   .badge-iris     { background: var(--iris-soft);     color: var(--iris); }
-  .badge-muted    { background: var(--canvas-2);      color: var(--ink-subtle); }
+  .badge-muted    { background: var(--canvas-2);      color: var(--ink-muted); }
 
   .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
   .dot.pulse { animation: hx-pulse 2s infinite; }
@@ -225,5 +243,8 @@ export const tokensCss = `
       transition-duration: 0.01ms !important;
     }
     html { scroll-behavior: auto; }
+    /* Reveals start at opacity:0 and are made visible BY their animation —
+       suppressing the animation without this leaves the page blank. */
+    .rise, .reveal { opacity: 1 !important; transform: none !important; }
   }
 `;

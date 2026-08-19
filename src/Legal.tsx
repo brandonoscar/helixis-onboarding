@@ -1,4 +1,4 @@
-import Helix from "./Helix";
+import Mark from "./Mark";
 
 // Plain-English Privacy Policy + Terms of Service. Written to be honest and
 // specific to what Occupella actually does (Buildium API mirror, Composio-managed
@@ -91,7 +91,7 @@ function Shell({ title, children }: { title: string; children: React.ReactNode }
       <style>{css}</style>
       <nav className="legal-nav">
         <a className="legal-wordmark" href="/">
-          <Helix width={22} height={30} dots={10} speed={0.5} />
+          <Mark size={22} />
           Occupella
         </a>
         <a href="/" style={{ fontSize: 13, color: "var(--ink-muted)", textDecoration: "none" }}>
@@ -102,14 +102,14 @@ function Shell({ title, children }: { title: string; children: React.ReactNode }
       <div className="legal-date">Effective July 6, 2026 · Updated August 14, 2026</div>
       <div className="legal-note">
         This is written in plain English on purpose. If anything here is unclear, email{" "}
-        <a href="mailto:hello@helixis.com">hello@helixis.com</a> and a human will answer.
+        <a href="mailto:team@occupella.com">team@occupella.com</a> and a human will answer.
       </div>
       {children}
       <div className="legal-footer">
         <span>© 2026 Oscar Ventures LLC</span>
         <a href="/privacy">Privacy</a>
         <a href="/terms">Terms</a>
-        <a href="mailto:hello@helixis.com">hello@helixis.com</a>
+        <a href="mailto:team@occupella.com">team@occupella.com</a>
       </div>
     </div>
   );
@@ -182,7 +182,7 @@ export function Privacy() {
 
       <h2>Contact</h2>
       <p>
-        Questions, deletion requests, or concerns: <a href="mailto:hello@helixis.com">hello@helixis.com</a>.
+        Questions, deletion requests, or concerns: <a href="mailto:team@occupella.com">team@occupella.com</a>.
       </p>
     </Shell>
   );
@@ -250,7 +250,7 @@ export function Terms() {
 
       <h2>Contact</h2>
       <p>
-        <a href="mailto:hello@helixis.com">hello@helixis.com</a>
+        <a href="mailto:team@occupella.com">team@occupella.com</a>
       </p>
     </Shell>
   );
