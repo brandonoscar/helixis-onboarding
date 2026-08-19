@@ -325,6 +325,8 @@ const TRUST = [
   { icon: CHECK, text: "Every write to Buildium or Gmail passes a confirmation gate you can edit before approving." },
   { icon: SHIELD, text: "Company-scoped isolation across data, memory, and files." },
   { icon: BELL, text: "Nothing auto-sends. Drafts wait for a person." },
+  { icon: CHECK, text: "Texting is consent-first — recipients opt in themselves, and STOP works instantly." },
+  { icon: LOCK, text: "Sensitive identifiers are redacted before anything enters AI memory." },
 ];
 
 export default function Landing() {
