@@ -156,11 +156,36 @@ export function Privacy() {
         <li>Sensitive identifiers (such as SSNs and payment card numbers) are redacted before anything is stored in AI memory.</li>
       </ul>
 
+      <h2>SMS / text messaging</h2>
+      <p>
+        Occupella can send SMS text messages about account activity, property operations,
+        maintenance updates, and service-related notices — but only to people who have
+        expressly opted in. A phone number on file is not consent; consent is recorded
+        separately, and messages are never sent without it.
+      </p>
+      <ul>
+        <li>
+          <strong>No third-party sharing:</strong> we will not share or sell your mobile
+          phone number, SMS opt-in consent, or text messaging originator opt-in data to
+          third parties or affiliates for marketing or promotional purposes.
+        </li>
+        <li>Message frequency varies based on your account activity.</li>
+        <li>Message and data rates may apply, depending on your carrier plan.</li>
+        <li>
+          Reply <strong>STOP</strong> at any time to opt out — it takes effect immediately.
+          Reply <strong>HELP</strong> for help, or email{" "}
+          <a href="mailto:team@occupella.com">team@occupella.com</a>. You can also revoke
+          consent by any reasonable means, including email.
+        </li>
+        <li>Messages are sent only between 8am and 9pm in your local time zone.</li>
+      </ul>
+
       <h2>What we do NOT do</h2>
       <ul>
         <li>We do not sell your data, ever.</li>
         <li>We do not use your data to train foundation models.</li>
         <li>We do not share your data with third parties except the subprocessors below, and only as needed to run the service.</li>
+        <li>We do not share mobile numbers or SMS consent data with anyone for marketing — see the SMS section above.</li>
       </ul>
 
       <h2>Subprocessors</h2>
@@ -224,6 +249,34 @@ export function Terms() {
         <li>Protect your data as described in the <a href="/privacy">Privacy Policy</a>.</li>
         <li>Perform writes to your systems only with your approval.</li>
         <li>Make deletion straightforward when you leave.</li>
+      </ul>
+
+      <h2>SMS terms</h2>
+      <p>
+        The Occupella SMS program sends text messages about account activity, property
+        operations, maintenance updates, and service-related notices to property management
+        customers and authorized users who have opted in. By opting in you agree to the
+        following:
+      </p>
+      <ul>
+        <li>Message frequency varies based on your account activity.</li>
+        <li>Message and data rates may apply.</li>
+        <li>
+          Reply <strong>STOP</strong> to cancel at any time. Reply <strong>HELP</strong> for
+          help, or contact <a href="mailto:team@occupella.com">team@occupella.com</a>.
+        </li>
+        <li>
+          Consent to receive text messages is optional and is never a condition of using
+          the service.
+        </li>
+        <li>
+          Carriers are not liable for delayed or undelivered messages.
+        </li>
+        <li>
+          How we handle mobile numbers and opt-in data is described in the{" "}
+          <a href="/privacy">Privacy Policy</a> — in short, it is never shared with third
+          parties for marketing.
+        </li>
       </ul>
 
       <h2>Limitations</h2>
