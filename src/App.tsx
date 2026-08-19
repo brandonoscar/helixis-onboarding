@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "./lib/supabase";
 import { apiFetch, apiJson, APP_URL, BUILDIUM_WEBHOOK_URL } from "./lib/api";
 import { loadWizard, saveWizard } from "./lib/persist";
-import Helix from "./Helix";
+import Mark from "./Mark";
 
 // ─────────────────────────────────────────────────────────
 // SETUP WIZARD — 4 steps + launch (2026-07 research rebuild):
@@ -680,7 +680,7 @@ function StepIdentify({
             </div>
             <div className="waitlist-note">
               Runs on <strong>Buildium</strong>. On AppFolio or Yardi?{" "}
-              <a href="mailto:hello@helixis.com?subject=AppFolio%2FYardi%20waitlist">Join the waitlist</a>.
+              <a href="mailto:team@occupella.com?subject=AppFolio%2FYardi%20waitlist">Join the waitlist</a>.
             </div>
             {error && (
               <div className="test-result error"><span>⚠</span> {error}</div>
@@ -1320,7 +1320,7 @@ function StepFinish({
     <div className="panel" key="finish">
       <div className="finish-hero">
         <div className="finish-viz">
-          <Helix width={80} height={110} dots={14} speed={0.5} />
+          <Mark size={64} />
         </div>
         <h1 className="panel-title" style={{ textAlign: "center" }}>
           {findings
@@ -1381,7 +1381,7 @@ function StepFinish({
         </a>
         <a
           className="btn btn-ghost"
-          href="mailto:hello@helixis.com?subject=15-minute%20setup%20help"
+          href="mailto:team@occupella.com?subject=15-minute%20setup%20help"
           style={{ flex: 1, textAlign: "center" }}
         >
           Book 15-minute setup help
@@ -1411,7 +1411,7 @@ function Sidebar({ current, completed }: { current: Step; completed: Set<Step> }
   return (
     <div className="sidebar">
       <a className="logo" href="/">
-        <Helix width={22} height={30} dots={10} speed={0.5} />
+        <Mark size={22} />
         <div className="logo-text">Occupella</div>
       </a>
 
@@ -1430,8 +1430,7 @@ function Sidebar({ current, completed }: { current: Step; completed: Set<Step> }
       </div>
 
       <div className="sidebar-footer">
-        <p>Need help? <a href="https://docs.helixis.com" target="_blank" rel="noopener noreferrer">docs.helixis.com</a></p>
-        <p style={{ marginTop: 6 }}>Onboarding support: <a href="mailto:hello@helixis.com">hello@helixis.com</a></p>
+        <p>Stuck on a step? Email <a href="mailto:team@occupella.com">team@occupella.com</a> — a human answers.</p>
         {/* Legal-entity attribution (A2P/Twilio verification crawls). */}
         <p style={{ marginTop: 6 }}>Occupella is operated by Oscar Ventures LLC.</p>
       </div>

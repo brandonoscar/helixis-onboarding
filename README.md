@@ -1,4 +1,14 @@
-# Helixis Onboarding — Architecture & Setup Guide
+# Occupella Onboarding — Architecture & Setup Guide
+
+> ⚠ **Everything below the "Project Structure" heading predates ADR 0003
+> (2026-06-12) and describes an architecture this repo no longer uses.** The
+> wizard had its own Supabase project + Edge Functions back then; today it is a
+> pure API client against the AgenticHelixis backend, and it authenticates
+> against the shared `helixis-test` Supabase project (see `src/lib/supabase.ts`
+> and `src/lib/api.ts` for what is actually wired). The `helixis.com` /
+> `hooks.helixis.com` hosts named below were never provisioned. Treat this as
+> historical until it is rewritten — the live contract lives in
+> `AgenticHelixis/docs/adr/0003-product-consolidation-contract.md`.
 
 ## Stack Overview
 
