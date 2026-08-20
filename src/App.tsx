@@ -36,8 +36,12 @@ interface IntegrationState {
 // Versioned ToS/Privacy acceptance recorded at signup (the wizard is the
 // one front door — keep in sync with the app's TERMS_VERSION).
 const TOS_VERSION = "2026-07-05";
-const TERMS_URL = "https://occupella.com/terms";
-const PRIVACY_URL = "https://occupella.com/privacy";
+// Legal pages are served by THIS app (main.tsx routes /terms + /privacy
+// → Legal.tsx). occupella.com is the main app — an SPA that renders the
+// login for any path, so absolute links there showed the login screen
+// (founder-reported 2026-08-20). Same-origin paths always resolve.
+const TERMS_URL = "/terms";
+const PRIVACY_URL = "/privacy";
 
 const DOORS_OPTIONS = ["1–50", "50–200", "200–500", "500–2,000", "2,000+"];
 const GOAL_OPTIONS = [
