@@ -33,6 +33,12 @@ interface IntegrationState {
   count?: number | null;
 }
 
+// Versioned ToS/Privacy acceptance recorded at signup (the wizard is the
+// one front door — keep in sync with the app's TERMS_VERSION).
+const TOS_VERSION = "2026-07-05";
+const TERMS_URL = "https://occupella.com/terms";
+const PRIVACY_URL = "https://occupella.com/privacy";
+
 const DOORS_OPTIONS = ["1–50", "50–200", "200–500", "500–2,000", "2,000+"];
 const GOAL_OPTIONS = [
   { id: "maintenance", label: "Maintenance & work orders" },
@@ -555,6 +561,15 @@ function StepIdentify({
   const [doors, setDoors] = useState(initial.doors);
   const [goal, setGoal] = useState(initial.goal);
   const [sent, setSent] = useState(false);
+  // ToS acceptance — REQUIRED here now: the wizard is the ONE front door
+  // (founder decision 2026-08-20; the app's signup + its checkbox are
+  // gone). Recorded on the new user via signInWithOtp options.data.
+  const [agreed, setAgreed] = useState(false);
+  // After the code verifies, the user SETS A PASSWORD before continuing —
+  // OTP-created users are otherwise passwordless and could never sign in
+  // at occupella.com (password-only). Same decision, same date.
+  const [verifiedToken, setVerifiedToken] = useState<string | null>(null);
+  const [password, setPassword] = useState("");
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -569,7 +584,7 @@ function StepIdentify({
     return () => clearInterval(t);
   }, [resendCooldown]);
 
-  const ready = email.includes("@") && name.trim().length > 0;
+  const ready = email.includes("@") && name.trim().length > 0 && agreed;
 
   const sendCode = async () => {
     if (!ready) return;
@@ -580,7 +595,12 @@ function StepIdentify({
     setError("");
     const { error: e } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: window.location.origin + "/start" },
+      options: {
+        emailRedirectTo: window.location.origin + "/start",
+        // Versioned ToS acceptance trail, recorded at account creation
+        // (mirrors what the app's old signup checkbox recorded).
+        data: { tos_version: TOS_VERSION, tos_accepted_at: new Date().toISOString() },
+      },
     });
     setLoading(false);
     if (e) { setError(e.message); return; }
@@ -595,7 +615,10 @@ function StepIdentify({
     setResendMsg("");
     const { error: e } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: window.location.origin + "/start" },
+      options: {
+        emailRedirectTo: window.location.origin + "/start",
+        data: { tos_version: TOS_VERSION, tos_accepted_at: new Date().toISOString() },
+      },
     });
     setLoading(false);
     if (e) { setError(e.message); return; }
@@ -621,22 +644,64 @@ function StepIdentify({
     const { data, error: e } = await supabase.auth.verifyOtp({ email, token: code, type: "email" });
     setLoading(false);
     if (e || !data.session) { setError("Invalid code. Please try again."); return; }
-    onVerified(email, data.session.access_token);
+    setVerifiedToken(data.session.access_token);
+  };
+
+  const savePassword = async () => {
+    if (!verifiedToken || password.length < 8 || loading) return;
+    setLoading(true);
+    setError("");
+    const { error: e } = await supabase.auth.updateUser({ password });
+    setLoading(false);
+    if (e) { setError(e.message); return; }
+    onVerified(email, verifiedToken);
   };
 
   return (
     <div className="panel" key="identify">
       <div className="panel-header">
         <div className="panel-tag">Step 1 of 4</div>
-        <h1 className="panel-title">{sent ? "Check your email" : "Create your secure setup link"}</h1>
+        <h1 className="panel-title">
+          {verifiedToken
+            ? "Create your password"
+            : sent
+              ? "Check your email"
+              : "Create your secure setup link"}
+        </h1>
         <p className="panel-desc">
-          {sent
-            ? `We sent a 6-digit code to ${email}. Enter it below to continue.`
-            : "Tell us where to point Occupella. Your progress is saved before we ask for any Buildium credentials."}
+          {verifiedToken
+            ? "You'll use this password to sign in at occupella.com. One more field, then straight into setup."
+            : sent
+              ? `We sent a 6-digit code to ${email}. Enter it below to continue.`
+              : "Tell us where to point Occupella. Your progress is saved before we ask for any Buildium credentials."}
         </p>
       </div>
 
-      {!sent ? (
+      {verifiedToken ? (
+        <>
+          <div className="card">
+            <div className="field">
+              <label>Password</label>
+              <input
+                type="password"
+                placeholder="At least 8 characters"
+                value={password}
+                onChange={(e) => { setPassword(e.target.value); setError(""); }}
+                autoComplete="new-password"
+                autoFocus
+                onKeyDown={(e) => { if (e.key === "Enter") savePassword(); }}
+              />
+            </div>
+            {error && (
+              <div className="test-result error"><span>⚠</span> {error}</div>
+            )}
+          </div>
+          <TrustLine text="Your email is verified. This password signs you into the Occupella app — the wizard keeps going right after." />
+          <button className="btn btn-primary wide" onClick={savePassword} disabled={password.length < 8 || loading}>
+            {loading ? <><span className="spinner" /> Saving…</> : "Save password & continue →"}
+          </button>
+        </>
+      ) : !sent ? (
         <>
           <div className="card">
             <div className="field">
@@ -682,6 +747,19 @@ function StepIdentify({
               Runs on <strong>Buildium</strong>. On AppFolio or Yardi?{" "}
               <a href="mailto:team@occupella.com?subject=AppFolio%2FYardi%20waitlist">Join the waitlist</a>.
             </div>
+            <label style={{ display: "flex", alignItems: "flex-start", gap: 8, marginTop: 12, cursor: "pointer", fontSize: 13, lineHeight: 1.5 }}>
+              <input
+                type="checkbox"
+                checked={agreed}
+                onChange={(e) => setAgreed(e.target.checked)}
+                style={{ marginTop: 3 }}
+                aria-label="Agree to the Terms of Service and Privacy Policy"
+              />
+              <span>
+                I agree to the <a href={TERMS_URL} target="_blank" rel="noreferrer">Terms of Service</a> and{" "}
+                <a href={PRIVACY_URL} target="_blank" rel="noreferrer">Privacy Policy</a>.
+              </span>
+            </label>
             {error && (
               <div className="test-result error"><span>⚠</span> {error}</div>
             )}
