@@ -457,6 +457,18 @@ const css = `
 
   .waitlist-note { font-size: 11.5px; color: var(--ink-subtle); margin-top: 10px; }
   .waitlist-note a { color: var(--iris); text-decoration: none; }
+  .tos-row {
+    display: flex; align-items: flex-start; gap: 9px;
+    margin-top: 14px; padding-top: 12px;
+    border-top: 1px solid var(--line);
+    font-size: 12.5px; line-height: 1.55; color: var(--ink-muted);
+    cursor: pointer; user-select: none;
+  }
+  .tos-row input[type="checkbox"] {
+    margin-top: 2px; width: 15px; height: 15px; flex: none;
+    accent-color: var(--iris); cursor: pointer;
+  }
+  .tos-row a { color: var(--ink); font-weight: 500; text-decoration: underline; text-underline-offset: 2px; }
 
   /* ── RESPONSIVE ── */
   @media (max-width: 768px) {
@@ -747,12 +759,11 @@ function StepIdentify({
               Runs on <strong>Buildium</strong>. On AppFolio or Yardi?{" "}
               <a href="mailto:team@occupella.com?subject=AppFolio%2FYardi%20waitlist">Join the waitlist</a>.
             </div>
-            <label style={{ display: "flex", alignItems: "flex-start", gap: 8, marginTop: 12, cursor: "pointer", fontSize: 13, lineHeight: 1.5 }}>
+            <label className="tos-row">
               <input
                 type="checkbox"
                 checked={agreed}
                 onChange={(e) => setAgreed(e.target.checked)}
-                style={{ marginTop: 3 }}
                 aria-label="Agree to the Terms of Service and Privacy Policy"
               />
               <span>
