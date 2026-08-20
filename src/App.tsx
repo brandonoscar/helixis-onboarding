@@ -465,8 +465,19 @@ const css = `
     cursor: pointer; user-select: none;
   }
   .tos-row input[type="checkbox"] {
-    margin-top: 2px; width: 15px; height: 15px; flex: none;
+    /* The global "input, select" rule (theme.ts) sets width:100%,
+       padding, radius and -webkit-appearance:none — which ERASES the
+       native checkbox (founder-reported: rendered as an empty oval).
+       Restore native rendering wholesale. */
+    appearance: auto; -webkit-appearance: auto;
+    width: 15px; height: 15px; flex: none;
+    margin-top: 2px; padding: 0;
+    border: none; border-radius: 0; box-shadow: none;
     accent-color: var(--iris); cursor: pointer;
+  }
+  .tos-row input[type="checkbox"]:focus { box-shadow: none; }
+  .tos-row input[type="checkbox"]:focus-visible {
+    outline: 2px solid var(--iris); outline-offset: 2px;
   }
   .tos-row a { color: var(--ink); font-weight: 500; text-decoration: underline; text-underline-offset: 2px; }
 
