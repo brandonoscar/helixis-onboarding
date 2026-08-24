@@ -85,7 +85,15 @@ const css = `
   .legal-footer a { color: var(--ink-muted); }
 `;
 
-function Shell({ title, children }: { title: string; children: React.ReactNode }) {
+function Shell({
+  title,
+  updated,
+  children,
+}: {
+  title: string;
+  updated?: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="legal">
       <style>{css}</style>
@@ -99,7 +107,9 @@ function Shell({ title, children }: { title: string; children: React.ReactNode }
         </a>
       </nav>
       <h1>{title}</h1>
-      <div className="legal-date">Effective July 6, 2026 · Updated August 14, 2026</div>
+      <div className="legal-date">
+        {updated ?? "Effective July 6, 2026 · Updated August 14, 2026"}
+      </div>
       <div className="legal-note">
         This is written in plain English on purpose. If anything here is unclear, email{" "}
         <a href="mailto:team@occupella.com">team@occupella.com</a> and a human will answer.
@@ -109,6 +119,7 @@ function Shell({ title, children }: { title: string; children: React.ReactNode }
         <span>© 2026 Oscar Ventures LLC</span>
         <a href="/privacy">Privacy</a>
         <a href="/terms">Terms</a>
+        <a href="/sms">SMS</a>
         <a href="mailto:team@occupella.com">team@occupella.com</a>
       </div>
     </div>
@@ -161,7 +172,9 @@ export function Privacy() {
         Occupella can send SMS text messages about account activity, property operations,
         maintenance updates, and service-related notices — but only to people who have
         expressly opted in. A phone number on file is not consent; consent is recorded
-        separately, and messages are never sent without it.
+        separately, and messages are never sent without it. How consent is obtained —
+        including the verbatim language a recipient agrees to — is set out in full on our{" "}
+        <a href="/sms">SMS Program &amp; Consent</a> page.
       </p>
       <ul>
         <li>
@@ -255,8 +268,10 @@ export function Terms() {
       <p>
         The Occupella SMS program sends text messages about account activity, property
         operations, maintenance updates, and service-related notices to property management
-        customers and authorized users who have opted in. By opting in you agree to the
-        following:
+        customers and authorized users who have opted in. The full program disclosure —
+        who sends the messages, how consent is obtained and recorded, sample messages, and
+        how to stop them — is on our <a href="/sms">SMS Program &amp; Consent</a> page. By
+        opting in you agree to the following:
       </p>
       <ul>
         <li>Message frequency varies based on your account activity.</li>
@@ -303,6 +318,213 @@ export function Terms() {
 
       <h2>Contact</h2>
       <p>
+        <a href="mailto:team@occupella.com">team@occupella.com</a>
+      </p>
+    </Shell>
+  );
+}
+
+// ─────────────────────────────────────────────────────────
+// SMS PROGRAM & CONSENT — the A2P 10DLC campaign's public
+// "call to action" URL.
+//
+// This page exists because the carrier reviewer could not SEE the opt-in
+// flow: the app is behind a login (App.tsx returns <LoginForm/> for any
+// unauthenticated path), so every URL we could point at rendered a sign-in
+// screen and the campaign was rejected twice for an unverifiable CTA.
+// The wizard deployment is public by construction — it is the front door
+// for new customers — so the disclosure lives HERE, at /sms, alongside
+// /privacy and /terms, and is linked from both.
+//
+// ⚠ The consent language in "How consent is obtained" is the VERBATIM text
+// property managers present to residents. It is what the campaign
+// registration quotes. Changing the wording here without changing the
+// signed form (and the campaign) puts the two out of sync — which is
+// itself a rejection reason.
+// ─────────────────────────────────────────────────────────
+
+export function Sms() {
+  return (
+    <Shell title="SMS Program & Consent" updated="Updated August 24, 2026">
+      <p>
+        Occupella is a property-management software platform operated by{" "}
+        <strong>Oscar Ventures LLC</strong>. This page describes our
+        application-to-person (A2P) text-messaging program in full: who sends messages,
+        what they contain, how consent is obtained and recorded, and how a recipient
+        stops them. No account or login is required to read this page.
+      </p>
+
+      <h2>Who sends the messages, and to whom</h2>
+      <p>
+        Property-management companies use Occupella to send{" "}
+        <strong>operational, non-marketing</strong> text messages to two audiences:
+      </p>
+      <ul>
+        <li>
+          <strong>Residents (tenants)</strong> — rent payment reminders, maintenance and
+          work-order status updates, appointment confirmations, and account notices
+          relating to their own tenancy.
+        </li>
+        <li>
+          <strong>Property managers and owners</strong> — operational notices about
+          properties they manage or own.
+        </li>
+      </ul>
+      <p>
+        We send no marketing, promotional, or advertising messages of any kind. We do not
+        sell, rent, or share mobile numbers or consent records with third parties for
+        their own marketing.
+      </p>
+
+      <h2>How consent is obtained (call to action)</h2>
+      <p>
+        Consent is collected <strong>offline, by the property-management company, in
+        writing</strong> — not through a web form on this site. That follows from the
+        relationship: a resident's phone number reaches Occupella only through their
+        lease or a signed authorization with their property manager, and Occupella never
+        contacts anyone who is not already that company's resident, owner, or staff
+        member.
+      </p>
+      <p>A recipient gives prior express written consent in one of two ways:</p>
+      <ul>
+        <li>
+          <strong>A signed SMS authorization form</strong> presented by the property
+          manager at lease signing or on request; or
+        </li>
+        <li>
+          <strong>A dedicated text-messaging clause in the lease agreement</strong>,
+          initialed or signed separately from the lease as a whole.
+        </li>
+      </ul>
+      <p>In both cases the recipient agrees to the following disclosure, presented verbatim:</p>
+      <div className="legal-note">
+        <p>
+          <strong>Consent language presented to the recipient:</strong>
+        </p>
+        <p>
+          “I agree to receive operational text messages from [Property Management Company]
+          sent via Occupella at the mobile number I provide, including rent reminders,
+          maintenance and work-order updates, appointment confirmations, and account
+          notices. Message frequency varies. Message and data rates may apply. Consent is
+          not a condition of renting or of any purchase. Reply STOP to unsubscribe or HELP
+          for help. See setup.occupella.com/sms and setup.occupella.com/privacy.”
+        </p>
+      </div>
+      <p>
+        <strong>Consent is not a condition of renting</strong>, of applying for a tenancy,
+        or of any purchase. A resident who declines still receives every notice through
+        the other channels their property manager uses.
+      </p>
+
+      <h2>How consent is recorded and enforced</h2>
+      <p>
+        A phone number on file is <strong>not</strong> consent. Occupella keeps a separate
+        consent ledger, and the platform will not send a message to any number without a
+        live consent record in it. Each record stores the phone number, the
+        property-management company, when consent was captured, the source of the
+        consent, and the recipient's time zone.
+      </p>
+      <p>
+        Every send is checked against that ledger first. If no live record exists — or if
+        consent was revoked — the send is refused. A user of the platform cannot bypass
+        the check.
+      </p>
+
+      <h2>Message frequency</h2>
+      <p>
+        Message frequency varies and depends on the recipient's own tenancy activity — a
+        rent reminder near a due date, an update when a maintenance request they filed
+        changes status. Recipients typically receive fewer than ten messages per month.
+        There is no recurring broadcast or campaign schedule.
+      </p>
+
+      <h2>Cost</h2>
+      <p>
+        <strong>Message and data rates may apply.</strong> Neither Occupella nor the
+        property manager charges for the messages; your mobile carrier's standard rates
+        apply.
+      </p>
+
+      <h2>How to stop messages (opt out)</h2>
+      <p>
+        Reply <strong>STOP</strong> to any message. Opt-out is immediate and automatic: it
+        revokes consent for that number across every property-management company using
+        Occupella, and the platform refuses all further sends to it. No further action is
+        required, and no confirmation call or email is needed.
+      </p>
+      <p>The keywords STOP, END, CANCEL, UNSUBSCRIBE, and QUIT are all honored.</p>
+      <p>
+        To resume messages after opting out, reply <strong>START</strong>. That restores
+        only consent that previously existed; it never creates new consent.
+      </p>
+      <p>
+        A recipient may also ask their property manager to remove their number, or contact
+        us directly at <a href="mailto:team@occupella.com">team@occupella.com</a>.
+      </p>
+
+      <h2>How to get help</h2>
+      <p>
+        Reply <strong>HELP</strong> to any message for support information. Replying HELP
+        does not change consent either way.
+      </p>
+      <p>
+        You can also reach us at{" "}
+        <a href="mailto:team@occupella.com">team@occupella.com</a>. For questions about a
+        specific notice — a rent amount, a work order, an appointment — contact your
+        property-management company directly; they control the content of the message.
+      </p>
+
+      <h2>Quiet hours</h2>
+      <p>
+        Occupella does not send messages outside 8:00 a.m. – 9:00 p.m. in the{" "}
+        <em>recipient's</em> local time zone, consistent with the Telephone Consumer
+        Protection Act. A send attempted outside that window is refused by the platform,
+        not merely delayed by policy.
+      </p>
+
+      <h2>Sample messages</h2>
+      <div className="legal-note">
+        <p>
+          <strong>Rent reminder</strong>
+          <br />
+          Occupella: Hi Maria, a reminder that rent of $1,450 for Unit 4B, 400 Oak St is
+          due Sep 1. Questions? Reply to this message or call (555) 010-2233. Reply STOP to
+          unsubscribe, HELP for help.
+        </p>
+        <p>
+          <strong>Maintenance update</strong>
+          <br />
+          Occupella: Hi Maria, your work order for Unit 4B (kitchen faucet leak) is
+          scheduled for Thu Sep 4 between 1–4pm. Reply to this message with questions.
+          Reply STOP to unsubscribe, HELP for help.
+        </p>
+        <p>
+          <strong>Appointment confirmation</strong>
+          <br />
+          Occupella: Hi Maria, confirming your unit inspection at 400 Oak St on Fri Sep 5
+          at 10:00am. Reply to this message to reschedule. Reply STOP to unsubscribe, HELP
+          for help.
+        </p>
+      </div>
+
+      <h2>Privacy</h2>
+      <p>
+        Mobile numbers and consent records are used only to deliver the operational
+        messages described above.{" "}
+        <strong>
+          No mobile information is shared with third parties or affiliates for marketing or
+          promotional purposes.
+        </strong>{" "}
+        Information is shared only with the messaging provider that delivers the message on
+        our behalf, and only for that purpose. Full details are in our{" "}
+        <a href="/privacy">Privacy Policy</a>; the program's terms are in our{" "}
+        <a href="/terms">Terms of Service</a>.
+      </p>
+
+      <h2>Contact</h2>
+      <p>
+        Oscar Ventures LLC, operator of Occupella
+        <br />
         <a href="mailto:team@occupella.com">team@occupella.com</a>
       </p>
     </Shell>

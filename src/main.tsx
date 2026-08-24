@@ -4,7 +4,7 @@ import '@fontsource-variable/geist'
 import '@fontsource-variable/geist-mono'
 import App from './App'
 import Landing from './Landing'
-import { Privacy, Terms } from './Legal'
+import { Privacy, Sms, Terms } from './Legal'
 import { tokensCss } from './theme'
 
 // Tiny pathname router — no dependency. vercel.json rewrites every path to
@@ -13,12 +13,14 @@ import { tokensCss } from './theme'
 //   /start          → the setup wizard (previously lived at /)
 //   /privacy        → privacy policy
 //   /terms          → terms of service
+//   /sms            → SMS program & consent (the A2P campaign's public CTA URL)
 //   /oauth/callback → Composio OAuth popup return — auto-closes (below)
 function route() {
   const p = window.location.pathname
   if (p.startsWith('/start')) return <App />
   if (p.startsWith('/privacy')) return <Privacy />
   if (p.startsWith('/terms')) return <Terms />
+  if (p.startsWith('/sms')) return <Sms />
   return <Landing />
 }
 
