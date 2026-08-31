@@ -6,10 +6,10 @@ import Mark from "./Mark";
 
 // ─────────────────────────────────────────────────────────
 // SETUP WIZARD — 4 steps + launch (2026-07 research rebuild):
-//   1 identify  — secure account: email OTP + company + doors/goal,
+//   1 identify  — secure account: email OTP + company + doors,
 //                 saved BEFORE any credential is asked for
 //   2 buildium  — the one high-friction required connection, with an
-//                 admin preflight + handoff and a value reveal on test
+//                 an admin handoff on request and a value reveal on test
 //   3 live      — webhooks, reframed as "live Buildium updates", skippable
 //   4 channels  — Google OAuth, optional
 //   finish      — launch: what Occupella is scanning now, not a summary
@@ -44,13 +44,6 @@ const TERMS_URL = "/terms";
 const PRIVACY_URL = "/privacy";
 
 const DOORS_OPTIONS = ["1–50", "50–200", "200–500", "500–2,000", "2,000+"];
-const GOAL_OPTIONS = [
-  { id: "maintenance", label: "Maintenance & work orders" },
-  { id: "owners", label: "Owner updates & reporting" },
-  { id: "rent", label: "Rent collection & follow-up" },
-  { id: "leasing", label: "Leasing & lead follow-up" },
-  { id: "everything", label: "All of it" },
-];
 
 // ─────────────────────────────────────────────────────────
 // WIZARD-SPECIFIC STYLES (tokens + primitives live in theme.ts)
@@ -210,25 +203,13 @@ const css = `
   .trust-line svg { flex-shrink: 0; margin-top: 1px; color: var(--ink-subtle); }
 
   /* ── PREFLIGHT (admin check) ── */
-  .preflight { display: flex; gap: 8px; margin-bottom: 16px; }
-
-  .preflight-opt {
-    flex: 1;
-    border: 1px solid var(--line);
-    border-radius: var(--r-sm);
-    background: var(--canvas-2);
-    padding: 12px 14px;
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--ink-muted);
-    cursor: pointer;
-    font-family: var(--font-sans);
-    text-align: left;
-    transition: border-color 0.15s, background 0.15s, color 0.15s;
+  .handoff-link {
+    display: block; width: 100%; margin: 4px 0 10px; padding: 0;
+    background: none; border: 0; cursor: pointer; text-align: left;
+    font-size: 13px; color: var(--ink-muted); text-decoration: underline;
+    text-underline-offset: 3px;
   }
-
-  .preflight-opt:hover { border-color: var(--line-strong); }
-  .preflight-opt.selected { border-color: var(--iris); background: var(--iris-soft); color: var(--ink); }
+  .handoff-link:hover { color: var(--ink); }
 
   /* ── ADMIN HANDOFF ── */
   .handoff {
@@ -497,33 +478,6 @@ const css = `
 // UTILITY COMPONENTS
 // ─────────────────────────────────────────────────────────
 
-function LockIcon() {
-  return (
-    <svg
-      width="13"
-      height="13"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2z M7 11V7a5 5 0 0 1 10 0v4" />
-    </svg>
-  );
-}
-
-function TrustLine({ text }: { text: string }) {
-  return (
-    <div className="trust-line">
-      <LockIcon />
-      <span>{text}</span>
-    </div>
-  );
-}
-
 function CopyField({ label, value }: { label: string; value: string }) {
   const [copied, setCopied] = useState(false);
 
@@ -571,7 +525,6 @@ interface Profile {
   email: string;
   name: string;
   doors: string;
-  goal: string;
 }
 
 function StepIdentify({
@@ -586,7 +539,6 @@ function StepIdentify({
   const [email, setEmail] = useState(initial.email);
   const [name, setName] = useState(initial.name);
   const [doors, setDoors] = useState(initial.doors);
-  const [goal, setGoal] = useState(initial.goal);
   const [sent, setSent] = useState(false);
   // ToS acceptance — REQUIRED here now: the wizard is the ONE front door
   // (founder decision 2026-08-20; the app's signup + its checkbox are
@@ -617,7 +569,7 @@ function StepIdentify({
     if (!ready) return;
     // Persist the profile BEFORE the OTP round-trip so a magic-link
     // redirect (full SPA reload) resumes with the company name intact.
-    onProfile({ email, name: name.trim(), doors, goal });
+    onProfile({ email, name: name.trim(), doors });
     setLoading(true);
     setError("");
     const { error: e } = await supabase.auth.signInWithOtp({
@@ -723,7 +675,6 @@ function StepIdentify({
               <div className="test-result error"><span>⚠</span> {error}</div>
             )}
           </div>
-          <TrustLine text="Your email is verified. This password signs you into the Occupella app — the wizard keeps going right after." />
           <button className="btn btn-primary wide" onClick={savePassword} disabled={password.length < 8 || loading}>
             {loading ? <><span className="spinner" /> Saving…</> : "Save password & continue →"}
           </button>
@@ -760,15 +711,6 @@ function StepIdentify({
                   ))}
                 </select>
               </div>
-              <div className="field">
-                <label>Where should Occupella help first?</label>
-                <select value={goal} onChange={(e) => setGoal(e.target.value)}>
-                  <option value="">Select…</option>
-                  {GOAL_OPTIONS.map((g) => (
-                    <option key={g.id} value={g.id}>{g.label}</option>
-                  ))}
-                </select>
-              </div>
             </div>
             <div className="waitlist-note">
               Runs on <strong>Buildium</strong>. On AppFolio or Yardi?{" "}
@@ -791,7 +733,6 @@ function StepIdentify({
             )}
           </div>
 
-          <TrustLine text="Passwordless login — we'll send a one-time code. Your setup is saved to your work email so you can come back later, or with your Buildium admin." />
 
           <button className="btn btn-primary wide" onClick={sendCode} disabled={!ready || loading}>
             {loading ? <><span className="spinner" /> Sending…</> : "Send secure code →"}
@@ -850,7 +791,7 @@ function StepIdentify({
 }
 
 // ─────────────────────────────────────────────────────────
-// STEP 2: CONNECT BUILDIUM (preflight → credentials/handoff → test → reveal)
+// STEP 2: CONNECT BUILDIUM (credentials → test → reveal; handoff on request)
 // ─────────────────────────────────────────────────────────
 
 function StepBuildium({
@@ -957,23 +898,18 @@ function StepBuildium({
         </p>
       </div>
 
-      {/* preflight: do you have API permission? */}
-      <div className="preflight">
-        <button
-          className={`preflight-opt ${isAdmin === true ? "selected" : ""}`}
-          onClick={() => setIsAdmin(true)}
-        >
-          I can generate Buildium API keys
-        </button>
-        <button
-          className={`preflight-opt ${isAdmin === false ? "selected" : ""}`}
-          onClick={() => setIsAdmin(false)}
-        >
-          I need my admin or partner
-        </button>
-      </div>
+      {/* ⚠ This used to be a forced binary ("I can generate Buildium API
+          keys" / "I need my admin or partner") sitting ABOVE the form. It made
+          everyone answer a question about themselves before they could start,
+          and most people can just paste the keys — so the common path paid for
+          the rare one. The credentials form is the default now and the handoff
+          is one link away, which loses no capability. */}
 
-      {isAdmin === false && (
+      {/* ⚠ The handoff kept its capability and lost its interstitial. Its
+          only entry point used to be the preflight button; now it is a link
+          under the form, so someone who cannot generate keys is one click from
+          the same email and everyone else never sees the question. */}
+      {isAdmin === false ? (
         <div className="handoff">
           <div className="handoff-title">Send setup instructions to your Buildium admin</div>
           <div className="handoff-body">
@@ -988,8 +924,11 @@ function StepBuildium({
               {copied ? "✓ Copied" : "Copy instructions"}
             </button>
           </div>
+          <button className="handoff-link" onClick={() => setIsAdmin(null)}>
+            I have the keys after all
+          </button>
         </div>
-      )}
+      ) : null}
 
       {(isAdmin === true || isAdmin === null) && (
         <div className="card" style={{ marginBottom: 16 }}>
@@ -1039,7 +978,12 @@ function StepBuildium({
         </div>
       )}
 
-      <TrustLine text="Credentials are encrypted at rest, masked in the browser, and never displayed again. You can revoke access from Buildium at any time. Every write Occupella makes needs your approval." />
+
+      {isAdmin !== false ? (
+        <button className="handoff-link" onClick={() => setIsAdmin(false)}>
+          I need my admin or partner to generate these keys
+        </button>
+      ) : null}
 
       <button className="sample-toggle" onClick={() => setShowSample((s) => !s)}>
         {showSample ? "Hide sample preview" : "Not ready with API keys? Preview the first scan with sample data →"}
@@ -1145,7 +1089,6 @@ function StepLive({ onNext }: { onNext: (saved: boolean) => void }) {
         )}
       </div>
 
-      <TrustLine text="The signing secret is encrypted server-side and used only to verify that events really came from Buildium. It never comes back to the browser." />
 
       <button className="btn btn-primary wide" onClick={() => onNext(saved)}>
         {saved ? "Continue →" : "Skip for now — run my first scan without live updates →"}
@@ -1244,7 +1187,6 @@ function StepChannels({ onNext }: { onNext: (connected: boolean) => void }) {
         )}
       </div>
 
-      <TrustLine text="Occupella requests the minimum Google scopes needed. OAuth tokens are encrypted at rest and can be revoked from your Google account at any time. Occupella never auto-sends email." />
 
       <button className="btn btn-primary wide" onClick={() => onNext(googleConnected)}>
         {googleConnected ? "Continue →" : "Skip — start with Buildium only →"}
@@ -1559,7 +1501,6 @@ export default function App() {
   );
   const [userEmail, setUserEmail] = useState(persisted.userEmail || "");
   const [doors, setDoors] = useState(persisted.doors || "");
-  const [goal, setGoal] = useState(persisted.goal || "");
   const [buildiumCount, setBuildiumCount] = useState<number | null>(
     persisted.buildiumCount ?? null,
   );
@@ -1582,12 +1523,11 @@ export default function App() {
       webhooksConfigured: liveUpdates,
       userEmail,
       doors,
-      goal,
       buildiumCount,
       buildiumConnected,
       googleConnected,
     });
-  }, [step, completed, workspace, liveUpdates, userEmail, doors, goal, buildiumCount, buildiumConnected, googleConnected]);
+  }, [step, completed, workspace, liveUpdates, userEmail, doors, buildiumCount, buildiumConnected, googleConnected]);
 
   // Idempotently create the company + apply the workspace name. Shared by the
   // inline-OTP path (explicit token) and the magic-link resume path
@@ -1644,10 +1584,9 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleProfile = (p: { email: string; name: string; doors: string; goal: string }) => {
+  const handleProfile = (p: { email: string; name: string; doors: string }) => {
     setUserEmail(p.email);
     setDoors(p.doors);
-    setGoal(p.goal);
     setWorkspace((prev) => ({
       ...prev,
       name: p.name,
@@ -1708,7 +1647,7 @@ export default function App() {
         <div className="main">
           {step === "identify" && !creatingWorkspace && (
             <StepIdentify
-              initial={{ email: userEmail, name: workspace.name, doors, goal }}
+              initial={{ email: userEmail, name: workspace.name, doors }}
               onProfile={handleProfile}
               onVerified={handleVerified}
             />
