@@ -731,7 +731,7 @@ export default function Landing() {
           <Reveal delay={60}>
             <p>
               Connect Buildium, watch it triage your first real work order, and decide from
-              there. Free during early access.
+              there.
             </p>
           </Reveal>
           <Reveal delay={120}>
