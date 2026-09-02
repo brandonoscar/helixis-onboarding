@@ -13,14 +13,44 @@ export const tokensCss = `
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    /* canvas ramp — pure white content, faint cool-blue raised surfaces */
+    /* canvas ramp — pure white content, faint cool-blue raised surfaces.
+       ⚠ These are the APP's exact values (globals.css --canvas-raised /
+       -elevated / -overlay). The landing page and the product are one brand
+       and a visitor sees both within ten minutes of each other, so a ramp
+       that is close-but-not-equal reads as two different products rather
+       than as a deliberate difference. The -1/-2/-3 names stay because they
+       are this file's vocabulary; only the values are shared. */
     --canvas:    #FFFFFF;
-    --canvas-1:  #F7FAFD;
-    --canvas-2:  #F0F5FB;
-    --canvas-3:  #E6EEF8;
+    --canvas-1:  #F4F8FD;
+    --canvas-2:  #EDF3FA;
+    --canvas-3:  #E4EDF7;
+    --canvas-hover:  rgba(14, 22, 32, 0.04);
+    --canvas-active: rgba(14, 22, 32, 0.08);
 
-    /* deep surface — the one dark band (matches the app's chrome ink) */
-    --deep:      #101E31;
+    /* chrome — the app's left rail, and here the sticky nav, which is the
+       one piece of chrome a marketing page has. 12/16/20% tints of --iris.
+       On chrome: labels --ink-muted (5.44:1), active label --ink (15.5:1),
+       icons --ink-subtle (4.02:1 — icons need 3:1), active icon --iris. */
+    --chrome:        #E4EEF7;
+    --chrome-hover:  #DBE9F4;
+    --chrome-active: #D2E3F2;
+    --chrome-line:   rgba(14, 22, 32, 0.09);
+
+    /* deep surface — the closing band and the footer, the page's one
+       polarity flip.
+
+       Lightened from #101E31 on founder direction. #234062 is as far up as
+       this can go while every token that sits ON it still clears 4.5:1:
+       white 10.60, --deep-ink 9.31, --deep-muted 4.93. The next step up
+       (#2A4D74) drops --deep-muted to 4.05 and fails. If this is ever
+       lightened again, --deep-muted is the constraint — it is the footer
+       and the sub-headline, i.e. the text most likely to be skimmed.
+
+       ⚠ The old comment here said it "matches the app's chrome ink". That
+       stopped being true on 2026-08-18, when the app flipped its rail from
+       navy to a light blue tint — the app has no dark surface to match any
+       more, so this band is the landing page's own decision now. */
+    --deep:      #234062;
     --deep-1:    #17293F;
     --deep-ink:  #EAF1F9;
     --deep-muted:#9FB3CA;
@@ -31,18 +61,24 @@ export const tokensCss = `
     --ink-muted:  #55606E;
     --ink-subtle: #6B7481;
     --ink-faint:  #98A1AE;
+    --ink-secondary: #3E4854;
 
     /* hairlines — depth is carried by these, not by shadows */
     --line:        rgba(14, 22, 32, 0.10);
     --line-strong: rgba(14, 22, 32, 0.18);
     --card-edge:   rgba(14, 22, 32, 0.14);
+    --card-edge-hover: rgba(14, 22, 32, 0.22);
+    --line-focus:  rgba(30, 115, 188, 0.50);
 
     /* accent — the product's blue, the ONE chromatic accent on the page */
     --iris:       #1E73BC;
     --iris-hover: #2A80CC;
     --iris-press: #0B4F78;
-    --iris-soft:  rgba(30, 115, 188, 0.10);
-    --iris-ring:  rgba(30, 115, 188, 0.32);
+    --iris-light: #6DAAD8;
+    --iris-tint:  rgba(30, 115, 188, 0.08);
+    --iris-soft:  rgba(30, 115, 188, 0.12);
+    --iris-glow:  rgba(30, 115, 188, 0.15);
+    --iris-ring:  rgba(30, 115, 188, 0.35);
 
     /* semantic — muted, only for real state */
     --positive:      #1D7A4C;

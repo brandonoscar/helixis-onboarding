@@ -1,14 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import Mark from "./Mark";
 import { APP_URL } from "./lib/api";
 import { loadWizard } from "./lib/persist";
-import {
-  type DesktopBuild,
-  type OS,
-  detectOS,
-  fetchDesktopBuilds,
-  formatSize,
-} from "./lib/download";
 
 // ─────────────────────────────────────────────────────────────────────
 // LANDING — the front door.
@@ -74,6 +66,87 @@ const css = `
     color: var(--ink-faint);
   }
 
+  /* ── rotating hero word ────────────────────────────────────────────
+     Five things Occupella actually does, cycling under a fixed line.
+
+     ⚠ It sits ALONE on its own line, and that is load-bearing. The words
+     are different widths, so anything sharing the line would be shoved
+     sideways every couple of seconds. Alone and left-aligned, the caret
+     hugs the word and nothing else moves — which is also why there is no
+     width-reservation hack here to go stale.
+
+     ⚠ .lp-h1 paints a luminance gradient through background-clip: text
+     with color: transparent, and that clipping covers descendants — so the
+     word would render in the headline's grey ramp, not the brand blue.
+     -webkit-text-fill-color is what overrides an inherited transparent
+     fill; plain color alone does not.
+
+     ⚠ No backticks anywhere in this block. These styles live inside a JS
+     template literal, so one backtick in a comment ends the string and the
+     file stops parsing several lines later, where nothing looks wrong. */
+  /* The live word and an invisible copy of ALL five share one grid cell, so
+     the block is always as tall as the tallest state and the height cannot
+     move. Measured before adding it: at 390px "resident communication" wraps
+     to two lines and the h1 went 120px -> 160px, shoving the lede and the
+     buttons down and back on every rotation. Desktop never showed it.
+
+     Height only, deliberately not width — the sizer is in its own grid so it
+     contributes the max HEIGHT, while the live row keeps natural width and
+     the caret keeps hugging the word. Reserving width instead would park the
+     caret far to the right of "leasing".
+
+     Nothing here is a magic number: change a word and the reservation
+     re-measures itself. */
+  .lp-rotor-line { display: grid; }
+  .lp-rotor-line > * { grid-area: 1 / 1; }
+
+  .lp-rotor-sizer { display: grid; visibility: hidden; }
+  .lp-rotor-sizer > span { grid-area: 1 / 1; }
+
+  .lp-rotor {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.14em;
+    justify-self: start;
+  }
+
+  .lp-rotor-word {
+    color: var(--iris);
+    -webkit-text-fill-color: var(--iris);
+    /* No entrance animation: the typing is the entrance, and anything keyed
+       per render would re-fire on every single character. */
+  }
+
+  /* Solid while the letters are moving, blinking only on the pause — which is
+     what a real cursor does, and what makes the hold read as deliberate
+     rather than as a stall. */
+  .lp-rotor-caret {
+    width: 0.075em;
+    height: 0.78em;
+    border-radius: 1px;
+    background: var(--iris);
+    opacity: 0.85;
+  }
+
+  .lp-rotor-caret.is-idle {
+    animation: lp-rotor-blink 1.05s steps(1, end) infinite;
+  }
+
+  @keyframes lp-rotor-blink {
+    0%, 55%  { opacity: 0.85; }
+    56%, 99% { opacity: 0; }
+  }
+
+  .lp-sr {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
   .lp-lede {
     font-size: 18px;
     line-height: 1.55;
@@ -89,12 +162,20 @@ const css = `
     position: sticky; top: 0; z-index: 20;
     height: 56px;
     display: flex; align-items: center; justify-content: space-between;
-    background: rgba(255, 255, 255, 0.86);
+    /* --chrome, the same rail tint the app's sidebar uses. A visitor sees
+       this page and then the product within ten minutes, and the top bar is
+       the one surface both have. Held at 0.86 so the page still shows
+       through as it scrolls under. The solid declaration above it is the
+       fallback: without one, a browser that does not know color-mix drops
+       the property entirely and the nav goes transparent over the copy
+       scrolling beneath it. */
+    background: var(--chrome);
+    background: color-mix(in srgb, var(--chrome) 86%, transparent);
     backdrop-filter: saturate(180%) blur(12px);
     border-bottom: 1px solid transparent;
     transition: border-color var(--dur-state) var(--ease-std);
   }
-  .lp-nav[data-stuck="true"] { border-bottom-color: var(--line); }
+  .lp-nav[data-stuck="true"] { border-bottom-color: var(--chrome-line); }
   .lp-nav-inner {
     max-width: 1120px; margin: 0 auto; padding: 0 32px; width: 100%;
     display: flex; align-items: center; justify-content: space-between;
@@ -105,13 +186,9 @@ const css = `
     color: var(--ink); text-decoration: none;
   }
   .lp-nav-right { display: flex; align-items: center; gap: 4px; }
-  /* Below ~560px the four nav items no longer fit and "Start setup" clips off
-     the right edge. Drop the "Desktop app" jump link first — the #get band it
-     points at is a full section of the page anyway — and keep sign-in and the
-     one CTA that matters. */
+  /* Below ~560px the nav tightens to sign-in and the one CTA that matters. */
   @media (max-width: 560px) {
     .lp-nav-inner { padding: 0 20px; }
-    .lp-nav-desktop-link { display: none; }
   }
 
   /* ── hero ── */
@@ -209,24 +286,6 @@ const css = `
   .lp-trust-item { background: var(--canvas); padding: 18px 20px; display: flex; gap: 12px; align-items: flex-start; font-size: 14px; line-height: 1.5; color: var(--ink-secondary, var(--ink-muted)); }
   .lp-trust-item svg { flex: none; margin-top: 2px; color: var(--iris); }
 
-  /* ── get-it band (web vs desktop) ── */
-  .lp-get { display: grid; gap: 16px; margin-top: 36px; }
-  @media (min-width: 820px) { .lp-get { grid-template-columns: 1fr 1fr; } }
-  .lp-get-card {
-    background: var(--canvas); border: 1px solid var(--card-edge); border-radius: var(--r-lg);
-    padding: 26px 24px 24px; display: flex; flex-direction: column; gap: 10px;
-    transition: border-color var(--dur-state) var(--ease-std), background var(--dur-state) var(--ease-std);
-  }
-  .lp-get-card:hover { border-color: var(--line-strong); background: var(--canvas-1); }
-  .lp-get-k { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-faint); }
-  .lp-get-t { font-size: 19px; font-weight: 600; letter-spacing: -0.018em; color: var(--ink); }
-  .lp-get-b { font-size: 14px; line-height: 1.55; color: var(--ink-muted); flex: 1; }
-  .lp-get-cta { margin-top: 8px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-  .lp-get-meta { font-size: 12.5px; color: var(--ink-subtle); }
-  .lp-alt { font-size: 12.5px; color: var(--ink-subtle); }
-  .lp-alt a { color: var(--ink-muted); text-decoration: none; border-bottom: 1px solid var(--line-strong); }
-  .lp-alt a:hover { color: var(--ink); }
-
   /* ── closing band — the one polarity flip on the page ── */
   .lp-close { margin-top: clamp(72px, 10vw, 120px); background: var(--deep); }
   .lp-close-inner {
@@ -253,10 +312,127 @@ const css = `
   .reveal[data-in="true"] { opacity: 1; transform: none; }
 
   @media (prefers-reduced-motion: reduce) {
+    /* The word still TYPES — letters appearing where they will stay move
+       nothing, and the setting is about movement. What goes is the blink:
+       a looping opacity animation carrying no content, which is exactly
+       what this query is for. */
+    .lp-rotor-caret { animation: none !important; opacity: 0.85 !important; }
     .lp-panel { transform: none !important; animation: none !important; }
     .lp-stage::before { opacity: 0.16 !important; animation: none !important; }
   }
 `;
+
+// ── rotating hero word ───────────────────────────────────────────────
+// "We help Buildium users with ___" — the blank cycling through five
+// things the product actually does.
+//
+// The five are grounded in shipped capability, not aspiration: the
+// delinquency + ledger surface, the work-order and task path, the
+// email/text/call inbox with drafted replies, the leasing CRM, and the
+// consent + confirmation guardrails. A rotator that names a feature the
+// product does not have is a promise the first demo breaks.
+const ROTATING = [
+  "rent collection",
+  "maintenance",
+  "resident communication",
+  "leasing",
+  "compliance",
+] as const;
+
+//: Long enough to READ, which is the whole point — a rotator fast enough
+//: to feel lively is one nobody finishes a word of.
+//: Typing beats. Deleting is faster than typing because that is how real
+//: typing behaves — same speed both ways reads as a machine, not a person.
+const TYPE_MS = 55;
+const DELETE_MS = 30;
+//: Long enough to READ the finished word. This is the beat that matters: a
+//: rotator nobody finishes a word of is decoration.
+const HOLD_MS = 1500;
+//: A short beat on empty before the next word, so the two do not run together.
+const EMPTY_MS = 320;
+// ⚠ This types under prefers-reduced-motion TOO, and that is deliberate.
+//
+// The first cut dropped the typing and swapped whole words instead. It was
+// over-cautious and it cost the feature outright for anyone with the setting
+// on — measured: 60 partial-word frames without it, 0 with. Reduced motion
+// exists for vestibular triggers: movement across the screen, parallax,
+// zoom, spin. Letters appearing where they will stay move nothing; the
+// guidance's own recommended substitute for a transition is a cross-fade,
+// which is a strictly larger visual change than one character arriving. And
+// the fallback was not gentler in any case — twenty-two characters landing
+// at once is a bigger jump than one.
+//
+// What DOES go is the caret blink: a looping opacity animation with no
+// content in it, which is the part the setting is actually about.
+function RotatingWord() {
+  // `n` is how many characters of ROTATING[w] are on screen. `del` is which
+  // direction the next tick moves it.
+  const [w, setW] = useState(0);
+  const [n, setN] = useState(0);
+  const [del, setDel] = useState(false);
+
+  useEffect(() => {
+    const word = ROTATING[w];
+    let delay: number;
+    let step: () => void;
+
+    if (!del && n < word.length) {
+      delay = TYPE_MS;
+      step = () => setN(n + 1);
+    } else if (!del) {
+      delay = HOLD_MS; // finished — let it be read
+      step = () => setDel(true);
+    } else if (n > 0) {
+      delay = DELETE_MS;
+      step = () => setN(n - 1);
+    } else {
+      delay = EMPTY_MS; // empty — beat, then the next word
+      step = () => {
+        setDel(false);
+        setW((x) => (x + 1) % ROTATING.length);
+      };
+    }
+
+    // ⚠ setTimeout re-scheduled per tick, not one setInterval: every phase
+    // runs at a different speed, and an interval would need a counter to fake
+    // that. It is also why StrictMode's double-mount is harmless — the effect
+    // cleans up its own single pending timer.
+    const id = window.setTimeout(step, delay);
+    return () => window.clearTimeout(id);
+  }, [w, n, del]);
+
+  const shown = ROTATING[w].slice(0, n);
+  // Solid while the letters move, blinking only when it is waiting — which is
+  // what a real cursor does, and what makes the pause read as deliberate
+  // rather than as a stall.
+  const idle = !del && n === ROTATING[w].length;
+
+  return (
+    <>
+      <span className="lp-rotor-line">
+        {/* Sizes the line to the tallest word so a wrap on a narrow screen
+            cannot move everything below it. See .lp-rotor-line. */}
+        <span className="lp-rotor-sizer" aria-hidden="true">
+          {ROTATING.map((word) => (
+            <span key={word}>{word}</span>
+          ))}
+        </span>
+        <span className="lp-rotor" aria-hidden="true">
+          {/* No `key` and no entrance animation — the typing IS the entrance,
+              and a per-render fade would re-fire on every character. */}
+          <span className="lp-rotor-word">{shown}</span>
+          <span className={idle ? "lp-rotor-caret is-idle" : "lp-rotor-caret"} />
+        </span>
+      </span>
+      {/* A word swapping every 2.4s is churn to a screen reader. The
+          animated span is hidden from it and the whole list is read once,
+          as the sentence it actually is. */}
+      <span className="lp-sr">
+        {ROTATING.slice(0, -1).join(", ")}, and {ROTATING[ROTATING.length - 1]}.
+      </span>
+    </>
+  );
+}
 
 // ── scroll reveal ────────────────────────────────────────────────────
 // threshold 0.25 + triggerOnce: the reveal fires once you have committed to
@@ -323,17 +499,15 @@ const STEPS = [
 const TRUST = [
   { icon: LOCK, text: "Credentials are encrypted at rest — keys are entered once and never shown again." },
   { icon: CHECK, text: "Every write to Buildium or Gmail passes a confirmation gate you can edit before approving." },
-  { icon: SHIELD, text: "Company-scoped isolation across data, memory, and files." },
+  { icon: SHIELD, text: "One company's data never reaches another's — not in files, not in what it remembers." },
   { icon: BELL, text: "Nothing auto-sends. Drafts wait for a person." },
-  { icon: CHECK, text: "Texting is consent-first — recipients opt in themselves, and STOP works instantly." },
+  { icon: CHECK, text: "Nobody gets a text who has not opted in, and STOP works the moment it arrives." },
   { icon: LOCK, text: "Sensitive identifiers are redacted before anything enters AI memory." },
 ];
 
 export default function Landing() {
   const [hasProgress, setHasProgress] = useState(false);
   const [stuck, setStuck] = useState(false);
-  const [os, setOs] = useState<OS | null>(null);
-  const [builds, setBuilds] = useState<Partial<Record<OS, DesktopBuild>>>({});
   const panelRef = useRef<HTMLDivElement>(null);
   const [panelIn, setPanelIn] = useState(false);
 
@@ -344,8 +518,6 @@ export default function Landing() {
     } catch {
       /* fresh visitor */
     }
-    setOs(detectOS());
-    void fetchDesktopBuilds().then(setBuilds);
   }, []);
 
   // Nav hairline appears only once the page has moved.
@@ -374,9 +546,6 @@ export default function Landing() {
   }, []);
 
   const start = hasProgress ? "Resume setup" : "Start setup";
-  const mine = os ? builds[os] : undefined;
-  const anyBuild = Object.values(builds)[0];
-  const others = (Object.keys(builds) as OS[]).filter((k) => k !== os);
 
   return (
     <div className="lp">
@@ -385,11 +554,9 @@ export default function Landing() {
       <nav className="lp-nav" data-stuck={stuck}>
         <div className="lp-nav-inner">
           <a className="lp-wordmark" href="/">
-            <Mark size={20} />
             Occupella
           </a>
           <div className="lp-nav-right">
-            <a className="btn btn-ghost lp-nav-desktop-link" href="#get">Desktop app</a>
             <a className="btn btn-ghost" href={APP_URL}>Sign in</a>
             <a className="btn btn-primary" href="/start" style={{ padding: "8px 16px", fontSize: 13.5 }}>
               {start}
@@ -404,11 +571,14 @@ export default function Landing() {
             For teams running Buildium
           </div>
           <h1 className="lp-h1 rise" style={{ "--d": "200ms", marginTop: 18 } as React.CSSProperties}>
-            Buildium keeps the records. Occupella does the work.
+            We help Buildium users with
+            <br />
+            <RotatingWord />
           </h1>
           <p className="lp-lede rise" style={{ "--d": "400ms", marginTop: 20 } as React.CSSProperties}>
-            It reads every Buildium event, pulls the history around it, and drafts what comes
-            next — the reply, the work order, the owner update. Then it waits for you.
+            Buildium keeps the records. Occupella does the work. It reads every Buildium
+            event, pulls the history around it, and drafts what comes next — the reply, the
+            work order, the owner update. Then it waits for you.
           </p>
           <div className="lp-hero-ctas rise" style={{ "--d": "600ms", marginTop: 30 } as React.CSSProperties}>
             <a className="btn btn-primary" href="/start" style={{ padding: "12px 24px", fontSize: 15 }}>
@@ -454,7 +624,7 @@ export default function Landing() {
           <Reveal>
             <div className="lp-section-head">
               <div className="lp-eyebrow">How it works</div>
-              <h2 className="lp-h2">From webhook to done, without the busywork.</h2>
+              <h2 className="lp-h2">The part between the event and the reply.</h2>
             </div>
           </Reveal>
           <Reveal delay={60}>
@@ -507,7 +677,7 @@ export default function Landing() {
               <Reveal>
                 <div className="lp-section-head">
                   <div className="lp-eyebrow">Owner reporting</div>
-                  <h2 className="lp-h2">Ask in English. Get the numbers.</h2>
+                  <h2 className="lp-h2">Ask it what you'd ask your bookkeeper.</h2>
                   <p className="lp-body">
                     Collections, NOI, work-order age, delinquency — pulled from your ledger and
                     rendered, not pasted into a paragraph. Every figure traces back to Buildium.
@@ -533,9 +703,10 @@ export default function Landing() {
           <Reveal>
             <div className="lp-section-head">
               <div className="lp-eyebrow">Trust</div>
-              <h2 className="lp-h2">Careful by construction.</h2>
+              <h2 className="lp-h2">It asks before it acts.</h2>
               <p className="lp-body">
-                Occupella acts on your systems, so the defaults are conservative.
+                Occupella writes to Buildium, sends email, and texts residents. So the
+                default everywhere is that it stops and shows you first.
               </p>
             </div>
           </Reveal>
@@ -552,103 +723,6 @@ export default function Landing() {
         </div>
       </section>
 
-      <section className="lp-section" id="get">
-        <div className="lp-wrap">
-          <Reveal>
-            <div className="lp-section-head">
-              <div className="lp-eyebrow">Get Occupella</div>
-              <h2 className="lp-h2">In your browser, or on your desktop.</h2>
-              <p className="lp-body">
-                Same account either way. Start in the browser in ten minutes; add the desktop
-                app when you want Occupella docked beside the tabs you already work in.
-              </p>
-            </div>
-          </Reveal>
-          <Reveal delay={60}>
-            <div className="lp-get">
-              <div className="lp-get-card">
-                <div className="lp-get-k">Web app</div>
-                <div className="lp-get-t">Start in the browser</div>
-                <div className="lp-get-b">
-                  Nothing to install. Connect Buildium, invite your team, and Occupella is
-                  working on your account the same afternoon.
-                </div>
-                <div className="lp-get-cta">
-                  <a className="btn btn-primary" href="/start" style={{ padding: "11px 22px" }}>
-                    {start} →
-                  </a>
-                  <span className="lp-get-meta">Free during early access</span>
-                </div>
-              </div>
-
-              <div className="lp-get-card">
-                <div className="lp-get-k">Desktop app</div>
-                <div className="lp-get-t">
-                  {mine ? `Download for ${mine.os}` : "The Occupella browser"}
-                </div>
-                <div className="lp-get-b">
-                  A browser with Occupella docked beside it — Buildium in one pane, the
-                  assistant in the other, on the same page you are already looking at.
-                </div>
-                <div className="lp-get-cta">
-                  {mine ? (
-                    <>
-                      <a
-                        className="btn btn-secondary"
-                        href={mine.url}
-                        download
-                        style={{ padding: "11px 22px" }}
-                      >
-                        Download for {mine.os}
-                      </a>
-                      <span className="lp-get-meta">
-                        {mine.version && `v${mine.version}`}
-                        {mine.size ? ` · ${formatSize(mine.size)}` : ""}
-                      </span>
-                    </>
-                  ) : anyBuild ? (
-                    <>
-                      <a
-                        className="btn btn-secondary"
-                        href={anyBuild.url}
-                        download
-                        style={{ padding: "11px 22px" }}
-                      >
-                        Download for {anyBuild.os}
-                      </a>
-                      <span className="lp-get-meta">
-                        {anyBuild.version && `v${anyBuild.version}`}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="btn btn-secondary" aria-disabled="true" style={{ padding: "11px 22px", opacity: 0.55, cursor: "default" }}>
-                        Desktop app — coming soon
-                      </span>
-                      <span className="lp-get-meta">Start in the browser today</span>
-                    </>
-                  )}
-                </div>
-                {others.length > 0 && (
-                  <div className="lp-alt">
-                    Also for{" "}
-                    {others.map((o, i) => (
-                      <span key={o}>
-                        {i > 0 && " and "}
-                        <a href={builds[o]!.url} download>
-                          {o}
-                        </a>
-                      </span>
-                    ))}
-                    .
-                  </div>
-                )}
-              </div>
-            </div>
-          </Reveal>
-        </div>
-      </section>
-
       <section className="lp-close">
         <div className="lp-close-inner">
           <Reveal>
@@ -657,7 +731,7 @@ export default function Landing() {
           <Reveal delay={60}>
             <p>
               Connect Buildium, watch it triage your first real work order, and decide from
-              there. Free during early access.
+              there.
             </p>
           </Reveal>
           <Reveal delay={120}>
