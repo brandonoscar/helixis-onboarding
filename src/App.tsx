@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "./lib/supabase";
 import { apiFetch, apiJson, APP_URL, BUILDIUM_WEBHOOK_URL } from "./lib/api";
 import { loadWizard, saveWizard } from "./lib/persist";
-import Mark from "./Mark";
 
 // ─────────────────────────────────────────────────────────
 // SETUP WIZARD — 4 steps + launch (2026-07 research rebuild):
@@ -154,6 +153,11 @@ const css = `
     max-width: 540px;
     animation: fadeUp 0.35s var(--ease-out) both;
   }
+
+  /* Absolutely positioned so the centred .panel keeps its exact geometry —
+     rendering it as a flex sibling would sit it BESIDE the panel, and
+     wrapping the panel in a column would move every step's layout. */
+  .step-back { position: absolute; top: 20px; left: 20px; }
 
   @keyframes fadeUp {
     from { opacity: 0; transform: translateY(14px); }
@@ -365,7 +369,6 @@ const css = `
 
   /* ── FINISH / LAUNCH ── */
   .finish-hero { text-align: center; padding: 20px 0 28px; }
-  .finish-viz { display: flex; justify-content: center; margin-bottom: 8px; }
 
   .scan-cards { display: flex; flex-direction: column; gap: 10px; margin: 20px 0; }
 
@@ -645,14 +648,14 @@ function StepIdentify({
             ? "Create your password"
             : sent
               ? "Check your email"
-              : "Create your secure setup link"}
+              : "Create your account"}
         </h1>
         <p className="panel-desc">
           {verifiedToken
-            ? "You'll use this password to sign in at occupella.com. One more field, then straight into setup."
+            ? "You'll use this to sign in at occupella.com."
             : sent
               ? `We sent a 6-digit code to ${email}. Enter it below to continue.`
-              : "Tell us where to point Occupella. Your progress is saved before we ask for any Buildium credentials."}
+              : "Your email and your company name. No Buildium credentials yet."}
         </p>
       </div>
 
@@ -892,9 +895,9 @@ function StepBuildium({
     <div className="panel" key="buildium">
       <div className="panel-header">
         <div className="panel-tag">Step 2 of 4</div>
-        <h1 className="panel-title">Connect Buildium so Occupella can scan your operations</h1>
+        <h1 className="panel-title">Connect Buildium</h1>
         <p className="panel-desc">
-          We test read access first and show you exactly what Occupella can see before anything launches.
+          We test the keys before saving them, and show you what Occupella can read.
         </p>
       </div>
 
@@ -986,7 +989,7 @@ function StepBuildium({
       ) : null}
 
       <button className="sample-toggle" onClick={() => setShowSample((s) => !s)}>
-        {showSample ? "Hide sample preview" : "Not ready with API keys? Preview the first scan with sample data →"}
+        {showSample ? "Hide sample preview" : "Preview the first scan with sample Buildium data →"}
       </button>
       {showSample && <SamplePreview />}
 
@@ -1041,8 +1044,8 @@ function StepLive({ onNext }: { onNext: (saved: boolean) => void }) {
         <div className="panel-tag">Step 3 of 4 · Recommended</div>
         <h1 className="panel-title">Turn on live Buildium updates</h1>
         <p className="panel-desc">
-          Let Occupella react the moment a work order, resident message, lease event, or payment
-          changes in Buildium — instead of waiting for the next sync.
+          Buildium posts work orders, resident messages, lease events and payments here as they
+          happen. Without this, Occupella only sees them at the next sync.
         </p>
       </div>
 
@@ -1156,8 +1159,8 @@ function StepChannels({ onNext }: { onNext: (connected: boolean) => void }) {
         <div className="panel-tag">Step 4 of 4 · Optional</div>
         <h1 className="panel-title">Add Gmail &amp; Calendar context</h1>
         <p className="panel-desc">
-          Occupella drafts cleaner owner updates and catches resident follow-ups when it can see the
-          communication trail around a Buildium issue.
+          Lets Occupella tie an email thread to the work order or lease it is about, so a follow-up
+          you already answered by email does not come back as a task.
         </p>
       </div>
 
@@ -1335,7 +1338,7 @@ function StepFinish({
             sub:
               scan.pending_promises > 0
                 ? `${scan.pending_promises} tenant${scan.pending_promises === 1 ? " has" : "s have"} promised payment — Occupella is watching the dates.`
-                : "Rent reminders will chase these with judgment.",
+                : "Rent reminders Occupella will send once you approve them.",
           },
         ]
       : null;
@@ -1365,9 +1368,6 @@ function StepFinish({
   return (
     <div className="panel" key="finish">
       <div className="finish-hero">
-        <div className="finish-viz">
-          <Mark size={64} />
-        </div>
         <h1 className="panel-title" style={{ textAlign: "center" }}>
           {findings
             ? `Here's what Occupella found in ${workspace.name || "your portfolio"}`
@@ -1383,7 +1383,7 @@ function StepFinish({
               Every number below is read straight from your Buildium data.
             </>
           ) : buildiumConnected ? (
-            "Occupella is reading your portfolio now. Open the app to watch your Inbox fill in and ask your first question."
+            "Occupella is reading your portfolio now. Open the app — the Inbox fills in as the scan runs."
           ) : (
             "Open the app and connect Buildium whenever you're ready — your first scan runs the moment it's linked."
           )}
@@ -1457,7 +1457,6 @@ function Sidebar({ current, completed }: { current: Step; completed: Set<Step> }
   return (
     <div className="sidebar">
       <a className="logo" href="/">
-        <Mark size={22} />
         <div className="logo-text">Occupella</div>
       </a>
 
@@ -1511,6 +1510,30 @@ export default function App() {
   const [googleConnected, setGoogleConnected] = useState(persisted.googleConnected || false);
   const [creatingWorkspace, setCreatingWorkspace] = useState(false);
   const didResume = useRef(false);
+
+  // Where "back" goes, as a stack rather than a table of predecessors: the
+  // flow is not linear. handleBuildiumSkip jumps buildium → channels, so a
+  // table would send someone back to `live`, a step they were never shown.
+  //
+  // ⚠ Nothing pushes on the identify → buildium transition. The account and
+  // the company exist by then, so "back" would offer to re-do a step that
+  // cannot be re-done — which is exactly the state the user reads a back
+  // button as undoing. Setup starts here; the button appears from the step
+  // after it. Deliberately NOT persisted: a refresh restores `step`, and a
+  // back button that survives into a fresh page load would claim we can
+  // return somewhere this render never went.
+  const [history, setHistory] = useState<Step[]>([]);
+
+  const go = (next: Step) => {
+    setHistory((prev) => [...prev, step]);
+    setStep(next);
+  };
+
+  const back = () => {
+    if (!history.length) return;
+    setStep(history[history.length - 1]);
+    setHistory((prev) => prev.slice(0, -1));
+  };
 
   const complete = (s: Step) => setCompleted((prev) => new Set([...prev, s]));
 
@@ -1615,7 +1638,7 @@ export default function App() {
     setBuildiumCount(count);
     setBuildiumConnected(true);
     complete("buildium");
-    setStep("live");
+    go("live");
   };
 
   // Skipping Buildium also bypasses live updates (webhooks are meaningless
@@ -1623,13 +1646,13 @@ export default function App() {
   const handleBuildiumSkip = () => {
     complete("buildium");
     complete("live");
-    setStep("channels");
+    go("channels");
   };
 
   const handleLive = (saved: boolean) => {
     setLiveUpdates(saved);
     complete("live");
-    setStep("channels");
+    go("channels");
   };
 
   const handleChannels = (connected: boolean) => {
@@ -1645,6 +1668,14 @@ export default function App() {
       <div className="app">
         <Sidebar current={step} completed={completed} />
         <div className="main">
+          {/* Hidden on `finish` — the scan has been launched, so there is
+              nothing behind it to go back to. Hidden while the workspace is
+              being created for the same reason: that panel is mid-write. */}
+          {history.length > 0 && step !== "finish" && !creatingWorkspace && (
+            <button type="button" className="btn btn-ghost step-back" onClick={back}>
+              ← Back
+            </button>
+          )}
           {step === "identify" && !creatingWorkspace && (
             <StepIdentify
               initial={{ email: userEmail, name: workspace.name, doors }}
@@ -1656,7 +1687,7 @@ export default function App() {
             <div className="panel">
               <div className="panel-header">
                 <h1 className="panel-title"><span className="spinner" /> Setting up your workspace…</h1>
-                <p className="panel-desc">Creating {workspace.name || "your workspace"} and configuring access controls.</p>
+                <p className="panel-desc">Creating {workspace.name || "your workspace"}.</p>
               </div>
             </div>
           )}
