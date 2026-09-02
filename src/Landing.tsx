@@ -487,7 +487,7 @@ const STEPS = [
   {
     n: "02",
     t: "It reads every event.",
-    b: "New work order, late payment, lease expiring, tenant email. Occupella pulls the history around it and tells you what it noticed.",
+    b: "New work order, late payment, lease expiring. Occupella pulls the history around it and tells you what it noticed.",
   },
   {
     n: "03",
