@@ -162,12 +162,20 @@ const css = `
     position: sticky; top: 0; z-index: 20;
     height: 56px;
     display: flex; align-items: center; justify-content: space-between;
-    background: rgba(255, 255, 255, 0.86);
+    /* --chrome, the same rail tint the app's sidebar uses. A visitor sees
+       this page and then the product within ten minutes, and the top bar is
+       the one surface both have. Held at 0.86 so the page still shows
+       through as it scrolls under. The solid declaration above it is the
+       fallback: without one, a browser that does not know color-mix drops
+       the property entirely and the nav goes transparent over the copy
+       scrolling beneath it. */
+    background: var(--chrome);
+    background: color-mix(in srgb, var(--chrome) 86%, transparent);
     backdrop-filter: saturate(180%) blur(12px);
     border-bottom: 1px solid transparent;
     transition: border-color var(--dur-state) var(--ease-std);
   }
-  .lp-nav[data-stuck="true"] { border-bottom-color: var(--line); }
+  .lp-nav[data-stuck="true"] { border-bottom-color: var(--chrome-line); }
   .lp-nav-inner {
     max-width: 1120px; margin: 0 auto; padding: 0 32px; width: 100%;
     display: flex; align-items: center; justify-content: space-between;
