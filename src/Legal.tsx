@@ -243,11 +243,37 @@ export function Terms() {
         are responsible for the accounts you connect and for having the right to connect them.
       </p>
 
-      <h2>Early access</h2>
+      <h2>Plans and billing</h2>
       <p>
-        Occupella is in early access. The service is provided as-is, features may change, and
-        access is currently free. We will announce pricing before any billing begins — you
-        will never be charged without agreeing to a price first.
+        Every workspace starts with a <strong>14-day free trial</strong>. No card is required
+        to start it, and it includes 150 questions. When it ends, you pick a plan or your
+        workspace stops answering questions — nothing is deleted and nothing is charged
+        automatically at the end of a trial.
+      </p>
+      <p>
+        <strong>Starter</strong> is $199 per seat per month and includes 400 questions per
+        seat each month. <strong>Pro</strong> is $500 per month for the whole account, with a
+        pooled fair-use ceiling of 1,200 questions per month. A "question" is one request you
+        send Occupella that produces an answer; we don't count requests that fail or return
+        nothing.
+      </p>
+      <p>
+        Paid plans are billed monthly in advance and <strong>renew automatically each month
+        until you cancel</strong>. You can cancel at any time in Settings → Billing, which
+        opens our payment provider's portal — cancelling stops the next charge and your
+        workspace keeps working until the end of the period you already paid for. Prices
+        exclude any sales tax we're required to collect.
+      </p>
+      <p>
+        If a payment fails we keep your workspace running while the card is retried, rather
+        than cutting you off over an expired card. If it ultimately can't be collected, the
+        subscription ends and the workspace stops answering questions — your data stays put
+        and you can start again.
+      </p>
+      <p>
+        We don't automatically refund partial months. If something goes wrong on our side,
+        email us and a person will sort it out. If we change a price, we'll tell workspace
+        owners by email before it takes effect, and you can cancel before it does.
       </p>
 
       <h2>Your responsibilities</h2>
@@ -300,7 +326,7 @@ export function Terms() {
         team — it is not legal, financial, or professional advice, and final decisions are
         yours. To the maximum extent permitted by law, Occupella is not liable for indirect or
         consequential damages, and our total liability is limited to the amounts you paid us
-        in the twelve months before a claim (during free early access, that is $0).
+        in the twelve months before a claim.
       </p>
 
       <h2>Termination</h2>

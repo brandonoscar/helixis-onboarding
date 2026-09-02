@@ -281,6 +281,17 @@ const css = `
   .lp-shot img { display: block; width: 100%; height: auto; }
 
   /* ── trust ── */
+  /* Pricing. Same 1px-gap grid as .lp-trust so the two sections feel like one
+     system rather than two designs. Three cards; the middle one is marked. */
+  .lp-price { display: grid; gap: 1px; margin-top: 32px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; }
+  @media (min-width: 860px) { .lp-price { grid-template-columns: repeat(3, 1fr); } }
+  .lp-price-card { background: var(--canvas); padding: 26px 24px; display: flex; flex-direction: column; gap: 10px; }
+  .lp-price-card[data-featured="true"] { background: var(--canvas-raised, var(--canvas)); }
+  .lp-price-name { font-size: 12px; letter-spacing: .09em; text-transform: uppercase; font-weight: 600; color: var(--ink-muted); }
+  .lp-price-fig { font-size: 32px; font-weight: 700; letter-spacing: -.025em; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .lp-price-fig span { font-size: 14px; font-weight: 500; color: var(--ink-muted); letter-spacing: 0; }
+  .lp-price-b { font-size: 14px; line-height: 1.55; color: var(--ink-secondary, var(--ink-muted)); margin: 0; }
+  .lp-price-note { font-size: 13px; color: var(--ink-muted); margin: 18px 0 0; text-align: center; }
   .lp-trust { display: grid; gap: 1px; margin-top: 32px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; }
   @media (min-width: 760px) { .lp-trust { grid-template-columns: 1fr 1fr; } }
   .lp-trust-item { background: var(--canvas); padding: 18px 20px; display: flex; gap: 12px; align-items: flex-start; font-size: 14px; line-height: 1.5; color: var(--ink-secondary, var(--ink-muted)); }
@@ -557,6 +568,7 @@ export default function Landing() {
             Occupella
           </a>
           <div className="lp-nav-right">
+            <a className="btn btn-ghost" href="#pricing">Pricing</a>
             <a className="btn btn-ghost" href={APP_URL}>Sign in</a>
             <a className="btn btn-primary" href="/start" style={{ padding: "8px 16px", fontSize: 13.5 }}>
               {start}
@@ -719,6 +731,54 @@ export default function Landing() {
                 </div>
               ))}
             </div>
+          </Reveal>
+        </div>
+      </section>
+
+      <section className="lp-section" id="pricing">
+        <div className="lp-wrap">
+          <Reveal>
+            <div className="lp-section-head">
+              <div className="lp-eyebrow">Pricing</div>
+              <h2 className="lp-h2">Start free for two weeks.</h2>
+              <p className="lp-body">
+                No card to begin. Pick a plan when the trial ends — or don't, and nothing
+                is charged.
+              </p>
+            </div>
+          </Reveal>
+          <Reveal delay={60}>
+            <div className="lp-price">
+              <div className="lp-price-card">
+                <div className="lp-price-name">Trial</div>
+                <div className="lp-price-fig">Free<span> · 14 days</span></div>
+                <p className="lp-price-b">
+                  150 questions, every feature, no card. Long enough to connect Buildium and
+                  watch it handle real work.
+                </p>
+              </div>
+              <div className="lp-price-card" data-featured="true">
+                <div className="lp-price-name">Starter</div>
+                <div className="lp-price-fig">$199<span> / seat / month</span></div>
+                <p className="lp-price-b">
+                  400 questions per seat each month — about eighteen a working day, for one
+                  person who lives in it.
+                </p>
+              </div>
+              <div className="lp-price-card">
+                <div className="lp-price-name">Pro</div>
+                <div className="lp-price-fig">$500<span> / month</span></div>
+                <p className="lp-price-b">
+                  Your whole team on one bill, pooled across everyone, with a fair-use
+                  ceiling of 1,200 questions a month.
+                </p>
+              </div>
+            </div>
+          </Reveal>
+          <Reveal delay={120}>
+            <p className="lp-price-note">
+              Monthly, cancel any time. See the <a href="/terms">terms</a> for the details.
+            </p>
           </Reveal>
         </div>
       </section>
