@@ -44,6 +44,23 @@ const PRIVACY_URL = "/privacy";
 
 const DOORS_OPTIONS = ["1–50", "50–200", "200–500", "500–2,000", "2,000+"];
 
+/**
+ * Screen recording of Buildium's own Create-API-Key flow, shown inside the
+ * "Walk me through it" panel on the Buildium step.
+ *
+ * Empty = the panel renders the written steps only, which is the correct
+ * behaviour until a file exists. Drop the clip at `public/<name>` and set
+ * this to "/<name>" — no other change is needed, and a missing file can
+ * never break the build the way a bare `import` of one would.
+ *
+ * ⚠ Record OUR OWN capture rather than lifting Buildium's marketing clip.
+ * Their video is their copyrighted material; embedding it in a commercial
+ * product that integrates with them is a permission question, not a
+ * technical one. A screen capture of the console taken from our own
+ * account carries no such problem.
+ */
+const BUILDIUM_KEY_CLIP = "";
+
 // ─────────────────────────────────────────────────────────
 // WIZARD-SPECIFIC STYLES (tokens + primitives live in theme.ts)
 // ─────────────────────────────────────────────────────────
@@ -153,6 +170,41 @@ const css = `
     max-width: 540px;
     animation: fadeUp 0.35s var(--ease-out) both;
   }
+
+  /* ── BUILDIUM KEY WALKTHROUGH ── */
+  .keys-help { margin-top: 14px; }
+
+  .keys-help summary {
+    cursor: pointer;
+    font-size: 12.5px;
+    color: var(--iris);
+    list-style: none;
+    width: fit-content;
+  }
+  .keys-help summary::-webkit-details-marker { display: none; }
+  .keys-help summary::after { content: " →"; }
+  .keys-help[open] summary::after { content: ""; }
+  .keys-help summary:hover { text-decoration: underline; }
+
+  /* Deliberately capped well under the panel width: this is a reference
+     while someone works in a second window, not something to watch. */
+  .keys-clip {
+    display: block;
+    width: 100%;
+    max-width: 380px;
+    margin: 12px 0 4px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
+  }
+
+  .keys-steps {
+    margin: 10px 0 0 16px;
+    padding: 0;
+    font-size: 12.5px;
+    line-height: 1.75;
+    color: var(--ink-muted);
+  }
+  .keys-steps strong { color: var(--ink); font-weight: 500; }
 
   /* Absolutely positioned so the centred .panel keeps its exact geometry —
      rendering it as a flex sibling would sit it BESIDE the panel, and
@@ -822,7 +874,7 @@ function StepBuildium({
     `We're connecting ${workspaceName || "our company"} to Occupella (an AI operations layer that runs on top of Buildium). ` +
     `It needs a Buildium API key to read our portfolio.\n\n` +
     `Steps (about 2 minutes):\n` +
-    `1. In Buildium, open Settings → API Settings\n` +
+    `1. In Buildium, open Settings → Developer Tools → API Keys\n` +
     `2. Create an API key and copy the Client ID and Client Secret\n` +
     `3. Send them to me securely, or finish the setup here: ${window.location.origin}/start\n\n` +
     `Security: credentials are encrypted at rest, never displayed again after setup, ` +
@@ -896,8 +948,14 @@ function StepBuildium({
       <div className="panel-header">
         <div className="panel-tag">Step 2 of 4</div>
         <h1 className="panel-title">Connect Buildium</h1>
+        {/* ⚠ Do not restore a claim about what happens BEFORE the scan. The
+            previous copy promised "we show you exactly what Occupella can see
+            before anything launches" — the scan starts on its own once the
+            keys save, so that was a false statement about our own product.
+            Say what the keys are for and what the limit on them is. */}
         <p className="panel-desc">
-          We test the keys before saving them, and show you what Occupella can read.
+          Occupella reads your properties, units, leases, tenants, work orders and bills.
+          It never writes anything back to Buildium without your approval.
         </p>
       </div>
 
@@ -950,8 +1008,33 @@ function StepBuildium({
           <div className="field">
             <label>Buildium Client Secret</label>
             <input className="secret-input" type="password" placeholder="••••••••••••••••••••" value={apiSecret} onChange={(e) => setApiSecret(e.target.value)} autoComplete="new-password" />
-            <span className="hint">Find these in Buildium → Settings → API Settings → Create API key.</span>
+            {/* ⚠ The path is Developer Tools, not "API Settings" — corrected
+                2026-09-02 from a screenshot of the live Buildium console,
+                where the page is titled "Developer Tools" and API Keys is a
+                tab on it alongside API Sandbox and Webhooks. The old wording
+                sent people to a page that does not exist. */}
+            <span className="hint">Buildium → Settings → Developer Tools → API Keys → Create API Key.</span>
           </div>
+
+          <details className="keys-help">
+            <summary>Walk me through it</summary>
+            {BUILDIUM_KEY_CLIP && (
+              <video
+                className="keys-clip"
+                src={BUILDIUM_KEY_CLIP}
+                autoPlay
+                loop
+                muted
+                playsInline
+                aria-label="Creating an API key in Buildium"
+              />
+            )}
+            <ol className="keys-steps">
+              <li>In Buildium, open <strong>Settings → Developer Tools</strong> and pick the <strong>API Keys</strong> tab.</li>
+              <li>Click <strong>Create API Key</strong>, name it <strong>Occupella</strong>, and continue through the three steps.</li>
+              <li>Copy the <strong>Client ID</strong> and <strong>Client Secret</strong> at the end and paste them above.</li>
+            </ol>
+          </details>
 
           {integration.status === "testing" && (
             <div className="test-result" style={{ background: "var(--canvas-2)", border: "1px solid var(--line)", color: "var(--ink-muted)" }}>
