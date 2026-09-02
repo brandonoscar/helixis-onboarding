@@ -1,14 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import Mark from "./Mark";
 import { APP_URL } from "./lib/api";
 import { loadWizard } from "./lib/persist";
-import {
-  type DesktopBuild,
-  type OS,
-  detectOS,
-  fetchDesktopBuilds,
-  formatSize,
-} from "./lib/download";
 
 // ─────────────────────────────────────────────────────────────────────
 // LANDING — the front door.
@@ -186,13 +178,9 @@ const css = `
     color: var(--ink); text-decoration: none;
   }
   .lp-nav-right { display: flex; align-items: center; gap: 4px; }
-  /* Below ~560px the four nav items no longer fit and "Start setup" clips off
-     the right edge. Drop the "Desktop app" jump link first — the #get band it
-     points at is a full section of the page anyway — and keep sign-in and the
-     one CTA that matters. */
+  /* Below ~560px the nav tightens to sign-in and the one CTA that matters. */
   @media (max-width: 560px) {
     .lp-nav-inner { padding: 0 20px; }
-    .lp-nav-desktop-link { display: none; }
   }
 
   /* ── hero ── */
@@ -289,24 +277,6 @@ const css = `
   @media (min-width: 760px) { .lp-trust { grid-template-columns: 1fr 1fr; } }
   .lp-trust-item { background: var(--canvas); padding: 18px 20px; display: flex; gap: 12px; align-items: flex-start; font-size: 14px; line-height: 1.5; color: var(--ink-secondary, var(--ink-muted)); }
   .lp-trust-item svg { flex: none; margin-top: 2px; color: var(--iris); }
-
-  /* ── get-it band (web vs desktop) ── */
-  .lp-get { display: grid; gap: 16px; margin-top: 36px; }
-  @media (min-width: 820px) { .lp-get { grid-template-columns: 1fr 1fr; } }
-  .lp-get-card {
-    background: var(--canvas); border: 1px solid var(--card-edge); border-radius: var(--r-lg);
-    padding: 26px 24px 24px; display: flex; flex-direction: column; gap: 10px;
-    transition: border-color var(--dur-state) var(--ease-std), background var(--dur-state) var(--ease-std);
-  }
-  .lp-get-card:hover { border-color: var(--line-strong); background: var(--canvas-1); }
-  .lp-get-k { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-faint); }
-  .lp-get-t { font-size: 19px; font-weight: 600; letter-spacing: -0.018em; color: var(--ink); }
-  .lp-get-b { font-size: 14px; line-height: 1.55; color: var(--ink-muted); flex: 1; }
-  .lp-get-cta { margin-top: 8px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-  .lp-get-meta { font-size: 12.5px; color: var(--ink-subtle); }
-  .lp-alt { font-size: 12.5px; color: var(--ink-subtle); }
-  .lp-alt a { color: var(--ink-muted); text-decoration: none; border-bottom: 1px solid var(--line-strong); }
-  .lp-alt a:hover { color: var(--ink); }
 
   /* ── closing band — the one polarity flip on the page ── */
   .lp-close { margin-top: clamp(72px, 10vw, 120px); background: var(--deep); }
@@ -521,17 +491,15 @@ const STEPS = [
 const TRUST = [
   { icon: LOCK, text: "Credentials are encrypted at rest — keys are entered once and never shown again." },
   { icon: CHECK, text: "Every write to Buildium or Gmail passes a confirmation gate you can edit before approving." },
-  { icon: SHIELD, text: "Company-scoped isolation across data, memory, and files." },
+  { icon: SHIELD, text: "One company's data never reaches another's — not in files, not in what it remembers." },
   { icon: BELL, text: "Nothing auto-sends. Drafts wait for a person." },
-  { icon: CHECK, text: "Texting is consent-first — recipients opt in themselves, and STOP works instantly." },
+  { icon: CHECK, text: "Nobody gets a text who has not opted in, and STOP works the moment it arrives." },
   { icon: LOCK, text: "Sensitive identifiers are redacted before anything enters AI memory." },
 ];
 
 export default function Landing() {
   const [hasProgress, setHasProgress] = useState(false);
   const [stuck, setStuck] = useState(false);
-  const [os, setOs] = useState<OS | null>(null);
-  const [builds, setBuilds] = useState<Partial<Record<OS, DesktopBuild>>>({});
   const panelRef = useRef<HTMLDivElement>(null);
   const [panelIn, setPanelIn] = useState(false);
 
@@ -542,8 +510,6 @@ export default function Landing() {
     } catch {
       /* fresh visitor */
     }
-    setOs(detectOS());
-    void fetchDesktopBuilds().then(setBuilds);
   }, []);
 
   // Nav hairline appears only once the page has moved.
@@ -572,9 +538,6 @@ export default function Landing() {
   }, []);
 
   const start = hasProgress ? "Resume setup" : "Start setup";
-  const mine = os ? builds[os] : undefined;
-  const anyBuild = Object.values(builds)[0];
-  const others = (Object.keys(builds) as OS[]).filter((k) => k !== os);
 
   return (
     <div className="lp">
@@ -583,11 +546,9 @@ export default function Landing() {
       <nav className="lp-nav" data-stuck={stuck}>
         <div className="lp-nav-inner">
           <a className="lp-wordmark" href="/">
-            <Mark size={20} />
             Occupella
           </a>
           <div className="lp-nav-right">
-            <a className="btn btn-ghost lp-nav-desktop-link" href="#get">Desktop app</a>
             <a className="btn btn-ghost" href={APP_URL}>Sign in</a>
             <a className="btn btn-primary" href="/start" style={{ padding: "8px 16px", fontSize: 13.5 }}>
               {start}
@@ -655,7 +616,7 @@ export default function Landing() {
           <Reveal>
             <div className="lp-section-head">
               <div className="lp-eyebrow">How it works</div>
-              <h2 className="lp-h2">From webhook to done, without the busywork.</h2>
+              <h2 className="lp-h2">The part between the event and the reply.</h2>
             </div>
           </Reveal>
           <Reveal delay={60}>
@@ -708,7 +669,7 @@ export default function Landing() {
               <Reveal>
                 <div className="lp-section-head">
                   <div className="lp-eyebrow">Owner reporting</div>
-                  <h2 className="lp-h2">Ask in English. Get the numbers.</h2>
+                  <h2 className="lp-h2">Ask it what you'd ask your bookkeeper.</h2>
                   <p className="lp-body">
                     Collections, NOI, work-order age, delinquency — pulled from your ledger and
                     rendered, not pasted into a paragraph. Every figure traces back to Buildium.
@@ -734,9 +695,10 @@ export default function Landing() {
           <Reveal>
             <div className="lp-section-head">
               <div className="lp-eyebrow">Trust</div>
-              <h2 className="lp-h2">Careful by construction.</h2>
+              <h2 className="lp-h2">It asks before it acts.</h2>
               <p className="lp-body">
-                Occupella acts on your systems, so the defaults are conservative.
+                Occupella writes to Buildium, sends email, and texts residents. So the
+                default everywhere is that it stops and shows you first.
               </p>
             </div>
           </Reveal>
@@ -748,103 +710,6 @@ export default function Landing() {
                   <span>{t.text}</span>
                 </div>
               ))}
-            </div>
-          </Reveal>
-        </div>
-      </section>
-
-      <section className="lp-section" id="get">
-        <div className="lp-wrap">
-          <Reveal>
-            <div className="lp-section-head">
-              <div className="lp-eyebrow">Get Occupella</div>
-              <h2 className="lp-h2">In your browser, or on your desktop.</h2>
-              <p className="lp-body">
-                Same account either way. Start in the browser in ten minutes; add the desktop
-                app when you want Occupella docked beside the tabs you already work in.
-              </p>
-            </div>
-          </Reveal>
-          <Reveal delay={60}>
-            <div className="lp-get">
-              <div className="lp-get-card">
-                <div className="lp-get-k">Web app</div>
-                <div className="lp-get-t">Start in the browser</div>
-                <div className="lp-get-b">
-                  Nothing to install. Connect Buildium, invite your team, and Occupella is
-                  working on your account the same afternoon.
-                </div>
-                <div className="lp-get-cta">
-                  <a className="btn btn-primary" href="/start" style={{ padding: "11px 22px" }}>
-                    {start} →
-                  </a>
-                  <span className="lp-get-meta">Free during early access</span>
-                </div>
-              </div>
-
-              <div className="lp-get-card">
-                <div className="lp-get-k">Desktop app</div>
-                <div className="lp-get-t">
-                  {mine ? `Download for ${mine.os}` : "The Occupella browser"}
-                </div>
-                <div className="lp-get-b">
-                  A browser with Occupella docked beside it — Buildium in one pane, the
-                  assistant in the other, on the same page you are already looking at.
-                </div>
-                <div className="lp-get-cta">
-                  {mine ? (
-                    <>
-                      <a
-                        className="btn btn-secondary"
-                        href={mine.url}
-                        download
-                        style={{ padding: "11px 22px" }}
-                      >
-                        Download for {mine.os}
-                      </a>
-                      <span className="lp-get-meta">
-                        {mine.version && `v${mine.version}`}
-                        {mine.size ? ` · ${formatSize(mine.size)}` : ""}
-                      </span>
-                    </>
-                  ) : anyBuild ? (
-                    <>
-                      <a
-                        className="btn btn-secondary"
-                        href={anyBuild.url}
-                        download
-                        style={{ padding: "11px 22px" }}
-                      >
-                        Download for {anyBuild.os}
-                      </a>
-                      <span className="lp-get-meta">
-                        {anyBuild.version && `v${anyBuild.version}`}
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="btn btn-secondary" aria-disabled="true" style={{ padding: "11px 22px", opacity: 0.55, cursor: "default" }}>
-                        Desktop app — coming soon
-                      </span>
-                      <span className="lp-get-meta">Start in the browser today</span>
-                    </>
-                  )}
-                </div>
-                {others.length > 0 && (
-                  <div className="lp-alt">
-                    Also for{" "}
-                    {others.map((o, i) => (
-                      <span key={o}>
-                        {i > 0 && " and "}
-                        <a href={builds[o]!.url} download>
-                          {o}
-                        </a>
-                      </span>
-                    ))}
-                    .
-                  </div>
-                )}
-              </div>
             </div>
           </Reveal>
         </div>
