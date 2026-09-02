@@ -790,7 +790,7 @@ function StepIdentify({
 
 
           <button className="btn btn-primary wide" onClick={sendCode} disabled={!ready || loading}>
-            {loading ? <><span className="spinner" /> Sending…</> : "Send secure code →"}
+            {loading ? <><span className="spinner" /> Sending…</> : "Send code →"}
           </button>
         </>
       ) : (
@@ -871,14 +871,15 @@ function StepBuildium({
 
   const handoffInstructions =
     `Hi —\n\n` +
-    `We're connecting ${workspaceName || "our company"} to Occupella (an AI operations layer that runs on top of Buildium). ` +
-    `It needs a Buildium API key to read our portfolio.\n\n` +
+    `We're setting up Occupella for ${workspaceName || "our company"}. It reads our Buildium data — ` +
+    `properties, units, leases, tenants, work orders and bills — and needs an API key to do it.\n\n` +
     `Steps (about 2 minutes):\n` +
     `1. In Buildium, open Settings → Developer Tools → API Keys\n` +
-    `2. Create an API key and copy the Client ID and Client Secret\n` +
+    `2. Click Create API Key, then copy the Client ID and Client Secret\n` +
     `3. Send them to me securely, or finish the setup here: ${window.location.origin}/start\n\n` +
-    `Security: credentials are encrypted at rest, never displayed again after setup, ` +
-    `and access can be revoked from Buildium at any time. Every write Occupella makes is approved by a person first.\n\n` +
+    `Security: the credentials are encrypted at rest, are not shown again after setup, and you can ` +
+    `revoke the key from Buildium at any time. Occupella never writes to Buildium without a person ` +
+    `approving the change first.\n\n` +
     `Requested by ${userEmail}`;
 
   const mailtoHref =
@@ -974,8 +975,8 @@ function StepBuildium({
         <div className="handoff">
           <div className="handoff-title">Send setup instructions to your Buildium admin</div>
           <div className="handoff-body">
-            A short email that says why Occupella needs access, exactly where the API settings live, what
-            gets stored, and a link back here. Your progress is saved — come back anytime with the keys.
+            A short email saying why Occupella needs access, where to create the key in Buildium, and
+            what gets stored — with a link back here. Your progress is saved.
           </div>
           <div className="btn-row">
             <a className="btn btn-secondary" href={mailtoHref} style={{ flex: 1 }}>
@@ -1240,10 +1241,18 @@ function StepChannels({ onNext }: { onNext: (connected: boolean) => void }) {
     <div className="panel" key="channels">
       <div className="panel-header">
         <div className="panel-tag">Step 4 of 4 · Optional</div>
-        <h1 className="panel-title">Add Gmail &amp; Calendar context</h1>
+        <h1 className="panel-title">Connect Gmail &amp; Calendar</h1>
+        {/* ⚠ Describes what you can ASK for, not what arrives on its own.
+            Automatic email-to-Inbox ingest exists but is gated (known
+            Buildium contact, 120+ words) and has produced ONE card across
+            every company in the product's lifetime — measured 2026-09-02,
+            26 poll rows against 1 Email.* event. Promising an Inbox that
+            fills itself would be the same false claim the Buildium step
+            just had removed. The specialists are live and answer every
+            time, so that is what this says. */}
         <p className="panel-desc">
-          Lets Occupella tie an email thread to the work order or lease it is about, so a follow-up
-          you already answered by email does not come back as a task.
+          Lets you ask Occupella what you told an owner last month, or when you're free to meet a
+          vendor, without leaving the thread you're working in.
         </p>
       </div>
 
@@ -1413,14 +1422,14 @@ function StepFinish({
           {
             num: String(scan.expiring_leases),
             label: `lease${scan.expiring_leases === 1 ? "" : "s"} ending in the next ${scan.expiring_window_days} days`,
-            sub: "Renewal windows Occupella will track for you.",
+            sub: "Occupella tracks these dates.",
           },
           {
             num: usd.format(scan.delinquent_total),
             label: `owed across ${scan.delinquent_leases} lease${scan.delinquent_leases === 1 ? "" : "s"}`,
             sub:
               scan.pending_promises > 0
-                ? `${scan.pending_promises} tenant${scan.pending_promises === 1 ? " has" : "s have"} promised payment — Occupella is watching the dates.`
+                ? `${scan.pending_promises} tenant${scan.pending_promises === 1 ? " has" : "s have"} promised payment — Occupella tracks those dates.`
                 : "Rent reminders Occupella will send once you approve them.",
           },
         ]
@@ -1444,8 +1453,8 @@ function StepFinish({
       ? { num: "on", label: "Live updates", sub: "New Buildium events land in your Inbox in real time." }
       : { num: "off", label: "Live updates", sub: "Skipped — turn on later from Settings for real-time events." },
     googleConnected
-      ? { num: "on", label: "Gmail & Calendar context", sub: "Important tenant emails will surface in your Inbox." }
-      : { num: "off", label: "Gmail & Calendar context", sub: "Skipped — connect later from Settings → Connectors." },
+      ? { num: "on", label: "Gmail & Calendar", sub: "Ask Occupella about a thread or a date and it can read them." }
+      : { num: "off", label: "Gmail & Calendar", sub: "Skipped — connect later from Settings → Connectors." },
   ];
 
   return (
