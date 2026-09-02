@@ -121,25 +121,27 @@ const css = `
   .lp-rotor-word {
     color: var(--iris);
     -webkit-text-fill-color: var(--iris);
-    animation: lp-rotor-in var(--dur-entrance, 420ms) var(--ease-out, cubic-bezier(0.2, 0.7, 0.3, 1)) both;
+    /* No entrance animation: the typing is the entrance, and anything keyed
+       per render would re-fire on every single character. */
   }
 
+  /* Solid while the letters are moving, blinking only on the pause — which is
+     what a real cursor does, and what makes the hold read as deliberate
+     rather than as a stall. */
   .lp-rotor-caret {
     width: 0.075em;
     height: 0.78em;
     border-radius: 1px;
     background: var(--iris);
-    opacity: 0.55;
-    animation: lp-rotor-blink 1.15s steps(1, end) infinite;
+    opacity: 0.85;
   }
 
-  @keyframes lp-rotor-in {
-    from { opacity: 0; transform: translateY(0.28em); }
-    to   { opacity: 1; transform: none; }
+  .lp-rotor-caret.is-idle {
+    animation: lp-rotor-blink 1.05s steps(1, end) infinite;
   }
 
   @keyframes lp-rotor-blink {
-    0%, 55%  { opacity: 0.55; }
+    0%, 55%  { opacity: 0.85; }
     56%, 99% { opacity: 0; }
   }
 
@@ -333,10 +335,10 @@ const css = `
 
   @media (prefers-reduced-motion: reduce) {
     /* The rotation still happens — the five words ARE the message, and a
-       swap is not a vestibular trigger. What goes is the movement: no
-       slide, no blink, just the word. */
-    .lp-rotor-word { animation: none !important; }
-    .lp-rotor-caret { animation: none !important; opacity: 0.55 !important; }
+       whole-word swap is not a vestibular trigger. What goes is the typing
+       and the blink; RotatingWord drops the per-character animation itself,
+       because it is driven by state rather than by CSS. */
+    .lp-rotor-caret { animation: none !important; opacity: 0.85 !important; }
     .lp-panel { transform: none !important; animation: none !important; }
     .lp-stage::before { opacity: 0.16 !important; animation: none !important; }
   }
@@ -361,18 +363,81 @@ const ROTATING = [
 
 //: Long enough to READ, which is the whole point — a rotator fast enough
 //: to feel lively is one nobody finishes a word of.
-const ROTATE_MS = 2400;
+//: Typing beats. Deleting is faster than typing because that is how real
+//: typing behaves — same speed both ways reads as a machine, not a person.
+const TYPE_MS = 55;
+const DELETE_MS = 30;
+//: Long enough to READ the finished word. This is the beat that matters: a
+//: rotator nobody finishes a word of is decoration.
+const HOLD_MS = 1500;
+//: A short beat on empty before the next word, so the two do not run together.
+const EMPTY_MS = 320;
+//: Reduced motion does not type. It swaps whole words on a plain interval.
+const REDUCED_SWAP_MS = 2400;
+
+function prefersReducedMotion(): boolean {
+  try {
+    return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
+  } catch {
+    return false;
+  }
+}
 
 function RotatingWord() {
-  const [i, setI] = useState(0);
+  // `n` is how many characters of ROTATING[w] are on screen. `del` is which
+  // direction the next tick moves it.
+  const [w, setW] = useState(0);
+  const [n, setN] = useState(0);
+  const [del, setDel] = useState(false);
+  const reduced = prefersReducedMotion();
 
   useEffect(() => {
-    const id = window.setInterval(
-      () => setI((n) => (n + 1) % ROTATING.length),
-      ROTATE_MS,
-    );
-    return () => window.clearInterval(id);
-  }, []);
+    // ⚠ Typing character by character IS motion, so reduced motion gets the
+    // whole word and a plain swap. This branch has to live in JS, not CSS:
+    // the animation is driven by state here, and a CSS override would leave
+    // the letters ticking underneath it.
+    if (reduced) {
+      const id = window.setInterval(
+        () => setW((x) => (x + 1) % ROTATING.length),
+        REDUCED_SWAP_MS,
+      );
+      return () => window.clearInterval(id);
+    }
+
+    const word = ROTATING[w];
+    let delay: number;
+    let step: () => void;
+
+    if (!del && n < word.length) {
+      delay = TYPE_MS;
+      step = () => setN(n + 1);
+    } else if (!del) {
+      delay = HOLD_MS; // finished — let it be read
+      step = () => setDel(true);
+    } else if (n > 0) {
+      delay = DELETE_MS;
+      step = () => setN(n - 1);
+    } else {
+      delay = EMPTY_MS; // empty — beat, then the next word
+      step = () => {
+        setDel(false);
+        setW((x) => (x + 1) % ROTATING.length);
+      };
+    }
+
+    // ⚠ setTimeout re-scheduled per tick, not one setInterval: every phase
+    // runs at a different speed, and an interval would need a counter to fake
+    // that. It is also why StrictMode's double-mount is harmless — the effect
+    // cleans up its own single pending timer.
+    const id = window.setTimeout(step, delay);
+    return () => window.clearTimeout(id);
+  }, [w, n, del, reduced]);
+
+  const shown = reduced ? ROTATING[w] : ROTATING[w].slice(0, n);
+  // Solid while the letters move, blinking only when it is waiting — which is
+  // what a real cursor does, and what makes the pause read as deliberate
+  // rather than as a stall.
+  const idle = reduced || (!del && n === ROTATING[w].length);
 
   return (
     <>
@@ -380,17 +445,15 @@ function RotatingWord() {
         {/* Sizes the line to the tallest word so a wrap on a narrow screen
             cannot move everything below it. See .lp-rotor-line. */}
         <span className="lp-rotor-sizer" aria-hidden="true">
-          {ROTATING.map((w) => (
-            <span key={w}>{w}</span>
+          {ROTATING.map((word) => (
+            <span key={word}>{word}</span>
           ))}
         </span>
-        {/* ⚠ `key` is what makes the entrance animation replay — without it
-            React reuses the node, the text swaps, and nothing animates. */}
         <span className="lp-rotor" aria-hidden="true">
-          <span key={i} className="lp-rotor-word">
-            {ROTATING[i]}
-          </span>
-          <span className="lp-rotor-caret" />
+          {/* No `key` and no entrance animation — the typing IS the entrance,
+              and a per-render fade would re-fire on every character. */}
+          <span className="lp-rotor-word">{shown}</span>
+          <span className={idle ? "lp-rotor-caret is-idle" : "lp-rotor-caret"} />
         </span>
       </span>
       {/* A word swapping every 2.4s is churn to a screen reader. The
