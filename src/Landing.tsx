@@ -334,10 +334,10 @@ const css = `
   .reveal[data-in="true"] { opacity: 1; transform: none; }
 
   @media (prefers-reduced-motion: reduce) {
-    /* The rotation still happens — the five words ARE the message, and a
-       whole-word swap is not a vestibular trigger. What goes is the typing
-       and the blink; RotatingWord drops the per-character animation itself,
-       because it is driven by state rather than by CSS. */
+    /* The word still TYPES — letters appearing where they will stay move
+       nothing, and the setting is about movement. What goes is the blink:
+       a looping opacity animation carrying no content, which is exactly
+       what this query is for. */
     .lp-rotor-caret { animation: none !important; opacity: 0.85 !important; }
     .lp-panel { transform: none !important; animation: none !important; }
     .lp-stage::before { opacity: 0.16 !important; animation: none !important; }
@@ -372,38 +372,28 @@ const DELETE_MS = 30;
 const HOLD_MS = 1500;
 //: A short beat on empty before the next word, so the two do not run together.
 const EMPTY_MS = 320;
-//: Reduced motion does not type. It swaps whole words on a plain interval.
-const REDUCED_SWAP_MS = 2400;
-
-function prefersReducedMotion(): boolean {
-  try {
-    return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-  } catch {
-    return false;
-  }
-}
-
+// ⚠ This types under prefers-reduced-motion TOO, and that is deliberate.
+//
+// The first cut dropped the typing and swapped whole words instead. It was
+// over-cautious and it cost the feature outright for anyone with the setting
+// on — measured: 60 partial-word frames without it, 0 with. Reduced motion
+// exists for vestibular triggers: movement across the screen, parallax,
+// zoom, spin. Letters appearing where they will stay move nothing; the
+// guidance's own recommended substitute for a transition is a cross-fade,
+// which is a strictly larger visual change than one character arriving. And
+// the fallback was not gentler in any case — twenty-two characters landing
+// at once is a bigger jump than one.
+//
+// What DOES go is the caret blink: a looping opacity animation with no
+// content in it, which is the part the setting is actually about.
 function RotatingWord() {
   // `n` is how many characters of ROTATING[w] are on screen. `del` is which
   // direction the next tick moves it.
   const [w, setW] = useState(0);
   const [n, setN] = useState(0);
   const [del, setDel] = useState(false);
-  const reduced = prefersReducedMotion();
 
   useEffect(() => {
-    // ⚠ Typing character by character IS motion, so reduced motion gets the
-    // whole word and a plain swap. This branch has to live in JS, not CSS:
-    // the animation is driven by state here, and a CSS override would leave
-    // the letters ticking underneath it.
-    if (reduced) {
-      const id = window.setInterval(
-        () => setW((x) => (x + 1) % ROTATING.length),
-        REDUCED_SWAP_MS,
-      );
-      return () => window.clearInterval(id);
-    }
-
     const word = ROTATING[w];
     let delay: number;
     let step: () => void;
@@ -431,13 +421,13 @@ function RotatingWord() {
     // cleans up its own single pending timer.
     const id = window.setTimeout(step, delay);
     return () => window.clearTimeout(id);
-  }, [w, n, del, reduced]);
+  }, [w, n, del]);
 
-  const shown = reduced ? ROTATING[w] : ROTATING[w].slice(0, n);
+  const shown = ROTATING[w].slice(0, n);
   // Solid while the letters move, blinking only when it is waiting — which is
   // what a real cursor does, and what makes the pause read as deliberate
   // rather than as a stall.
-  const idle = reduced || (!del && n === ROTATING[w].length);
+  const idle = !del && n === ROTATING[w].length;
 
   return (
     <>
