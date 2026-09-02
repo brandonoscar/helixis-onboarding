@@ -74,6 +74,85 @@ const css = `
     color: var(--ink-faint);
   }
 
+  /* ── rotating hero word ────────────────────────────────────────────
+     Five things Occupella actually does, cycling under a fixed line.
+
+     ⚠ It sits ALONE on its own line, and that is load-bearing. The words
+     are different widths, so anything sharing the line would be shoved
+     sideways every couple of seconds. Alone and left-aligned, the caret
+     hugs the word and nothing else moves — which is also why there is no
+     width-reservation hack here to go stale.
+
+     ⚠ .lp-h1 paints a luminance gradient through background-clip: text
+     with color: transparent, and that clipping covers descendants — so the
+     word would render in the headline's grey ramp, not the brand blue.
+     -webkit-text-fill-color is what overrides an inherited transparent
+     fill; plain color alone does not.
+
+     ⚠ No backticks anywhere in this block. These styles live inside a JS
+     template literal, so one backtick in a comment ends the string and the
+     file stops parsing several lines later, where nothing looks wrong. */
+  /* The live word and an invisible copy of ALL five share one grid cell, so
+     the block is always as tall as the tallest state and the height cannot
+     move. Measured before adding it: at 390px "resident communication" wraps
+     to two lines and the h1 went 120px -> 160px, shoving the lede and the
+     buttons down and back on every rotation. Desktop never showed it.
+
+     Height only, deliberately not width — the sizer is in its own grid so it
+     contributes the max HEIGHT, while the live row keeps natural width and
+     the caret keeps hugging the word. Reserving width instead would park the
+     caret far to the right of "leasing".
+
+     Nothing here is a magic number: change a word and the reservation
+     re-measures itself. */
+  .lp-rotor-line { display: grid; }
+  .lp-rotor-line > * { grid-area: 1 / 1; }
+
+  .lp-rotor-sizer { display: grid; visibility: hidden; }
+  .lp-rotor-sizer > span { grid-area: 1 / 1; }
+
+  .lp-rotor {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.14em;
+    justify-self: start;
+  }
+
+  .lp-rotor-word {
+    color: var(--iris);
+    -webkit-text-fill-color: var(--iris);
+    animation: lp-rotor-in var(--dur-entrance, 420ms) var(--ease-out, cubic-bezier(0.2, 0.7, 0.3, 1)) both;
+  }
+
+  .lp-rotor-caret {
+    width: 0.075em;
+    height: 0.78em;
+    border-radius: 1px;
+    background: var(--iris);
+    opacity: 0.55;
+    animation: lp-rotor-blink 1.15s steps(1, end) infinite;
+  }
+
+  @keyframes lp-rotor-in {
+    from { opacity: 0; transform: translateY(0.28em); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  @keyframes lp-rotor-blink {
+    0%, 55%  { opacity: 0.55; }
+    56%, 99% { opacity: 0; }
+  }
+
+  .lp-sr {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
   .lp-lede {
     font-size: 18px;
     line-height: 1.55;
@@ -253,10 +332,76 @@ const css = `
   .reveal[data-in="true"] { opacity: 1; transform: none; }
 
   @media (prefers-reduced-motion: reduce) {
+    /* The rotation still happens — the five words ARE the message, and a
+       swap is not a vestibular trigger. What goes is the movement: no
+       slide, no blink, just the word. */
+    .lp-rotor-word { animation: none !important; }
+    .lp-rotor-caret { animation: none !important; opacity: 0.55 !important; }
     .lp-panel { transform: none !important; animation: none !important; }
     .lp-stage::before { opacity: 0.16 !important; animation: none !important; }
   }
 `;
+
+// ── rotating hero word ───────────────────────────────────────────────
+// "We help Buildium users with ___" — the blank cycling through five
+// things the product actually does.
+//
+// The five are grounded in shipped capability, not aspiration: the
+// delinquency + ledger surface, the work-order and task path, the
+// email/text/call inbox with drafted replies, the leasing CRM, and the
+// consent + confirmation guardrails. A rotator that names a feature the
+// product does not have is a promise the first demo breaks.
+const ROTATING = [
+  "rent collection",
+  "maintenance",
+  "resident communication",
+  "leasing",
+  "compliance",
+] as const;
+
+//: Long enough to READ, which is the whole point — a rotator fast enough
+//: to feel lively is one nobody finishes a word of.
+const ROTATE_MS = 2400;
+
+function RotatingWord() {
+  const [i, setI] = useState(0);
+
+  useEffect(() => {
+    const id = window.setInterval(
+      () => setI((n) => (n + 1) % ROTATING.length),
+      ROTATE_MS,
+    );
+    return () => window.clearInterval(id);
+  }, []);
+
+  return (
+    <>
+      <span className="lp-rotor-line">
+        {/* Sizes the line to the tallest word so a wrap on a narrow screen
+            cannot move everything below it. See .lp-rotor-line. */}
+        <span className="lp-rotor-sizer" aria-hidden="true">
+          {ROTATING.map((w) => (
+            <span key={w}>{w}</span>
+          ))}
+        </span>
+        {/* ⚠ `key` is what makes the entrance animation replay — without it
+            React reuses the node, the text swaps, and nothing animates. */}
+        <span className="lp-rotor" aria-hidden="true">
+          <span key={i} className="lp-rotor-word">
+            {ROTATING[i]}
+          </span>
+          <span className="lp-rotor-caret" />
+        </span>
+      </span>
+      {/* A word swapping every 2.4s is churn to a screen reader. The
+          animated span is hidden from it and the whole list is read once,
+          as the sentence it actually is. */}
+      <span className="lp-sr">
+        {ROTATING.slice(0, -1).join(", ")}, and {ROTATING[ROTATING.length - 1]}.
+      </span>
+    </>
+  );
+}
 
 // ── scroll reveal ────────────────────────────────────────────────────
 // threshold 0.25 + triggerOnce: the reveal fires once you have committed to
@@ -404,11 +549,14 @@ export default function Landing() {
             For teams running Buildium
           </div>
           <h1 className="lp-h1 rise" style={{ "--d": "200ms", marginTop: 18 } as React.CSSProperties}>
-            Buildium keeps the records. Occupella does the work.
+            We help Buildium users with
+            <br />
+            <RotatingWord />
           </h1>
           <p className="lp-lede rise" style={{ "--d": "400ms", marginTop: 20 } as React.CSSProperties}>
-            It reads every Buildium event, pulls the history around it, and drafts what comes
-            next — the reply, the work order, the owner update. Then it waits for you.
+            Buildium keeps the records. Occupella does the work. It reads every Buildium
+            event, pulls the history around it, and drafts what comes next — the reply, the
+            work order, the owner update. Then it waits for you.
           </p>
           <div className="lp-hero-ctas rise" style={{ "--d": "600ms", marginTop: 30 } as React.CSSProperties}>
             <a className="btn btn-primary" href="/start" style={{ padding: "12px 24px", fontSize: 15 }}>
