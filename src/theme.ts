@@ -36,8 +36,21 @@ export const tokensCss = `
     --chrome-active: #D2E3F2;
     --chrome-line:   rgba(14, 22, 32, 0.09);
 
-    /* deep surface — the one dark band (matches the app's chrome ink) */
-    --deep:      #101E31;
+    /* deep surface — the closing band and the footer, the page's one
+       polarity flip.
+
+       Lightened from #101E31 on founder direction. #234062 is as far up as
+       this can go while every token that sits ON it still clears 4.5:1:
+       white 10.60, --deep-ink 9.31, --deep-muted 4.93. The next step up
+       (#2A4D74) drops --deep-muted to 4.05 and fails. If this is ever
+       lightened again, --deep-muted is the constraint — it is the footer
+       and the sub-headline, i.e. the text most likely to be skimmed.
+
+       ⚠ The old comment here said it "matches the app's chrome ink". That
+       stopped being true on 2026-08-18, when the app flipped its rail from
+       navy to a light blue tint — the app has no dark surface to match any
+       more, so this band is the landing page's own decision now. */
+    --deep:      #234062;
     --deep-1:    #17293F;
     --deep-ink:  #EAF1F9;
     --deep-muted:#9FB3CA;
