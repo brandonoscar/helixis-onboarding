@@ -261,17 +261,18 @@ export function Terms() {
       <h2>Plans and billing</h2>
       <p>
         Every workspace starts with a <strong>14-day free trial</strong>. No card is required
-        to start it, and it includes 150 questions. When it ends, you pick a plan or your
-        workspace stops answering questions — nothing is deleted and nothing is charged
+        to start it, and it includes 150 requests. When it ends, you pick a plan or your
+        workspace stops answering requests — nothing is deleted and nothing is charged
         automatically at the end of a trial.
       </p>
       <p>
         <strong>Starter</strong> is $50 per month for the whole account and includes 150
-        questions each month. <strong>Pro</strong> is $199 per seat per month and includes 400
-        questions per seat each month. <strong>Scale</strong> is $500 per month for the whole
-        account, with a pooled fair-use ceiling of 1,200 questions per month. A "question" is
-        one request you send Occupella that produces an answer; we don't count requests that
-        fail or return nothing.
+        requests each month. <strong>Pro</strong> is $199 per seat per month and includes 400
+        requests per seat each month. <strong>Scale</strong> is $500 per month for the whole
+        account, with a pooled fair-use ceiling of 1,200 requests per month. A "request" is
+        one thing you ask Occupella that produces an answer; we don't count requests that
+        fail or return nothing, and we don't count work Occupella does on its own, such as
+        drafting a reply to an incoming work order.
       </p>
       {/* ⚠ These TERMS, not a marketing page. A capability difference between
           plans is part of what the customer is agreeing to buy, so it is
@@ -280,11 +281,20 @@ export function Terms() {
           could pay and then find a section closed. */}
       <p>
         The <strong>Leasing</strong> section — texting and calling leads from your own
-        registered number, and the applicant pipeline behind it — is included in the free
-        trial, <strong>Pro</strong> and <strong>Scale</strong>. It is <strong>not</strong>{' '}
-        included in <strong>Starter</strong>. Everything else Occupella does is on every
-        plan; the plans differ in how many questions they include and in whether Leasing is
-        part of them.
+        registered number, and the applicant pipeline behind it — is included in{' '}
+        <strong>Pro</strong> and <strong>Scale</strong> only. It is <strong>not</strong>{' '}
+        included in <strong>Starter</strong> or in the free trial. Everything else Occupella
+        does is on every plan; the plans differ in how many requests they include and in
+        whether Leasing is part of them.
+      </p>
+      <p>
+        Sending a text from the Leasing section additionally requires US mobile carriers to
+        approve your business for application-to-person messaging. We file that registration
+        on your behalf; the carriers decide, typically in about ten to fifteen days, and{' '}
+        <strong>we cannot commit to an outcome or a date</strong>. Until it is approved, no
+        text can be sent from your number — this is a carrier requirement, not an Occupella
+        setting. It is also the reason Leasing is not part of the 14-day trial: the review
+        is normally longer than the trial itself.
       </p>
       <p>
         Paid plans are billed monthly in advance and <strong>renew automatically each month
@@ -296,7 +306,7 @@ export function Terms() {
       <p>
         If a payment fails we keep your workspace running while the card is retried, rather
         than cutting you off over an expired card. If it ultimately can't be collected, the
-        subscription ends and the workspace stops answering questions — your data stays put
+        subscription ends and the workspace stops answering requests — your data stays put
         and you can start again.
       </p>
       <p>

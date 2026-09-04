@@ -513,7 +513,7 @@ export default function Landing() {
               <div className="lp-shot">
                 <img
                   src="/shots/report.png"
-                  alt="A monthly owner report in Occupella: an NOI trend chart and a portfolio summary card"
+                  alt="An owner report in Occupella: a portfolio summary card with collections, revenue, operating expenses and net operating income"
                   loading="lazy"
                 />
               </div>
@@ -529,8 +529,13 @@ export default function Landing() {
               <div className="lp-eyebrow">Trust</div>
               <h2 className="lp-h2">It asks before it acts.</h2>
               <p className="lp-body">
-                Occupella writes to Buildium, sends email, and texts residents. So the
-                default everywhere is that it stops and shows you first.
+                {/* ⚠ Do NOT put "and texts residents" back. Every SMS path in
+                    the product is behind carrier approval that no company has
+                    cleared yet, so it is a capability the reader cannot have
+                    on the day they read this. Email and the Buildium writes
+                    are both live and are enough to make the point. */}
+                Occupella changes records in your Buildium account and sends email from your
+                address. So the default everywhere is that it stops and shows you first.
               </p>
             </div>
           </Reveal>

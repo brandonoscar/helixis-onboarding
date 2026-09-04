@@ -16,15 +16,27 @@ import { CHECK, Icon, MINUS, Reveal, SitePageShell } from "./Site";
 // number in the terms is a different kind of problem.
 //
 // ⚠ WHAT THE PLANS ACTUALLY DIFFER ON. Two things, and only two: how many
-// questions are included, and whether the Leasing pipeline is part of it.
+// requests are included, and whether the Leasing pipeline is part of it.
 // Everything else Occupella does is on every plan. Presenting it any other way
 // — a feature matrix with invented distinctions to make the dear plans look
 // fuller — is the thing this table is written to avoid.
 //
-// ⚠ STARTER GENUINELY EXCLUDES LEASING, and the API enforces it: every
-// authenticated Leasing route refuses a Starter plan with a 402. The card says
-// so in as many words rather than leaving it to the table, because Starter is
-// the one plan where somebody could pay and then find a section closed.
+// ⚠ VOCABULARY (founder call, 2026-09-04). The metered unit is a REQUEST and
+// the meter itself is USAGE. It used to be "questions" here and in the app,
+// which broke the moment the answer to "what counts" had to include things
+// that are not questions. Both words are load-bearing across three surfaces —
+// this page, Legal.tsx's billing section, and the app's own billing panel and
+// refusal messages — so a change is a change in all of them. The refusal a
+// customer reads when they run out is generated from the backend, and it must
+// use the same noun this page sold them.
+//
+// ⚠ TWO PLANS EXCLUDE LEASING, for two different reasons, and the API
+// enforces both: every authenticated Leasing route refuses with a 402.
+//   · Starter — Leasing costs real per-customer money that $50 does not cover.
+//   · Trial — carrier approval outlasts the trial, so it could never be used.
+// The cards say each reason in as many words rather than leaving it to the
+// table, because those are the two plans where somebody could arrive and find
+// a section closed.
 // ─────────────────────────────────────────────────────────────────────
 
 const css = `
@@ -105,6 +117,9 @@ type Plan = {
   allowance: string;
   forWho: string;
   leasing: boolean;
+  /** The one-line Leasing verdict on the card. Required, so a new plan cannot
+   *  inherit a default that happens to be wrong for it. */
+  leasingLabel: string;
   featured?: boolean;
   cta: string;
 };
@@ -116,10 +131,19 @@ const PLANS: Plan[] = [
     name: "Trial",
     fig: "Free",
     unit: " · 14 days",
-    allowance: "150 questions",
+    allowance: "150 requests",
+    // ⚠ Leasing is FALSE on the trial and the reason is arithmetic, not
+    // packaging (founder call, 2026-09-04). Carrier approval for texting runs
+    // ten to fifteen days; the trial is fourteen. A trialist given Leasing
+    // gets a setup checklist they cannot finish inside the trial, which is a
+    // worse first week than not offering it. Do not flip this back without
+    // changing billing/plans.py in the same commit — the API refuses on that
+    // file's feature set, so a tick here that disagrees is a promise the
+    // product breaks on click.
     forWho:
-      "The whole product, including Leasing, for two weeks. Long enough to connect Buildium and watch it handle real work.",
-    leasing: true,
+      "The everyday work for two weeks — Buildium, the Inbox, reporting and documents. Long enough to connect your account and watch it handle real work.",
+    leasing: false,
+    leasingLabel: "Leasing opens on Pro",
     cta: "Start free",
   },
   {
@@ -127,10 +151,11 @@ const PLANS: Plan[] = [
     name: "Starter",
     fig: "$50",
     unit: " / month",
-    allowance: "150 questions a month",
+    allowance: "150 requests a month",
     forWho:
       "One person running a small book. The trial's allowance, kept — every month, without a card expiring on you.",
     leasing: false,
+    leasingLabel: "No Leasing pipeline",
     cta: "Start free",
   },
   {
@@ -139,10 +164,11 @@ const PLANS: Plan[] = [
     tag: "Most teams",
     fig: "$199",
     unit: " / person / month",
-    allowance: "400 questions each, every month",
+    allowance: "400 requests each, every month",
     forWho:
-      "A team working the whole portfolio. About eighteen questions a working day per person, and the allowance grows as you hire.",
+      "A team working the whole portfolio. About eighteen requests a working day per person, and the allowance grows as you hire.",
     leasing: true,
+    leasingLabel: "Leasing included",
     featured: true,
     cta: "Start free",
   },
@@ -151,10 +177,11 @@ const PLANS: Plan[] = [
     name: "Scale",
     fig: "$500",
     unit: " / month",
-    allowance: "1,200 questions a month, pooled",
+    allowance: "1,200 requests a month, pooled",
     forWho:
       "Put everyone on it for one predictable bill. No per-person charge, and the allowance is shared across the team.",
     leasing: true,
+    leasingLabel: "Leasing included",
     cta: "Start free",
   },
 ];
@@ -169,27 +196,34 @@ type Row = { label: string; values: (string | boolean)[] };
  * mostly "nothing". Showing the ticks all the way across is what says that.
  */
 const ROWS: Row[] = [
-  { label: "Questions included", values: ["150 once", "150 / mo", "400 / person", "1,200 / mo"] },
+  { label: "Requests included", values: ["150 once", "150 / mo", "400 / person", "1,200 / mo"] },
   { label: "People", values: ["Your team", "Your team", "Priced per person", "Your team"] },
   { label: "Buildium sync and history", values: [true, true, true, true] },
   { label: "Inbox with drafted replies", values: [true, true, true, true] },
   { label: "Approval gates on every write", values: [true, true, true, true] },
-  { label: "Reports, tables and charts", values: [true, true, true, true] },
+  // ⚠ "Reports and tables", NOT "and charts". The chart card is built, wired
+  // and has never once been produced by a real question — a tick beside the
+  // word charts is a claim a buyer can falsify on their first afternoon.
+  { label: "Reports and tables", values: [true, true, true, true] },
   { label: "Documents, Drive and web search", values: [true, true, true, true] },
   { label: "Gmail and Calendar", values: [true, true, true, true] },
   { label: "Roles, permissions and activity log", values: [true, true, true, true] },
-  { label: "Leasing pipeline", values: [true, false, true, true] },
-  { label: "Your own number for texts and calls", values: [true, false, true, true] },
+  { label: "Fair housing guardrails", values: [true, true, true, true] },
+  // ⚠ Trial is FALSE on both Leasing rows — see the note on the trial plan
+  // above, and billing/plans.py, which is what the API actually refuses on.
+  { label: "Leasing pipeline", values: [false, false, true, true] },
+  { label: "Your own number for texts and calls", values: [false, false, true, true] },
 ];
 
 const FAQ: { q: string; a: React.ReactNode }[] = [
   {
-    q: "What counts as a question?",
+    q: "What counts as a request?",
     a: (
       <>
-        One request you send Occupella that produces an answer. A request that fails or comes
-        back empty is not counted. Reading the Inbox, approving a draft and browsing your
-        portfolio are not questions — only asking is.
+        One thing you ask Occupella that produces an answer. A request that fails or comes back
+        empty is not counted, and neither is anything Occupella does on its own — the Inbox
+        drafting a reply to a work order, a nightly sweep, a reminder. Reading the Inbox,
+        approving a draft and browsing your portfolio are free. Asking is what counts.
       </>
     ),
   },
@@ -198,8 +232,8 @@ const FAQ: { q: string; a: React.ReactNode }[] = [
     a: (
       <>
         Asking pauses until the month resets, or until you move up a plan. Nothing is deleted,
-        the Inbox keeps working, and your Buildium account is untouched. You can see the count
-        on the billing page at any time, so it should not be a surprise.
+        the Inbox keeps working, and your Buildium account is untouched. Your usage for the
+        period is on the billing page, so it should not be a surprise.
       </>
     ),
   },
@@ -213,8 +247,19 @@ const FAQ: { q: string; a: React.ReactNode }[] = [
     a: (
       <>
         Leasing runs on a phone number registered to your business and a carrier campaign that
-        costs money every month per customer. At $50 that does not cover itself. Everything else
+        costs money every month, per customer. At $50 that does not cover itself. Everything else
         Occupella does is on Starter.
+      </>
+    ),
+  },
+  {
+    q: "Why is Leasing not in the trial?",
+    a: (
+      <>
+        Because you could not use it inside two weeks. Texting a lead needs carrier approval,
+        that review runs about ten to fifteen days, and the trial is fourteen — so it would be a
+        setup checklist you never got to finish. Everything else is in the trial, and Leasing
+        turns on when you pick Pro or Scale.
       </>
     ),
   },
@@ -223,8 +268,8 @@ const FAQ: { q: string; a: React.ReactNode }[] = [
     a: (
       <>
         After the carriers approve your business, which takes about ten to fifteen days. We file
-        it the day you sign up and there is nothing for you to chase. The rest of the product
-        works from day one.
+        it for you and there is nothing to chase. Until it clears, nobody on any plan can text a
+        lead — us included. The rest of the product works from day one.
       </>
     ),
   },
@@ -276,8 +321,8 @@ export default function Pricing() {
       title="Start free for two weeks."
       lede={
         <>
-          No card to begin. Plans differ on two things: how many questions are included, and
-          whether Leasing is part of it. Everything else is on every plan.
+          No card to begin. Plans differ on two things: how many requests are included, and
+          whether the Leasing pipeline is part of it. Everything else is on every plan.
         </>
       }
       css={css}
@@ -302,9 +347,15 @@ export default function Pricing() {
                   </div>
                   <div className="pr-allow">{p.allowance}</div>
                   <p className="pr-for">{p.forWho}</p>
+                  {/* ⚠ The two no-Leasing plans get DIFFERENT wording, because
+                      they are different facts. Starter does not buy it. The
+                      trial cannot use it — carrier approval outlasts fourteen
+                      days — and labelling that "no Leasing" would read as the
+                      free plan being crippled rather than as a timing limit
+                      that applies to everyone. */}
                   <div className="pr-leasing" data-has={p.leasing}>
                     <Icon d={p.leasing ? CHECK : MINUS} size={14} />
-                    <span>{p.leasing ? "Leasing included" : "No Leasing pipeline"}</span>
+                    <span>{p.leasingLabel}</span>
                   </div>
                   <div className="pr-cta">
                     <a className={`btn ${p.featured ? "btn-primary" : "btn-secondary"}`} href="/start">

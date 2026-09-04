@@ -316,7 +316,13 @@ function useStuck(): boolean {
 
 export type SitePage = "home" | "features" | "pricing";
 
+// ⚠ Home is here as well as on the wordmark, deliberately (founder call,
+// 2026-09-04). The wordmark IS a link to "/" and always has been, but on a
+// secondary page nothing says so — a visitor two pages deep has no visible
+// way back that reads as one. The redundancy is the point: the wordmark is
+// branding that happens to be clickable, this is a labelled control.
 const NAV_LINKS: { href: string; label: string; page: SitePage }[] = [
+  { href: "/", label: "Home", page: "home" },
   { href: "/features", label: "Features", page: "features" },
   { href: "/pricing", label: "Pricing", page: "pricing" },
 ];
@@ -409,7 +415,11 @@ export function SiteFooter() {
 
           <div>
             <div className="lp-footer-h">Product</div>
+            {/* ⚠ Home is repeated here because the nav's section links are
+                hidden under 640px — on a phone this column IS the navigation,
+                so dropping it would leave the wordmark as the only way back. */}
             <div className="lp-footer-col">
+              <a href="/">Home</a>
               <a href="/features">Features</a>
               <a href="/pricing">Pricing</a>
               <a href="/start">Start setup</a>

@@ -1,30 +1,51 @@
-import { CHECK, Icon, LOCK, Reveal, SHIELD, BELL, SitePageShell } from "./Site";
+import { CHECK, Icon, LOCK, Reveal, SHIELD, BELL, MINUS, SitePageShell } from "./Site";
 
 // ─────────────────────────────────────────────────────────────────────
-// /features — what Occupella actually does.
+// /features — what Occupella actually does, in detail.
 //
 // ⚠ EVERY LINE ON THIS PAGE IS A CLAIM SOMEBODY WILL TEST WITHIN TEN MINUTES
 // OF READING IT. The landing page's header comment sets the rule — "everything
 // shown ships today" — and this page is where that rule is hardest to keep,
 // because a features page is a list and a list invites padding.
 //
-// The bar used here: a capability is listed only if a customer on a paid plan
-// can reach it in production today. Behind a default-false flag does not
-// count. Built but unreachable does not count.
+// The bar used here: a capability is listed as AVAILABLE only if a customer on
+// a paid plan can reach it in production today. Behind a default-false flag
+// does not count. Built but unreachable does not count. Anything that is real
+// code and not yet reachable goes in the Leasing section, under a status line
+// that says so in the first sentence.
 //
-// DELIBERATELY ABSENT, so nobody "adds the missing ones" later:
-//   · Gmail → Inbox email ingest. Switched OFF in production 2026-09-04: it
-//     resolves its known-contact list from ONE Buildium account and gates every
-//     connected user's mail against it, which is wrong the moment there are two
-//     customers.
-//   · Autonomous Buildium notes (notes/runner.py) — flag defaults false.
+// ⚠ THE SPECIFICS ARE THE POINT (founder direction, 2026-09-04: "get nitty
+// gritty"). A property manager evaluating this has read twenty pages of
+// "AI-powered insights" and cannot tell any of them apart. Numbers, field
+// names, the actual list of writes, and the actual limits are what separate a
+// page written from the codebase from a page written from a template. When you
+// edit this file, replace a specific with a better specific — never with an
+// adjective.
+//
+// DELIBERATELY ABSENT, so nobody "adds the missing ones" later. Each is real
+// code in the repo and none of them is a feature yet:
+//   · Gmail → Inbox email ingest, and lead capture from Zillow/Apartments.com
+//     by watching Gmail. Both default OFF; the worker has never logged the CRM
+//     ingest line on any boot.
+//   · Texting or calling anyone. Every SMS/voice path is behind carrier
+//     approval; the consent ledger and message log hold zero rows across the
+//     whole deployment.
+//   · Chart, checklist, schedule and form cards, and CSV export. All built and
+//     wired end to end; none has ever been produced by a real question.
+//   · Browser automation and Outlook. Registered specialists with zero
+//     production calls; Outlook has no connect path at all.
+//   · "Find a plumber near this property" — the keyless geocoder we run has no
+//     place data, so it returns nothing. Named in the routing prose; does not
+//     work.
+//   · Photo assessment from the chat composer, and follow-up questions about a
+//     document you just attached — the extraction renders client-side and the
+//     next turn cannot see it.
+//   · Vendor payment history. The mirror carries unpaid bills only.
 //   · Code execution / the analysis sandbox — flag defaults false.
-//   · Lease renewal writes — the endpoint is probed, the tool is dark because a
-//     renewal has no clean undo.
+//   · Lease renewal writes, creating a vendor bill, and approving or rejecting
+//     an application. All three implemented, all three deliberately
+//     unregistered.
 //   · Reopening a work order — Buildium latches it Completed; no API can.
-//   · Nearby-places search — the keyless geocoder has no Places equivalent, so
-//     it returns nothing.
-// Each of those is a real thing in the codebase. None of them is a feature yet.
 // ─────────────────────────────────────────────────────────────────────
 
 const css = `
@@ -58,6 +79,33 @@ const css = `
   }
   .ft-note strong { color: var(--ink); font-weight: 600; }
 
+  /* The status chip on a section that is real code and not yet reachable.
+     ⚠ Monochrome on purpose — the ONE chromatic accent on this site is
+     --iris, and spending it on "not ready yet" would make the unfinished
+     thing the loudest element on the page. */
+  .ft-status {
+    /* ⚠ align-self, not just inline-flex. This sits inside .lp-section-head,
+       which is a COLUMN flex container, so its children stretch to the full
+       width by default — inline-flex does not stop that and the chip renders
+       as a 1000px pill. Measured, not guessed. */
+    align-self: flex-start;
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px;
+    font-family: var(--font-mono); font-size: 11px; font-weight: 500;
+    letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-subtle);
+    background: var(--canvas-1);
+  }
+  .ft-status svg { color: var(--ink-subtle); }
+
+  /* A two-column "what you ask" / "what comes back" table. This is the
+     nitty-gritty section and a card grid would flatten it back into
+     marketing — the value is in the exact fields on the exact row. */
+  .ft-qa { margin-top: 32px; display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; }
+  .ft-qa-row { background: var(--canvas); padding: 20px 22px; display: grid; gap: 8px; }
+  @media (min-width: 820px) { .ft-qa-row { grid-template-columns: 22ch 1fr; gap: 24px; align-items: baseline; } }
+  .ft-qa-q { font-size: 14.5px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
+  .ft-qa-a { font-size: 14px; line-height: 1.55; color: var(--ink-muted); }
+
   .ft-shot {
     margin-top: 36px;
     border-radius: var(--r-lg); border: 1px solid var(--card-edge); overflow: hidden;
@@ -70,45 +118,64 @@ const css = `
 /** Cards, not prose, where the content is genuinely a set of parallel things. */
 const READS = [
   {
-    t: "Every Buildium event, as it happens.",
-    b: "Work orders, tasks, leases, applicants, bills, payments and property changes arrive by webhook. Occupella mirrors your account so it can answer without waiting on an API call.",
+    t: "The card lands before the AI runs.",
+    b: "A signed Buildium webhook arrives, is verified against your account and queued. Within seconds you have a readable row — title, address and unit, who reported it, who it is assigned to — built from the record itself. The written summary catches up a moment later.",
   },
   {
-    t: "The history around the event.",
-    b: "Before it drafts anything it pulls what happened at that unit before — prior work orders at the same address, the tenant's ledger, how similar requests were handled.",
+    t: "It pulls the history first.",
+    b: "The full task, its unit, its property by name, the active lease and its tenants, and ninety days of prior tickets at that address — fetched in parallel. A sub-fetch that fails costs one field, not the card.",
   },
   {
-    t: "What it noticed, in writing.",
-    b: "Each card opens with the signals it found and where they came from. If a figure is on the card, it came out of Buildium, and you can check it.",
+    t: "What it noticed, and it has to be checkable.",
+    b: "The lease owes $1,240. No rent has posted this month. The lease ends in 41 days. Three other tasks are overdue at this property. A numeric claim the model writes is checked against the record before it is shown, and dropped if it does not hold.",
   },
   {
-    t: "A drafted next step.",
-    b: "The tenant reply, the work order, the note, the owner update. More than one draft when there is more than one sensible way to answer, each with its approach named.",
+    t: "A drafted next step you edit.",
+    b: "The tenant reply, the follow-up task, the note — written out, with the reason it was suggested and the fact it was based on. You send your words; the draft is a starting point, not an outbox.",
   },
 ];
 
+/**
+ * ⚠ Every row here is a real registered tool with production call volume
+ * behind it. Do NOT add a row for something that merely exists — the whole
+ * point of this section is that the second column is specific enough to be
+ * falsified in one question.
+ */
 const ASKS = [
   {
-    t: "Money.",
-    b: "Who is behind on rent and by how much, which leases expire in the next 90 days, what is unpaid and to whom, what a property brought in against what it spent.",
+    q: "Who is behind on rent?",
+    a: "Every lease with a balance: tenant, property and unit, the amount, 31–60 / 61–90 / 90+ aging, and the count of open maintenance at that address on the same row — so “check whether they have open work before I send a late notice” is the same question, not the next one.",
   },
   {
-    t: "Maintenance.",
-    b: "What is open and how long it has been open, which property is costing the most in repairs, which vendor has the work, what happened at a unit before.",
+    q: "What do we owe vendors?",
+    a: "Every unpaid bill with vendor, amount, due date with overdue flagged, and which properties its lines charge. Amounts are summed from the line items, because production Buildium sends no total on the bill itself.",
   },
   {
-    t: "People and records.",
-    b: "Who lives where, which lease is current and which has ended, a vendor's contact and history, the documents attached to a property.",
+    q: "What expires soon?",
+    a: "Leases ending inside 90 days, with the tenant, the current rent, the outstanding balance and open maintenance already on the row.",
   },
   {
-    t: "Answers with the numbers rendered.",
-    b: "Tables, charts, detail cards and checklists — not a paragraph with figures pasted into it. Every figure traces back to the Buildium record it came from.",
+    q: "What is overdue?",
+    a: "Open tasks — new, in progress and deferred — with title, priority, property, assignee and due date, overdue first.",
+  },
+  {
+    q: "Brief me on everything.",
+    a: "Occupancy and vacancies, delinquency, unpaid bills, open work orders and tasks, and expiring leases. One request, all five run at once.",
+  },
+  {
+    q: "Who is Marcus Whitfield?",
+    a: "Resolved across tenants, owners and vendors, with the property and whether the tenancy is current. A lease that has ended is marked FORMER on the row rather than left for you to infer.",
+  },
+  {
+    q: "Which vendor cost us the most this year?",
+    a: "No fixed report covers this, so Occupella writes the query. It runs inside a read-only Postgres transaction against views scoped to your company, and anything that is not a single clean SELECT is refused before it executes.",
   },
 ];
 
 /** ⚠ Live, registered, confirm-gated write tools only. See the file header
  *  for the ones deliberately missing. */
 const WRITES = [
+  "Create a to-do task",
   "Create a work order and assign a vendor",
   "Reassign a work order to a different vendor",
   "Change a task's status, priority or due date",
@@ -117,59 +184,106 @@ const WRITES = [
   "Post a charge to a lease ledger",
   "Record a payment against a lease",
   "Record a move-out — and undo it",
+  "Share a file with a tenant or an owner",
 ];
 
-const DOCS = [
+const HONESTY = [
   {
-    t: "Read a lease or an invoice.",
-    b: "Upload a document and ask about it. Occupella pulls the text out — including from scans with no text layer — and answers from what is actually in the file.",
+    t: "A truncated list is never evidence of absence.",
+    b: "When a list is cut short, the answer says how many it showed, out of how many, and what it searched — and it is forbidden from concluding that the thing you asked about does not exist.",
   },
   {
-    t: "Your company's own files.",
-    b: "Connect Google Drive and it can find and read the documents you already keep there: SOPs, templates, vendor agreements.",
+    t: "A failed lookup reads as a failed lookup.",
+    b: "If Buildium refuses the connection, the answer says the connection is broken. It does not say you have no work orders. The same rule covers a document search that timed out and a specialist that ran out of turns.",
   },
   {
-    t: "The public web, when the answer is not in your books.",
-    b: "Supplier prices, code requirements, a vendor's licence status. It searches and reads pages, and it tells you where the answer came from.",
+    t: "Every answer carries an as-of line.",
+    b: "Answers come from a synced copy of your account, so each one says when that copy was last refreshed. A core table more than 26 hours stale gets a named warning in the answer itself.",
   },
   {
-    t: "What it learns about your company.",
-    b: "A standing profile of how you work, built from your own activity and refreshed daily. Sensitive identifiers are stripped before anything is remembered.",
+    t: "It says when it ran out of time.",
+    b: "A question that runs long stops at a soft deadline and writes up what it had already gathered, labelled as partial and naming what it did not get to. A blank screen is the failure this exists to avoid.",
+  },
+];
+
+/**
+ * ⚠ The Fair Housing section is its own thing on this page rather than a
+ * bullet in the trust list (founder direction, 2026-09-04). It is the one
+ * guardrail a property manager already loses sleep over, and the
+ * decline-then-offer-a-proxy rule below is genuinely uncommon — most products
+ * refuse the direct question and then hand over school ratings.
+ */
+const FAIR_HOUSING = [
+  "It will not research or report who lives in an area — race, religion, national origin, familial status, disability, or any proxy for them.",
+  "It will not help write a screening rule that turns on a protected class, including source of income where that is protected.",
+  "It will not make or draft a decision on a housing application. That tool exists in the codebase and is deliberately switched off.",
+  "After it declines, it will not offer school ratings or crime statistics as a substitute — the workaround most systems fall into, and steering either way.",
+  "Every outbound message drafted for a resident is screened against the same rules before it reaches the approval card.",
+];
+
+const CONTEXT = [
+  {
+    t: "Tell it something once.",
+    b: "“Sarah Chen prefers email only.” “We use Redbud for anything electrical.” It holds that per company and brings it back on a later question, and identifiers are stripped before anything is stored.",
+  },
+  {
+    t: "It builds on what it already flagged.",
+    b: "Before it looks anything up it checks what it has noticed about your portfolio — a payment a tenant promised in an email, the reminders it raised about missed rent and expiring leases. “Where do we stand on 4B” continues last week rather than starting over.",
+  },
+  {
+    t: "Ask a follow-up on the card itself.",
+    b: "“Has this unit done this before?” “Who did we use last time?” Typed into the card, answered in the card, with that event's property, unit and task already in context.",
+  },
+  {
+    t: "Anything from outside is data, not instruction.",
+    b: "A resident's typed work-order description, an email body, a file from Drive, a web snippet — all fenced before the model sees them, so text written by somebody else cannot tell Occupella what to do.",
   },
 ];
 
 const TRUST = [
   {
     icon: BELL,
-    text: "Nothing auto-sends. Every message and every write to Buildium stops at a confirmation card you can edit before approving.",
+    text: "Nothing auto-sends. Every message and every write to Buildium stops at a card showing the exact outbound payload — not a summary of it — which you can edit before approving.",
   },
   {
     icon: CHECK,
-    text: "The riskiest writes — a payment, a charge, closing a work order — additionally require a manager or an admin, and refuse outright if the role cannot be verified.",
+    text: "A payment, a charge and closing a work order additionally require a manager or an admin, and refuse outright if the role cannot be verified. Buildium cannot undo any of the three.",
+  },
+  {
+    icon: CHECK,
+    text: "Each approved action claims a lock before the Buildium call, so a double-click, a retry or a restart cannot fire the same charge twice. A write that might have half-landed is flagged for review and never retried automatically.",
   },
   {
     icon: SHIELD,
-    text: "One company's data never reaches another's. Every query is scoped to your company, and that scoping is enforced by a test that reads every query in the codebase.",
+    text: "One company's data never reaches another's. Every query is scoped to your company, and a test reads every query in the codebase to keep it that way.",
   },
   {
     icon: LOCK,
-    text: "Your Buildium keys are encrypted at rest, entered once and never shown again. Disconnect and the mirror of your data is deleted.",
-  },
-  {
-    icon: CHECK,
-    text: "Occupella declines questions that would steer on a protected class, and will not substitute a proxy for one when asked a different way.",
+    text: "Your Buildium keys are encrypted at rest, entered once and never shown again. Disconnect and the copy of your data is deleted — there is no keep-my-data mode.",
   },
   {
     icon: LOCK,
-    text: "Sensitive identifiers are redacted before anything enters AI memory, and account numbers are kept out of tenant-facing drafts.",
+    text: "Buildium record numbers, tenant emails and phone numbers are stripped out of the reply as it is written, so an identifier never reaches the screen even briefly.",
   },
 ];
 
 const CONNECTS = [
-  { t: "Buildium", b: "The system of record. One API key. Occupella reads and, with your approval, writes." },
-  { t: "Gmail", b: "Read a thread for context and send an approved reply from your own address." },
-  { t: "Google Calendar", b: "Check availability and put approved appointments on the calendar." },
-  { t: "Google Drive", b: "Find and read the documents your company already keeps." },
+  {
+    t: "Buildium",
+    b: "The system of record. One API key, entered once. Occupella mirrors your account so it can answer without waiting on the API, and writes back only with your approval.",
+  },
+  {
+    t: "Gmail",
+    b: "Read a thread for context and send an approved reply from your own address.",
+  },
+  {
+    t: "Google Calendar",
+    b: "Check availability and put approved appointments on the calendar.",
+  },
+  {
+    t: "Google Drive",
+    b: "Find and read the documents your company already keeps — SOPs, templates, vendor agreements. Docs and Sheets included.",
+  },
 ];
 
 export default function Features() {
@@ -177,12 +291,12 @@ export default function Features() {
     <SitePageShell
       active="features"
       eyebrow="Features"
-      title="It does the work between the event and the reply."
+      title="Agentic AI for leasing and operations."
       lede={
         <>
-          Buildium records what happened. Occupella reads every event, gathers the history
-          around it, drafts what comes next, and waits for you to approve it. Everything on this
-          page ships today.
+          Buildium records what happened. Occupella reads every event as it arrives, gathers the
+          history around it, drafts what comes next, and waits for you to approve it. Below is
+          what it does, in detail, with the limits named where they exist.
         </>
       }
       css={css}
@@ -198,8 +312,8 @@ export default function Features() {
               <div className="lp-eyebrow">The loop</div>
               <h2 className="lp-h2">Every event, read and answered.</h2>
               <p className="lp-body">
-                This is the part of the day that Buildium leaves to you: something happens, you
-                go and find out what else is true, and then you write to somebody about it.
+                This is the part of the day Buildium leaves to you: something happens, you go and
+                find out what else is true about it, and then you write to somebody.
               </p>
             </div>
           </Reveal>
@@ -223,7 +337,7 @@ export default function Features() {
             </div>
           </Reveal>
           <div className="ft-caption">
-            A real work order — context gathered, reply drafted, waiting on approval.
+            A work order — context gathered, reply drafted, waiting on approval.
           </div>
         </div>
       </section>
@@ -233,34 +347,51 @@ export default function Features() {
           <Reveal>
             <div className="lp-section-head">
               <div className="lp-eyebrow">Ask it anything</div>
-              <h2 className="lp-h2">Questions you would otherwise run a report for.</h2>
+              <h2 className="lp-h2">The morning questions, answered in one go.</h2>
               <p className="lp-body">
-                Ask in plain English. Occupella answers from your Buildium account, and shows
-                the figures rather than describing them.
+                Ask in plain English. The answer comes from a synced copy of your Buildium
+                account, so it arrives without crawling the API record by record — and it comes
+                back as a table you can sort, not a paragraph with figures pasted into it.
               </p>
             </div>
           </Reveal>
           <Reveal delay={60}>
-            <div className="lp-grid ft-cards">
-              {ASKS.map((c) => (
-                <div className="ft-card" key={c.t}>
-                  <div className="ft-card-t">{c.t}</div>
-                  <div className="ft-card-b">{c.b}</div>
+            <div className="ft-qa">
+              {ASKS.map((r) => (
+                <div className="ft-qa-row" key={r.q}>
+                  <div className="ft-qa-q">{r.q}</div>
+                  <div className="ft-qa-a">{r.a}</div>
                 </div>
               ))}
             </div>
           </Reveal>
           <Reveal delay={120}>
+            {/* ⚠ This caveat is not optional and not softenable. The
+                open-maintenance count is per PROPERTY: Buildium leaves the
+                unit id null on every mirrored work order and task, so a
+                multi-unit building's count is the building's. On a
+                single-unit property the two are identical, which is exactly
+                why the over-claim is invisible in a demo. */}
+            <div className="ft-note">
+              <strong>Two limits worth knowing before you ask.</strong> The open-maintenance
+              count on those rows is per property, not per unit — Buildium does not carry the
+              unit on a work order, and the answer says so where it matters. And the bills
+              Occupella holds are the unpaid ones, so &ldquo;when did we last pay this
+              vendor&rdquo; is a question it tells you it cannot answer rather than answering it
+              with a zero.
+            </div>
+          </Reveal>
+          <Reveal delay={160}>
             <div className="ft-shot">
               <img
                 src="/shots/report.png"
-                alt="A monthly owner report in Occupella: an NOI trend chart and a portfolio summary card"
+                alt="An owner report in Occupella's chat: a portfolio summary card with collections, revenue, operating expenses and net operating income"
                 loading="lazy"
               />
             </div>
           </Reveal>
           <div className="ft-caption">
-            An owner report, pulled from the ledger and rendered — every figure traces to Buildium.
+            An owner report rendered in the thread, with the source of the figures on the card.
           </div>
         </div>
       </section>
@@ -270,11 +401,10 @@ export default function Features() {
           <Reveal>
             <div className="lp-section-head">
               <div className="lp-eyebrow">Writing back</div>
-              <h2 className="lp-h2">It can change Buildium. It asks first.</h2>
+              <h2 className="lp-h2">It changes Buildium. It asks first, every time.</h2>
               <p className="lp-body">
-                Reading is only half the job. Occupella writes to your Buildium account too —
-                behind a confirmation card that shows the exact record and the exact change
-                before anything happens.
+                Reading is half the job. Occupella writes to your Buildium account as well, behind
+                a card that shows the exact record and the exact change before anything leaves.
               </p>
             </div>
           </Reveal>
@@ -289,11 +419,108 @@ export default function Features() {
             </div>
           </Reveal>
           <Reveal delay={120}>
+            {/* ⚠ The route-by-field sentence reads like an implementation
+                detail and is the most load-bearing claim in this section:
+                Buildium accepts a status or priority on the work-order
+                endpoint, returns 200, and silently ignores it. A product that
+                did the obvious thing would report a change that never
+                happened. Do not cut it for length. */}
+            <div className="ft-note">
+              <strong>Where it routes matters.</strong> Buildium accepts a status or priority
+              change on a work order, returns success, and ignores it. Occupella sends each field
+              where Buildium actually stores it, updates records by reading and merging so an
+              untouched field is never blanked, and on six of these re-reads the record afterwards
+              to confirm the field it changed actually moved.
+            </div>
+          </Reveal>
+          <Reveal delay={160}>
             <div className="ft-note">
               <strong>Two things it will not do.</strong> It will not renew a lease — a renewal
               creates a real term with no clean undo, so that one stays with you in Buildium. And
-              it cannot reopen a work order once it is closed: Buildium latches that, and no
-              integration can change it. Closing one asks twice for the same reason.
+              it cannot reopen a work order once closed: Buildium latches that, and no integration
+              can change it. Closing one asks for a manager for the same reason.
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      <section className="lp-section">
+        <div className="lp-wrap">
+          <Reveal>
+            <div className="lp-section-head">
+              <div className="lp-eyebrow">The fair housing layer</div>
+              <h2 className="lp-h2">The questions it refuses, and the answer it refuses next.</h2>
+              <p className="lp-body">
+                An assistant that answers everything is a liability in this industry. Occupella
+                declines a defined set of questions outright, and the rule that matters most is
+                the second one — what it says after it declines.
+              </p>
+            </div>
+          </Reveal>
+          <Reveal delay={60}>
+            <div className="ft-list">
+              {FAIR_HOUSING.map((f) => (
+                <div className="ft-list-item" key={f}>
+                  <Icon d={SHIELD} size={14} />
+                  <span>{f}</span>
+                </div>
+              ))}
+            </div>
+          </Reveal>
+          <Reveal delay={120}>
+            <div className="ft-note">
+              <strong>It is a guardrail, not a compliance opinion.</strong> Occupella will also
+              give you the operational parameters for a property&rsquo;s state — deposit caps and
+              return deadlines, notice periods, late-fee rules — with the statute cited and the
+              actual calendar date computed. Those are state-level and carry a footer saying they
+              are not legal advice. Your lawyer is still your lawyer.
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      <section className="lp-section">
+        <div className="lp-wrap">
+          <Reveal>
+            <div className="lp-section-head">
+              <div className="lp-eyebrow">Honesty</div>
+              <h2 className="lp-h2">What it says when it does not know.</h2>
+              <p className="lp-body">
+                The failure that costs you money is not a wrong number. It is a confident
+                &ldquo;nothing found&rdquo; when the lookup broke, or a list of five when there
+                were forty. Occupella is built to make both of those say so.
+              </p>
+            </div>
+          </Reveal>
+          <Reveal delay={60}>
+            <div className="lp-grid ft-cards">
+              {HONESTY.map((c) => (
+                <div className="ft-card" key={c.t}>
+                  <div className="ft-card-t">{c.t}</div>
+                  <div className="ft-card-b">{c.b}</div>
+                </div>
+              ))}
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      <section className="lp-section">
+        <div className="lp-wrap">
+          <Reveal>
+            <div className="lp-section-head">
+              <div className="lp-eyebrow">Memory and context</div>
+              <h2 className="lp-h2">It remembers, so you are not the memory.</h2>
+            </div>
+          </Reveal>
+          <Reveal delay={60}>
+            <div className="lp-grid ft-cards">
+              {CONTEXT.map((c) => (
+                <div className="ft-card" key={c.t}>
+                  <div className="ft-card-t">{c.t}</div>
+                  <div className="ft-card-b">{c.b}</div>
+                </div>
+              ))}
             </div>
           </Reveal>
         </div>
@@ -304,67 +531,64 @@ export default function Features() {
           <Reveal>
             <div className="lp-section-head">
               <div className="lp-eyebrow">Leasing</div>
-              <h2 className="lp-h2">Leads, from the first text to the signed application.</h2>
+              <span className="ft-status">
+                <Icon d={MINUS} size={12} />
+                In carrier review
+              </span>
+              <h2 className="lp-h2">Leads on your own number, once the carriers clear it.</h2>
+              {/* ⚠ THE STATUS SENTENCE LEADS. Leasing is code-complete and
+                  reachable by nobody: no company on the deployment has a
+                  provisioned number, and no A2P registration has completed.
+                  Describing the pipeline first and disclosing at the bottom
+                  would be selling a section a new customer cannot open. If a
+                  future edit moves the disclosure below the fold, it has
+                  turned this page into the thing its own header forbids. */}
               <p className="lp-body">
-                A lead texts your number and lands in a pipeline with a drafted reply. Move them
-                through stages, call them from the browser, and track the application — on a
-                number that belongs to your company, not a shared one.
+                US carriers vet every business that sends application-to-person texts, and that
+                review runs about ten to fifteen days. Nobody on any plan can text a lead before
+                it clears, so this section is honest about which half is working today.
               </p>
             </div>
           </Reveal>
           <Reveal delay={60}>
             <div className="lp-grid ft-cards" data-cols="3">
               <div className="ft-card">
-                <div className="ft-card-t">Your own number.</div>
+                <div className="ft-card-t">Working today: the paperwork.</div>
                 <div className="ft-card-b">
-                  Occupella registers a dedicated number for your business and handles the
-                  carrier paperwork. Texts and calls come from you.
+                  You fill in your legal business name, whether you have an EIN, your address, an
+                  authorised contact, and one consent checkbox. Occupella writes the campaign
+                  description, the opt-in language, the sample messages and the public privacy and
+                  terms pages the carrier fetches — the four things registrations get rejected
+                  over.
                 </div>
               </div>
               <div className="ft-card">
-                <div className="ft-card-t">A pipeline, not an inbox.</div>
+                <div className="ft-card-t">Working today: the compliance rails.</div>
                 <div className="ft-card-b">
-                  New, contacted, scheduled, applied, leased. Leads that have gone quiet for a
-                  few days are flagged so they do not sit.
+                  A consent ledger you manage yourself, with revocations recorded rather than
+                  deleted. STOP honoured across every number you own. Quiet hours computed from
+                  the recipient&rsquo;s own state, including the four that are stricter than
+                  federal.
                 </div>
               </div>
               <div className="ft-card">
-                <div className="ft-card-t">Consent, handled.</div>
+                <div className="ft-card-t">At approval: the pipeline opens.</div>
                 <div className="ft-card-b">
-                  STOP is honoured the moment it arrives, across every number you own, and
-                  texting stops outside the hours the recipient&rsquo;s own state allows.
+                  A number belonging to your company — not a shared one — bought and wired
+                  automatically the day carriers clear you. Leads arrive by text into a stage
+                  board with a drafted first reply, quiet leads flagged, and click-to-call from
+                  the browser.
                 </div>
               </div>
             </div>
           </Reveal>
           <Reveal delay={120}>
             <div className="ft-note">
-              <strong>Texting starts after carrier approval.</strong> US carriers vet every
-              business that sends application-to-person messages, and that review takes about
-              ten to fifteen days. Occupella files it for you on the day you sign up, and the
-              rest of the product works throughout — but nobody, on any plan, can text a lead
-              before the carriers clear it. Leasing is included on Pro and Scale.
-            </div>
-          </Reveal>
-        </div>
-      </section>
-
-      <section className="lp-section">
-        <div className="lp-wrap">
-          <Reveal>
-            <div className="lp-section-head">
-              <div className="lp-eyebrow">Documents and context</div>
-              <h2 className="lp-h2">It reads the things your answer depends on.</h2>
-            </div>
-          </Reveal>
-          <Reveal delay={60}>
-            <div className="lp-grid ft-cards">
-              {DOCS.map((c) => (
-                <div className="ft-card" key={c.t}>
-                  <div className="ft-card-t">{c.t}</div>
-                  <div className="ft-card-b">{c.b}</div>
-                </div>
-              ))}
+              <strong>Nothing here answers a lead on its own.</strong> Every outbound text is
+              drafted and waits for you, the same as everywhere else in the product. Leasing is
+              included on Pro and Scale, and deliberately not on the free trial — the carrier
+              review is longer than the trial, so a trial account would get a setup checklist it
+              could never finish.
             </div>
           </Reveal>
         </div>
@@ -393,6 +617,14 @@ export default function Features() {
               ))}
             </div>
           </Reveal>
+          <Reveal delay={120}>
+            <div className="ft-note">
+              <strong>Also: attach a file to any question.</strong> A lease, an invoice, an
+              inspection report — PDF or image, up to 20 MB — and Occupella pulls the fields out,
+              including from a scan with no text layer. When your books cannot answer, it searches
+              the public web and carries a link back to whatever it based the answer on.
+            </div>
+          </Reveal>
         </div>
       </section>
 
@@ -403,8 +635,8 @@ export default function Features() {
               <div className="lp-eyebrow">Control</div>
               <h2 className="lp-h2">It asks before it acts.</h2>
               <p className="lp-body">
-                Occupella writes to Buildium, sends email, and texts residents. So the default
-                everywhere is that it stops and shows you first.
+                Occupella changes records in your Buildium account and sends email from your
+                address. So the default everywhere is that it stops and shows you first.
               </p>
             </div>
           </Reveal>
