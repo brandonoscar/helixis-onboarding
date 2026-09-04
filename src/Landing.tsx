@@ -1,6 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-import { APP_URL } from "./lib/api";
-import { loadWizard } from "./lib/persist";
+import {
+  CHECK,
+  CloseBand,
+  Icon,
+  LOCK,
+  BELL,
+  Reveal,
+  SHIELD,
+  useStartLabel,
+  SiteFooter,
+  SiteNav,
+  siteCss,
+} from "./Site";
 
 // ─────────────────────────────────────────────────────────────────────
 // LANDING — the front door.
@@ -45,25 +56,6 @@ const css = `
     background-clip: text;
     -webkit-background-clip: text;
     color: transparent;
-  }
-
-  .lp-h2 {
-    font-size: clamp(28px, 3.4vw, 40px);
-    font-weight: 600;
-    line-height: 1.15;
-    letter-spacing: -0.026em;
-    color: var(--ink);
-    text-wrap: balance;
-    max-width: 20ch;
-  }
-
-  .lp-eyebrow {
-    font-family: var(--font-mono);
-    font-size: 12px;
-    font-weight: 500;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--ink-faint);
   }
 
   /* ── rotating hero word ────────────────────────────────────────────
@@ -137,74 +129,9 @@ const css = `
     56%, 99% { opacity: 0; }
   }
 
-  .lp-sr {
-    position: absolute;
-    width: 1px; height: 1px;
-    padding: 0; margin: -1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-    border: 0;
-  }
-
-  .lp-lede {
-    font-size: 18px;
-    line-height: 1.55;
-    letter-spacing: -0.006em;
-    color: var(--ink-muted);
-    max-width: 54ch;
-  }
-
-  .lp-body { font-size: 15.5px; line-height: 1.6; color: var(--ink-muted); max-width: 58ch; }
-
-  /* ── nav ── */
-  .lp-nav {
-    position: sticky; top: 0; z-index: 20;
-    height: 56px;
-    display: flex; align-items: center; justify-content: space-between;
-    /* --chrome, the same rail tint the app's sidebar uses. A visitor sees
-       this page and then the product within ten minutes, and the top bar is
-       the one surface both have. Held at 0.86 so the page still shows
-       through as it scrolls under. The solid declaration above it is the
-       fallback: without one, a browser that does not know color-mix drops
-       the property entirely and the nav goes transparent over the copy
-       scrolling beneath it. */
-    background: var(--chrome);
-    background: color-mix(in srgb, var(--chrome) 86%, transparent);
-    backdrop-filter: saturate(180%) blur(12px);
-    border-bottom: 1px solid transparent;
-    transition: border-color var(--dur-state) var(--ease-std);
-  }
-  .lp-nav[data-stuck="true"] { border-bottom-color: var(--chrome-line); }
-  .lp-nav-inner {
-    max-width: 1120px; margin: 0 auto; padding: 0 32px; width: 100%;
-    display: flex; align-items: center; justify-content: space-between;
-  }
-  .lp-wordmark {
-    display: inline-flex; align-items: center; gap: 9px;
-    font-size: 15px; font-weight: 600; letter-spacing: -0.02em;
-    color: var(--ink); text-decoration: none;
-  }
-  .lp-nav-right { display: flex; align-items: center; gap: 4px; }
-  /* Below ~560px the nav tightens to sign-in and the one CTA that matters. */
-  @media (max-width: 560px) {
-    .lp-nav-inner { padding: 0 20px; }
-  }
-
   /* ── hero ── */
   .lp-hero { padding: clamp(56px, 9vw, 104px) 0 0; }
   .lp-hero-ctas { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
-  .lp-textlink {
-    font-size: 14.5px; font-weight: 500; color: var(--ink-muted);
-    text-decoration: none; transition: color var(--dur-state) var(--ease-std);
-  }
-  .lp-textlink:hover { color: var(--ink); }
-  .lp-note { font-size: 13px; color: var(--ink-subtle); }
-
-  /* ── the entrance: 4 elements, 200ms apart, settling DOWN ── */
-  .rise { opacity: 0; transform: translateY(-10px); animation: rise var(--dur-entrance) var(--ease-out) var(--d, 0ms) forwards; }
-  @keyframes rise { to { opacity: 1; transform: none; } }
-
   /* ── product panel ── */
   .lp-stage { position: relative; perspective: 2000px; margin-top: clamp(40px, 6vw, 72px); }
   .lp-stage::before {
@@ -256,10 +183,6 @@ const css = `
   .lp-proof span { display: inline-flex; align-items: center; gap: 8px; }
   .lp-proof i { width: 3px; height: 3px; border-radius: 50%; background: var(--iris); opacity: 0.7; }
 
-  /* ── sections ── */
-  .lp-section { padding: clamp(64px, 9vw, 96px) 0 0; }
-  .lp-section-head { display: flex; flex-direction: column; gap: 14px; }
-
   /* ── steps: a real sequence, so it's numbered and asymmetric ── */
   .lp-steps { display: grid; gap: 1px; margin-top: 36px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; }
   @media (min-width: 860px) { .lp-steps { grid-template-columns: repeat(3, 1fr); } }
@@ -279,48 +202,6 @@ const css = `
     background: var(--canvas); box-shadow: 0 18px 44px -30px rgba(14,22,32,0.35);
   }
   .lp-shot img { display: block; width: 100%; height: auto; }
-
-  /* ── trust ── */
-  /* Pricing. Same 1px-gap grid as .lp-trust so the two sections feel like one
-     system rather than two designs. Three cards; the middle one is marked. */
-  .lp-price { display: grid; gap: 1px; margin-top: 32px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; }
-  @media (min-width: 860px) { .lp-price { grid-template-columns: repeat(3, 1fr); } }
-  .lp-price-card { background: var(--canvas); padding: 26px 24px; display: flex; flex-direction: column; gap: 10px; }
-  .lp-price-card[data-featured="true"] { background: var(--canvas-raised, var(--canvas)); }
-  .lp-price-name { font-size: 12px; letter-spacing: .09em; text-transform: uppercase; font-weight: 600; color: var(--ink-muted); }
-  .lp-price-fig { font-size: 32px; font-weight: 700; letter-spacing: -.025em; font-variant-numeric: tabular-nums; line-height: 1.1; }
-  .lp-price-fig span { font-size: 14px; font-weight: 500; color: var(--ink-muted); letter-spacing: 0; }
-  .lp-price-b { font-size: 14px; line-height: 1.55; color: var(--ink-secondary, var(--ink-muted)); margin: 0; }
-  .lp-price-note { font-size: 13px; color: var(--ink-muted); margin: 18px 0 0; text-align: center; }
-  .lp-trust { display: grid; gap: 1px; margin-top: 32px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; }
-  @media (min-width: 760px) { .lp-trust { grid-template-columns: 1fr 1fr; } }
-  .lp-trust-item { background: var(--canvas); padding: 18px 20px; display: flex; gap: 12px; align-items: flex-start; font-size: 14px; line-height: 1.5; color: var(--ink-secondary, var(--ink-muted)); }
-  .lp-trust-item svg { flex: none; margin-top: 2px; color: var(--iris); }
-
-  /* ── closing band — the one polarity flip on the page ── */
-  .lp-close { margin-top: clamp(72px, 10vw, 120px); background: var(--deep); }
-  .lp-close-inner {
-    max-width: 1120px; margin: 0 auto; padding: clamp(64px, 8vw, 96px) 32px;
-    display: flex; flex-direction: column; align-items: flex-start; gap: 18px;
-  }
-  .lp-close h2 { font-size: clamp(28px, 3.6vw, 42px); font-weight: 600; line-height: 1.1; letter-spacing: -0.03em; color: var(--deep-ink); max-width: 18ch; }
-  .lp-close p { font-size: 16px; line-height: 1.55; color: var(--deep-muted); max-width: 52ch; }
-  .lp-close .btn-primary { background: var(--canvas); color: var(--deep); }
-  .lp-close .btn-primary:hover { background: #E8F0F9; }
-
-  /* ── footer ── */
-  .lp-footer { background: var(--deep); border-top: 1px solid var(--deep-line); }
-  .lp-footer-inner {
-    max-width: 1120px; margin: 0 auto; padding: 40px 32px 56px;
-    display: flex; flex-wrap: wrap; gap: 16px 28px; align-items: center;
-    font-size: 12.5px; color: var(--deep-muted);
-  }
-  .lp-footer a { color: var(--deep-muted); text-decoration: none; }
-  .lp-footer a:hover { color: var(--deep-ink); }
-
-  /* ── scroll reveals: headers + cards only, 12px, once ── */
-  .reveal { opacity: 0; transform: translateY(12px); transition: opacity var(--dur-reveal) var(--ease-out), transform var(--dur-reveal) var(--ease-out); }
-  .reveal[data-in="true"] { opacity: 1; transform: none; }
 
   @media (prefers-reduced-motion: reduce) {
     /* The word still TYPES — letters appearing where they will stay move
@@ -445,50 +326,6 @@ function RotatingWord() {
   );
 }
 
-// ── scroll reveal ────────────────────────────────────────────────────
-// threshold 0.25 + triggerOnce: the reveal fires once you have committed to
-// looking at the element, and never re-fires. Applied to section heads and
-// cards — never to body copy.
-function Reveal({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [seen, setSeen] = useState(false);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || seen) return;
-    if (typeof IntersectionObserver === "undefined") return setSeen(true);
-    const io = new IntersectionObserver(
-      ([e]) => {
-        if (e.isIntersecting) {
-          setSeen(true);
-          io.disconnect();
-        }
-      },
-      { threshold: 0.25 },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, [seen]);
-  return (
-    <div ref={ref} className="reveal" data-in={seen} style={{ transitionDelay: `${delay}ms` }}>
-      {children}
-    </div>
-  );
-}
-
-function Icon({ d, size = 15 }: { d: string; size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d={d} />
-    </svg>
-  );
-}
-
-const CHECK = "M20 6L9 17l-5-5";
-const LOCK = "M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2z M7 11V7a5 5 0 0 1 10 0v4";
-const SHIELD = "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z";
-const BELL = "M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9 M13.7 21a2 2 0 0 1-3.4 0";
-
 const STEPS = [
   {
     n: "01",
@@ -507,37 +344,21 @@ const STEPS = [
   },
 ];
 
+// ⚠ FOUR here, six on /features. The front door makes the promise; the
+// features page is where somebody who wants to check it goes. Repeating the
+// full list on both is how a landing page swallows the site it is supposed to
+// be the door to.
 const TRUST = [
-  { icon: LOCK, text: "Credentials are encrypted at rest — keys are entered once and never shown again." },
-  { icon: CHECK, text: "Every write to Buildium or Gmail passes a confirmation gate you can edit before approving." },
+  { icon: BELL, text: "Nothing auto-sends. Every draft waits for a person." },
+  { icon: CHECK, text: "Every write to Buildium or Gmail passes a confirmation card you can edit before approving." },
   { icon: SHIELD, text: "One company's data never reaches another's — not in files, not in what it remembers." },
-  { icon: BELL, text: "Nothing auto-sends. Drafts wait for a person." },
-  { icon: CHECK, text: "Nobody gets a text who has not opted in, and STOP works the moment it arrives." },
-  { icon: LOCK, text: "Sensitive identifiers are redacted before anything enters AI memory." },
+  { icon: LOCK, text: "Credentials are encrypted at rest, entered once and never shown again." },
 ];
 
 export default function Landing() {
-  const [hasProgress, setHasProgress] = useState(false);
-  const [stuck, setStuck] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const [panelIn, setPanelIn] = useState(false);
-
-  useEffect(() => {
-    try {
-      const w = loadWizard();
-      setHasProgress(Boolean(w.completed && (w.completed as string[]).length > 0));
-    } catch {
-      /* fresh visitor */
-    }
-  }, []);
-
-  // Nav hairline appears only once the page has moved.
-  useEffect(() => {
-    const onScroll = () => setStuck(window.scrollY > 8);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
+  const start = useStartLabel();
 
   // Product panel tilts up once, at 40% visible.
   useEffect(() => {
@@ -556,26 +377,12 @@ export default function Landing() {
     return () => io.disconnect();
   }, []);
 
-  const start = hasProgress ? "Resume setup" : "Start setup";
-
   return (
     <div className="lp">
+      <style>{siteCss}</style>
       <style>{css}</style>
 
-      <nav className="lp-nav" data-stuck={stuck}>
-        <div className="lp-nav-inner">
-          <a className="lp-wordmark" href="/">
-            Occupella
-          </a>
-          <div className="lp-nav-right">
-            <a className="btn btn-ghost" href="#pricing">Pricing</a>
-            <a className="btn btn-ghost" href={APP_URL}>Sign in</a>
-            <a className="btn btn-primary" href="/start" style={{ padding: "8px 16px", fontSize: 13.5 }}>
-              {start}
-            </a>
-          </div>
-        </div>
-      </nav>
+      <SiteNav active="home" />
 
       <header className="lp-hero">
         <div className="lp-wrap">
@@ -593,10 +400,15 @@ export default function Landing() {
             work order, the owner update. Then it waits for you.
           </p>
           <div className="lp-hero-ctas rise" style={{ "--d": "600ms", marginTop: 30 } as React.CSSProperties}>
+            {/* ⚠ The "See it work" text link that sat here was REMOVED by
+                explicit founder instruction (2026-09-04), and nothing replaces
+                it. The thing it scrolled to is directly below the fold anyway,
+                and the nav now carries Features and Pricing as real pages — so
+                the hero is one primary action, which is what a hero should be.
+                Do not quietly reintroduce a secondary link here. */}
             <a className="btn btn-primary" href="/start" style={{ padding: "12px 24px", fontSize: 15 }}>
               {start} →
             </a>
-            <a className="lp-textlink" href="#work">See it work</a>
           </div>
           <div className="lp-note rise" style={{ "--d": "600ms", marginTop: 16 } as React.CSSProperties}>
             Ten minutes to connect. Nothing sends without your approval.
@@ -723,7 +535,7 @@ export default function Landing() {
             </div>
           </Reveal>
           <Reveal delay={60}>
-            <div className="lp-trust">
+            <div className="lp-grid lp-trust">
               {TRUST.map((t) => (
                 <div className="lp-trust-item" key={t.text}>
                   <Icon d={t.icon} />
@@ -735,96 +547,40 @@ export default function Landing() {
         </div>
       </section>
 
-      <section className="lp-section" id="pricing">
+      {/* ⚠ A SUMMARY, not the pricing table. The four cards, the comparison
+          and the FAQ live on /pricing now. Two copies of a price is the
+          hand-copied-figure problem that billing/plans.py's own test exists to
+          catch, and the landing page is the copy that would go stale. What
+          stays here is the shape of the offer and the cheapest number, which
+          is what a visitor needs before deciding to look properly. */}
+      <section className="lp-section">
         <div className="lp-wrap">
           <Reveal>
             <div className="lp-section-head">
               <div className="lp-eyebrow">Pricing</div>
               <h2 className="lp-h2">Start free for two weeks.</h2>
               <p className="lp-body">
-                No card to begin. Pick a plan when the trial ends — or don't, and nothing
-                is charged.
+                No card to begin. Plans start at $50 a month, and nothing is charged when the
+                trial ends — you pick one then, or you do not.
               </p>
             </div>
           </Reveal>
           <Reveal delay={60}>
-            <div className="lp-price">
-              <div className="lp-price-card">
-                <div className="lp-price-name">Trial</div>
-                <div className="lp-price-fig">Free<span> · 14 days</span></div>
-                <p className="lp-price-b">
-                  150 questions, every feature, no card. Long enough to connect Buildium and
-                  watch it handle real work.
-                </p>
-              </div>
-              <div className="lp-price-card">
-                <div className="lp-price-name">Starter</div>
-                <div className="lp-price-fig">$50<span> / month</span></div>
-                {/* ⚠ This read "150 questions a month, every feature" until
-                    2026-09-04, and that stopped being true the moment the
-                    Leasing pipeline became a Pro capability — the API refuses
-                    those routes on a Starter plan, so the sentence was
-                    promising a section the product declines. A pricing page
-                    that overstates the cheap tier is a refund, not a
-                    conversion. */}
-                <p className="lp-price-b">
-                  150 questions a month — the trial's allowance, kept — for one person
-                  running a small book. Everything except the Leasing pipeline.
-                </p>
-              </div>
-              <div className="lp-price-card" data-featured="true">
-                <div className="lp-price-name">Pro</div>
-                <div className="lp-price-fig">$199<span> / seat / month</span></div>
-                <p className="lp-price-b">
-                  400 questions per seat each month — about eighteen a working day — plus
-                  the Leasing pipeline: texts, calls and lead tracking on your own number.
-                </p>
-              </div>
-              <div className="lp-price-card">
-                <div className="lp-price-name">Scale</div>
-                <div className="lp-price-fig">$500<span> / month</span></div>
-                <p className="lp-price-b">
-                  Your whole team on one bill, Leasing included, pooled across everyone,
-                  with a fair-use ceiling of 1,200 questions a month.
-                </p>
-              </div>
+            <div className="lp-hero-ctas" style={{ marginTop: 26 }}>
+              <a className="btn btn-secondary" href="/pricing">
+                See the plans
+              </a>
+              <a className="lp-textlink" href="/features">
+                Everything it does →
+              </a>
             </div>
           </Reveal>
-          <Reveal delay={120}>
-            <p className="lp-price-note">
-              Monthly, cancel any time. See the <a href="/terms">terms</a> for the details.
-            </p>
-          </Reveal>
         </div>
       </section>
 
-      <section className="lp-close">
-        <div className="lp-close-inner">
-          <Reveal>
-            <h2>Set up in about ten minutes.</h2>
-          </Reveal>
-          <Reveal delay={60}>
-            <p>
-              Connect Buildium, watch it triage your first real work order, and decide from
-              there.
-            </p>
-          </Reveal>
-          <Reveal delay={120}>
-            <a className="btn btn-primary" href="/start" style={{ padding: "13px 28px", fontSize: 15 }}>
-              {start} →
-            </a>
-          </Reveal>
-        </div>
-      </section>
+      <CloseBand />
 
-      <footer className="lp-footer">
-        <div className="lp-footer-inner">
-          <a href="/privacy">Privacy</a>
-          <a href="/terms">Terms</a>
-          <a href="mailto:team@occupella.com">team@occupella.com</a>
-          <span style={{ marginLeft: "auto" }}>Occupella is operated by Oscar Ventures LLC.</span>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

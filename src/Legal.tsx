@@ -73,6 +73,10 @@ const css = `
     margin-bottom: 36px;
   }
 
+  /* ⚠ flex-wrap is load-bearing, not tidiness. This row is a no-wrap flex
+     container, so every link added to it widens the page — at seven items it
+     pushed /terms past 390px and the whole document scrolled sideways on a
+     phone. Measured, not guessed. */
   .legal-footer {
     border-top: 1px solid var(--line);
     margin-top: 56px;
@@ -80,7 +84,8 @@ const css = `
     font-size: 12.5px;
     color: var(--ink-subtle);
     display: flex;
-    gap: 20px;
+    flex-wrap: wrap;
+    gap: 10px 20px;
   }
   .legal-footer a { color: var(--ink-muted); }
 `;
@@ -115,8 +120,14 @@ function Shell({
         <a href="mailto:team@occupella.com">team@occupella.com</a> and a human will answer.
       </div>
       {children}
+      {/* ⚠ These pages keep their own narrow shell (720px, for reading), but
+          the footer links must reach the rest of the SITE — somebody who
+          arrives here from a carrier review or a procurement email has no
+          other way to find out what the product is. */}
       <div className="legal-footer">
         <span>© 2026 Oscar Ventures LLC</span>
+        <a href="/features">Features</a>
+        <a href="/pricing">Pricing</a>
         <a href="/privacy">Privacy</a>
         <a href="/terms">Terms</a>
         <a href="/sms">SMS</a>
@@ -190,7 +201,11 @@ export function Privacy() {
           <a href="mailto:team@occupella.com">team@occupella.com</a>. You can also revoke
           consent by any reasonable means, including email.
         </li>
-        <li>Messages are sent only between 8am and 9pm in your local time zone.</li>
+        <li>
+          Messages are sent only during the hours your state allows, read in your own
+          local time zone — 8am to 9pm at the widest, and narrower where state law is
+          stricter.
+        </li>
       </ul>
 
       <h2>What we do NOT do</h2>
@@ -514,12 +529,25 @@ export function Sms() {
         property-management company directly; they control the content of the message.
       </p>
 
+      {/* ⚠ CORRECTED 2026-09-04. This said a flat "8:00 a.m. - 9:00 p.m."
+          while comms/local_time.py enforces something stricter: 8am-8pm in
+          Florida, Oklahoma and Washington, 9am-9pm in Texas (noon on Sunday),
+          and the intersection of all of them — 9am-8pm — when the recipient's
+          state cannot be determined. The old sentence was wrong in the SAFE
+          direction, which is exactly why it survived: we were doing more than
+          we claimed. It is still a false statement in a document carriers and
+          regulators read, and it undersold the control. If the windows in
+          local_time.py change, change this paragraph. */}
       <h2>Quiet hours</h2>
       <p>
-        Occupella does not send messages outside 8:00 a.m. – 9:00 p.m. in the{" "}
-        <em>recipient's</em> local time zone, consistent with the Telephone Consumer
-        Protection Act. A send attempted outside that window is refused by the platform,
-        not merely delayed by policy.
+        Occupella does not send messages outside the hours the{" "}
+        <em>recipient&rsquo;s own state</em> allows, read in their local time zone. The
+        federal Telephone Consumer Protection Act sets the widest window at 8:00 a.m. –
+        9:00 p.m., and several states are stricter: Florida, Oklahoma and Washington end at
+        8:00 p.m., and Texas begins at 9:00 a.m. — noon on Sundays. Where we cannot place a
+        number in a state, we apply every one of those rules at once rather than the
+        federal default. A send attempted outside the applicable window is refused by the
+        platform, not merely delayed by policy.
       </p>
 
       <h2>Sample messages</h2>
