@@ -4,20 +4,31 @@ import '@fontsource-variable/geist'
 import '@fontsource-variable/geist-mono'
 import App from './App'
 import Landing from './Landing'
+import Features from './Features'
+import Pricing from './Pricing'
 import { Privacy, Sms, Terms } from './Legal'
 import { tokensCss } from './theme'
 
 // Tiny pathname router — no dependency. vercel.json rewrites every path to
 // index.html so deep links work:
 //   /               → landing page (the front door)
+//   /features       → what the product does
+//   /pricing        → the plans, compared, plus the FAQ
 //   /start          → the setup wizard (previously lived at /)
 //   /privacy        → privacy policy
 //   /terms          → terms of service
 //   /sms            → SMS program & consent (the A2P campaign's public CTA URL)
 //   /oauth/callback → Composio OAuth popup return — auto-closes (below)
+//
+// ⚠ ORDER MATTERS AND `/start` MUST STAY FIRST. These are prefix matches, so
+// a future route that is a prefix of another shadows it. Nothing here is
+// currently ambiguous; the rule is written down so the next addition is
+// checked rather than appended.
 function route() {
   const p = window.location.pathname
   if (p.startsWith('/start')) return <App />
+  if (p.startsWith('/features')) return <Features />
+  if (p.startsWith('/pricing')) return <Pricing />
   if (p.startsWith('/privacy')) return <Privacy />
   if (p.startsWith('/terms')) return <Terms />
   if (p.startsWith('/sms')) return <Sms />

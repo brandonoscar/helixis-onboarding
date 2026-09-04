@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "./lib/supabase";
 import { apiFetch, apiJson, APP_URL, BUILDIUM_WEBHOOK_URL } from "./lib/api";
 import { loadWizard, saveWizard } from "./lib/persist";
-import Mark from "./Mark";
 
 // ─────────────────────────────────────────────────────────
 // SETUP WIZARD — 4 steps + launch (2026-07 research rebuild):
@@ -44,6 +43,23 @@ const TERMS_URL = "/terms";
 const PRIVACY_URL = "/privacy";
 
 const DOORS_OPTIONS = ["1–50", "50–200", "200–500", "500–2,000", "2,000+"];
+
+/**
+ * Screen recording of Buildium's own Create-API-Key flow, shown inside the
+ * "Walk me through it" panel on the Buildium step.
+ *
+ * Empty = the panel renders the written steps only, which is the correct
+ * behaviour until a file exists. Drop the clip at `public/<name>` and set
+ * this to "/<name>" — no other change is needed, and a missing file can
+ * never break the build the way a bare `import` of one would.
+ *
+ * ⚠ Record OUR OWN capture rather than lifting Buildium's marketing clip.
+ * Their video is their copyrighted material; embedding it in a commercial
+ * product that integrates with them is a permission question, not a
+ * technical one. A screen capture of the console taken from our own
+ * account carries no such problem.
+ */
+const BUILDIUM_KEY_CLIP = "";
 
 // ─────────────────────────────────────────────────────────
 // WIZARD-SPECIFIC STYLES (tokens + primitives live in theme.ts)
@@ -154,6 +170,46 @@ const css = `
     max-width: 540px;
     animation: fadeUp 0.35s var(--ease-out) both;
   }
+
+  /* ── BUILDIUM KEY WALKTHROUGH ── */
+  .keys-help { margin-top: 14px; }
+
+  .keys-help summary {
+    cursor: pointer;
+    font-size: 12.5px;
+    color: var(--iris);
+    list-style: none;
+    width: fit-content;
+  }
+  .keys-help summary::-webkit-details-marker { display: none; }
+  .keys-help summary::after { content: " →"; }
+  .keys-help[open] summary::after { content: ""; }
+  .keys-help summary:hover { text-decoration: underline; }
+
+  /* Deliberately capped well under the panel width: this is a reference
+     while someone works in a second window, not something to watch. */
+  .keys-clip {
+    display: block;
+    width: 100%;
+    max-width: 380px;
+    margin: 12px 0 4px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
+  }
+
+  .keys-steps {
+    margin: 10px 0 0 16px;
+    padding: 0;
+    font-size: 12.5px;
+    line-height: 1.75;
+    color: var(--ink-muted);
+  }
+  .keys-steps strong { color: var(--ink); font-weight: 500; }
+
+  /* Absolutely positioned so the centred .panel keeps its exact geometry —
+     rendering it as a flex sibling would sit it BESIDE the panel, and
+     wrapping the panel in a column would move every step's layout. */
+  .step-back { position: absolute; top: 20px; left: 20px; }
 
   @keyframes fadeUp {
     from { opacity: 0; transform: translateY(14px); }
@@ -365,7 +421,6 @@ const css = `
 
   /* ── FINISH / LAUNCH ── */
   .finish-hero { text-align: center; padding: 20px 0 28px; }
-  .finish-viz { display: flex; justify-content: center; margin-bottom: 8px; }
 
   .scan-cards { display: flex; flex-direction: column; gap: 10px; margin: 20px 0; }
 
@@ -645,14 +700,14 @@ function StepIdentify({
             ? "Create your password"
             : sent
               ? "Check your email"
-              : "Create your secure setup link"}
+              : "Create your account"}
         </h1>
         <p className="panel-desc">
           {verifiedToken
-            ? "You'll use this password to sign in at occupella.com. One more field, then straight into setup."
+            ? "You'll use this to sign in at occupella.com."
             : sent
               ? `We sent a 6-digit code to ${email}. Enter it below to continue.`
-              : "Tell us where to point Occupella. Your progress is saved before we ask for any Buildium credentials."}
+              : "Your email and your company name. No Buildium credentials yet."}
         </p>
       </div>
 
@@ -735,7 +790,7 @@ function StepIdentify({
 
 
           <button className="btn btn-primary wide" onClick={sendCode} disabled={!ready || loading}>
-            {loading ? <><span className="spinner" /> Sending…</> : "Send secure code →"}
+            {loading ? <><span className="spinner" /> Sending…</> : "Send code →"}
           </button>
         </>
       ) : (
@@ -816,14 +871,15 @@ function StepBuildium({
 
   const handoffInstructions =
     `Hi —\n\n` +
-    `We're connecting ${workspaceName || "our company"} to Occupella (an AI operations layer that runs on top of Buildium). ` +
-    `It needs a Buildium API key to read our portfolio.\n\n` +
+    `We're setting up Occupella for ${workspaceName || "our company"}. It reads our Buildium data — ` +
+    `properties, units, leases, tenants, work orders and bills — and needs an API key to do it.\n\n` +
     `Steps (about 2 minutes):\n` +
-    `1. In Buildium, open Settings → API Settings\n` +
-    `2. Create an API key and copy the Client ID and Client Secret\n` +
+    `1. In Buildium, open Settings → Developer Tools → API Keys\n` +
+    `2. Click Create API Key, then copy the Client ID and Client Secret\n` +
     `3. Send them to me securely, or finish the setup here: ${window.location.origin}/start\n\n` +
-    `Security: credentials are encrypted at rest, never displayed again after setup, ` +
-    `and access can be revoked from Buildium at any time. Every write Occupella makes is approved by a person first.\n\n` +
+    `Security: the credentials are encrypted at rest, are not shown again after setup, and you can ` +
+    `revoke the key from Buildium at any time. Occupella never writes to Buildium without a person ` +
+    `approving the change first.\n\n` +
     `Requested by ${userEmail}`;
 
   const mailtoHref =
@@ -892,9 +948,15 @@ function StepBuildium({
     <div className="panel" key="buildium">
       <div className="panel-header">
         <div className="panel-tag">Step 2 of 4</div>
-        <h1 className="panel-title">Connect Buildium so Occupella can scan your operations</h1>
+        <h1 className="panel-title">Connect Buildium</h1>
+        {/* ⚠ Do not restore a claim about what happens BEFORE the scan. The
+            previous copy promised "we show you exactly what Occupella can see
+            before anything launches" — the scan starts on its own once the
+            keys save, so that was a false statement about our own product.
+            Say what the keys are for and what the limit on them is. */}
         <p className="panel-desc">
-          We test read access first and show you exactly what Occupella can see before anything launches.
+          Occupella reads your properties, units, leases, tenants, work orders and bills.
+          It never writes anything back to Buildium without your approval.
         </p>
       </div>
 
@@ -913,8 +975,8 @@ function StepBuildium({
         <div className="handoff">
           <div className="handoff-title">Send setup instructions to your Buildium admin</div>
           <div className="handoff-body">
-            A short email that says why Occupella needs access, exactly where the API settings live, what
-            gets stored, and a link back here. Your progress is saved — come back anytime with the keys.
+            A short email saying why Occupella needs access, where to create the key in Buildium, and
+            what gets stored — with a link back here. Your progress is saved.
           </div>
           <div className="btn-row">
             <a className="btn btn-secondary" href={mailtoHref} style={{ flex: 1 }}>
@@ -947,8 +1009,33 @@ function StepBuildium({
           <div className="field">
             <label>Buildium Client Secret</label>
             <input className="secret-input" type="password" placeholder="••••••••••••••••••••" value={apiSecret} onChange={(e) => setApiSecret(e.target.value)} autoComplete="new-password" />
-            <span className="hint">Find these in Buildium → Settings → API Settings → Create API key.</span>
+            {/* ⚠ The path is Developer Tools, not "API Settings" — corrected
+                2026-09-02 from a screenshot of the live Buildium console,
+                where the page is titled "Developer Tools" and API Keys is a
+                tab on it alongside API Sandbox and Webhooks. The old wording
+                sent people to a page that does not exist. */}
+            <span className="hint">Buildium → Settings → Developer Tools → API Keys → Create API Key.</span>
           </div>
+
+          <details className="keys-help">
+            <summary>Walk me through it</summary>
+            {BUILDIUM_KEY_CLIP && (
+              <video
+                className="keys-clip"
+                src={BUILDIUM_KEY_CLIP}
+                autoPlay
+                loop
+                muted
+                playsInline
+                aria-label="Creating an API key in Buildium"
+              />
+            )}
+            <ol className="keys-steps">
+              <li>In Buildium, open <strong>Settings → Developer Tools</strong> and pick the <strong>API Keys</strong> tab.</li>
+              <li>Click <strong>Create API Key</strong>, name it <strong>Occupella</strong>, and continue through the three steps.</li>
+              <li>Copy the <strong>Client ID</strong> and <strong>Client Secret</strong> at the end and paste them above.</li>
+            </ol>
+          </details>
 
           {integration.status === "testing" && (
             <div className="test-result" style={{ background: "var(--canvas-2)", border: "1px solid var(--line)", color: "var(--ink-muted)" }}>
@@ -986,7 +1073,7 @@ function StepBuildium({
       ) : null}
 
       <button className="sample-toggle" onClick={() => setShowSample((s) => !s)}>
-        {showSample ? "Hide sample preview" : "Not ready with API keys? Preview the first scan with sample data →"}
+        {showSample ? "Hide sample preview" : "Preview the first scan with sample Buildium data →"}
       </button>
       {showSample && <SamplePreview />}
 
@@ -1041,8 +1128,8 @@ function StepLive({ onNext }: { onNext: (saved: boolean) => void }) {
         <div className="panel-tag">Step 3 of 4 · Recommended</div>
         <h1 className="panel-title">Turn on live Buildium updates</h1>
         <p className="panel-desc">
-          Let Occupella react the moment a work order, resident message, lease event, or payment
-          changes in Buildium — instead of waiting for the next sync.
+          Buildium posts work orders, resident messages, lease events and payments here as they
+          happen. Without this, Occupella only sees them at the next sync.
         </p>
       </div>
 
@@ -1154,10 +1241,18 @@ function StepChannels({ onNext }: { onNext: (connected: boolean) => void }) {
     <div className="panel" key="channels">
       <div className="panel-header">
         <div className="panel-tag">Step 4 of 4 · Optional</div>
-        <h1 className="panel-title">Add Gmail &amp; Calendar context</h1>
+        <h1 className="panel-title">Connect Gmail &amp; Calendar</h1>
+        {/* ⚠ Describes what you can ASK for, not what arrives on its own.
+            Automatic email-to-Inbox ingest exists but is gated (known
+            Buildium contact, 120+ words) and has produced ONE card across
+            every company in the product's lifetime — measured 2026-09-02,
+            26 poll rows against 1 Email.* event. Promising an Inbox that
+            fills itself would be the same false claim the Buildium step
+            just had removed. The specialists are live and answer every
+            time, so that is what this says. */}
         <p className="panel-desc">
-          Occupella drafts cleaner owner updates and catches resident follow-ups when it can see the
-          communication trail around a Buildium issue.
+          Lets you ask Occupella what you told an owner last month, or when you're free to meet a
+          vendor, without leaving the thread you're working in.
         </p>
       </div>
 
@@ -1327,15 +1422,15 @@ function StepFinish({
           {
             num: String(scan.expiring_leases),
             label: `lease${scan.expiring_leases === 1 ? "" : "s"} ending in the next ${scan.expiring_window_days} days`,
-            sub: "Renewal windows Occupella will track for you.",
+            sub: "Occupella tracks these dates.",
           },
           {
             num: usd.format(scan.delinquent_total),
             label: `owed across ${scan.delinquent_leases} lease${scan.delinquent_leases === 1 ? "" : "s"}`,
             sub:
               scan.pending_promises > 0
-                ? `${scan.pending_promises} tenant${scan.pending_promises === 1 ? " has" : "s have"} promised payment — Occupella is watching the dates.`
-                : "Rent reminders will chase these with judgment.",
+                ? `${scan.pending_promises} tenant${scan.pending_promises === 1 ? " has" : "s have"} promised payment — Occupella tracks those dates.`
+                : "Rent reminders Occupella will send once you approve them.",
           },
         ]
       : null;
@@ -1358,16 +1453,13 @@ function StepFinish({
       ? { num: "on", label: "Live updates", sub: "New Buildium events land in your Inbox in real time." }
       : { num: "off", label: "Live updates", sub: "Skipped — turn on later from Settings for real-time events." },
     googleConnected
-      ? { num: "on", label: "Gmail & Calendar context", sub: "Important tenant emails will surface in your Inbox." }
-      : { num: "off", label: "Gmail & Calendar context", sub: "Skipped — connect later from Settings → Connectors." },
+      ? { num: "on", label: "Gmail & Calendar", sub: "Ask Occupella about a thread or a date and it can read them." }
+      : { num: "off", label: "Gmail & Calendar", sub: "Skipped — connect later from Settings → Connectors." },
   ];
 
   return (
     <div className="panel" key="finish">
       <div className="finish-hero">
-        <div className="finish-viz">
-          <Mark size={64} />
-        </div>
         <h1 className="panel-title" style={{ textAlign: "center" }}>
           {findings
             ? `Here's what Occupella found in ${workspace.name || "your portfolio"}`
@@ -1383,7 +1475,7 @@ function StepFinish({
               Every number below is read straight from your Buildium data.
             </>
           ) : buildiumConnected ? (
-            "Occupella is reading your portfolio now. Open the app to watch your Inbox fill in and ask your first question."
+            "Occupella is reading your portfolio now. Open the app — the Inbox fills in as the scan runs."
           ) : (
             "Open the app and connect Buildium whenever you're ready — your first scan runs the moment it's linked."
           )}
@@ -1457,7 +1549,6 @@ function Sidebar({ current, completed }: { current: Step; completed: Set<Step> }
   return (
     <div className="sidebar">
       <a className="logo" href="/">
-        <Mark size={22} />
         <div className="logo-text">Occupella</div>
       </a>
 
@@ -1511,6 +1602,30 @@ export default function App() {
   const [googleConnected, setGoogleConnected] = useState(persisted.googleConnected || false);
   const [creatingWorkspace, setCreatingWorkspace] = useState(false);
   const didResume = useRef(false);
+
+  // Where "back" goes, as a stack rather than a table of predecessors: the
+  // flow is not linear. handleBuildiumSkip jumps buildium → channels, so a
+  // table would send someone back to `live`, a step they were never shown.
+  //
+  // ⚠ Nothing pushes on the identify → buildium transition. The account and
+  // the company exist by then, so "back" would offer to re-do a step that
+  // cannot be re-done — which is exactly the state the user reads a back
+  // button as undoing. Setup starts here; the button appears from the step
+  // after it. Deliberately NOT persisted: a refresh restores `step`, and a
+  // back button that survives into a fresh page load would claim we can
+  // return somewhere this render never went.
+  const [history, setHistory] = useState<Step[]>([]);
+
+  const go = (next: Step) => {
+    setHistory((prev) => [...prev, step]);
+    setStep(next);
+  };
+
+  const back = () => {
+    if (!history.length) return;
+    setStep(history[history.length - 1]);
+    setHistory((prev) => prev.slice(0, -1));
+  };
 
   const complete = (s: Step) => setCompleted((prev) => new Set([...prev, s]));
 
@@ -1615,7 +1730,7 @@ export default function App() {
     setBuildiumCount(count);
     setBuildiumConnected(true);
     complete("buildium");
-    setStep("live");
+    go("live");
   };
 
   // Skipping Buildium also bypasses live updates (webhooks are meaningless
@@ -1623,13 +1738,13 @@ export default function App() {
   const handleBuildiumSkip = () => {
     complete("buildium");
     complete("live");
-    setStep("channels");
+    go("channels");
   };
 
   const handleLive = (saved: boolean) => {
     setLiveUpdates(saved);
     complete("live");
-    setStep("channels");
+    go("channels");
   };
 
   const handleChannels = (connected: boolean) => {
@@ -1645,6 +1760,14 @@ export default function App() {
       <div className="app">
         <Sidebar current={step} completed={completed} />
         <div className="main">
+          {/* Hidden on `finish` — the scan has been launched, so there is
+              nothing behind it to go back to. Hidden while the workspace is
+              being created for the same reason: that panel is mid-write. */}
+          {history.length > 0 && step !== "finish" && !creatingWorkspace && (
+            <button type="button" className="btn btn-ghost step-back" onClick={back}>
+              ← Back
+            </button>
+          )}
           {step === "identify" && !creatingWorkspace && (
             <StepIdentify
               initial={{ email: userEmail, name: workspace.name, doors }}
@@ -1656,7 +1779,7 @@ export default function App() {
             <div className="panel">
               <div className="panel-header">
                 <h1 className="panel-title"><span className="spinner" /> Setting up your workspace…</h1>
-                <p className="panel-desc">Creating {workspace.name || "your workspace"} and configuring access controls.</p>
+                <p className="panel-desc">Creating {workspace.name || "your workspace"}.</p>
               </div>
             </div>
           )}

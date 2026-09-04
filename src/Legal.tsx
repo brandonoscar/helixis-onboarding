@@ -73,6 +73,10 @@ const css = `
     margin-bottom: 36px;
   }
 
+  /* ⚠ flex-wrap is load-bearing, not tidiness. This row is a no-wrap flex
+     container, so every link added to it widens the page — at seven items it
+     pushed /terms past 390px and the whole document scrolled sideways on a
+     phone. Measured, not guessed. */
   .legal-footer {
     border-top: 1px solid var(--line);
     margin-top: 56px;
@@ -80,7 +84,8 @@ const css = `
     font-size: 12.5px;
     color: var(--ink-subtle);
     display: flex;
-    gap: 20px;
+    flex-wrap: wrap;
+    gap: 10px 20px;
   }
   .legal-footer a { color: var(--ink-muted); }
 `;
@@ -115,8 +120,14 @@ function Shell({
         <a href="mailto:team@occupella.com">team@occupella.com</a> and a human will answer.
       </div>
       {children}
+      {/* ⚠ These pages keep their own narrow shell (720px, for reading), but
+          the footer links must reach the rest of the SITE — somebody who
+          arrives here from a carrier review or a procurement email has no
+          other way to find out what the product is. */}
       <div className="legal-footer">
         <span>© 2026 Oscar Ventures LLC</span>
+        <a href="/features">Features</a>
+        <a href="/pricing">Pricing</a>
         <a href="/privacy">Privacy</a>
         <a href="/terms">Terms</a>
         <a href="/sms">SMS</a>
@@ -190,7 +201,11 @@ export function Privacy() {
           <a href="mailto:team@occupella.com">team@occupella.com</a>. You can also revoke
           consent by any reasonable means, including email.
         </li>
-        <li>Messages are sent only between 8am and 9pm in your local time zone.</li>
+        <li>
+          Messages are sent only during the hours your state allows, read in your own
+          local time zone — 8am to 9pm at the widest, and narrower where state law is
+          stricter.
+        </li>
       </ul>
 
       <h2>What we do NOT do</h2>
@@ -243,11 +258,61 @@ export function Terms() {
         are responsible for the accounts you connect and for having the right to connect them.
       </p>
 
-      <h2>Early access</h2>
+      <h2>Plans and billing</h2>
       <p>
-        Occupella is in early access. The service is provided as-is, features may change, and
-        access is currently free. We will announce pricing before any billing begins — you
-        will never be charged without agreeing to a price first.
+        Every workspace starts with a <strong>14-day free trial</strong>. No card is required
+        to start it, and it includes 150 requests. When it ends, you pick a plan or your
+        workspace stops answering requests — nothing is deleted and nothing is charged
+        automatically at the end of a trial.
+      </p>
+      <p>
+        <strong>Starter</strong> is $50 per month for the whole account and includes 150
+        requests each month. <strong>Pro</strong> is $199 per seat per month and includes 400
+        requests per seat each month. <strong>Scale</strong> is $500 per month for the whole
+        account, with a pooled fair-use ceiling of 1,200 requests per month. A "request" is
+        one thing you ask Occupella that produces an answer; we don't count requests that
+        fail or return nothing, and we don't count work Occupella does on its own, such as
+        drafting a reply to an incoming work order.
+      </p>
+      {/* ⚠ These TERMS, not a marketing page. A capability difference between
+          plans is part of what the customer is agreeing to buy, so it is
+          stated here rather than left to the pricing cards — and it is stated
+          for Starter specifically, because Starter is the one where somebody
+          could pay and then find a section closed. */}
+      <p>
+        The <strong>Leasing</strong> section — texting and calling leads from your own
+        registered number, and the applicant pipeline behind it — is included in{' '}
+        <strong>Pro</strong> and <strong>Scale</strong> only. It is <strong>not</strong>{' '}
+        included in <strong>Starter</strong> or in the free trial. Everything else Occupella
+        does is on every plan; the plans differ in how many requests they include and in
+        whether Leasing is part of them.
+      </p>
+      <p>
+        Sending a text from the Leasing section additionally requires US mobile carriers to
+        approve your business for application-to-person messaging. We file that registration
+        on your behalf; the carriers decide, typically in about ten to fifteen days, and{' '}
+        <strong>we cannot commit to an outcome or a date</strong>. Until it is approved, no
+        text can be sent from your number — this is a carrier requirement, not an Occupella
+        setting. It is also the reason Leasing is not part of the 14-day trial: the review
+        is normally longer than the trial itself.
+      </p>
+      <p>
+        Paid plans are billed monthly in advance and <strong>renew automatically each month
+        until you cancel</strong>. You can cancel at any time in Settings → Billing, which
+        opens our payment provider's portal — cancelling stops the next charge and your
+        workspace keeps working until the end of the period you already paid for. Prices
+        exclude any sales tax we're required to collect.
+      </p>
+      <p>
+        If a payment fails we keep your workspace running while the card is retried, rather
+        than cutting you off over an expired card. If it ultimately can't be collected, the
+        subscription ends and the workspace stops answering requests — your data stays put
+        and you can start again.
+      </p>
+      <p>
+        We don't automatically refund partial months. If something goes wrong on our side,
+        email us and a person will sort it out. If we change a price, we'll tell workspace
+        owners by email before it takes effect, and you can cancel before it does.
       </p>
 
       <h2>Your responsibilities</h2>
@@ -300,7 +365,7 @@ export function Terms() {
         team — it is not legal, financial, or professional advice, and final decisions are
         yours. To the maximum extent permitted by law, Occupella is not liable for indirect or
         consequential damages, and our total liability is limited to the amounts you paid us
-        in the twelve months before a claim (during free early access, that is $0).
+        in the twelve months before a claim.
       </p>
 
       <h2>Termination</h2>
@@ -474,12 +539,25 @@ export function Sms() {
         property-management company directly; they control the content of the message.
       </p>
 
+      {/* ⚠ CORRECTED 2026-09-04. This said a flat "8:00 a.m. - 9:00 p.m."
+          while comms/local_time.py enforces something stricter: 8am-8pm in
+          Florida, Oklahoma and Washington, 9am-9pm in Texas (noon on Sunday),
+          and the intersection of all of them — 9am-8pm — when the recipient's
+          state cannot be determined. The old sentence was wrong in the SAFE
+          direction, which is exactly why it survived: we were doing more than
+          we claimed. It is still a false statement in a document carriers and
+          regulators read, and it undersold the control. If the windows in
+          local_time.py change, change this paragraph. */}
       <h2>Quiet hours</h2>
       <p>
-        Occupella does not send messages outside 8:00 a.m. – 9:00 p.m. in the{" "}
-        <em>recipient's</em> local time zone, consistent with the Telephone Consumer
-        Protection Act. A send attempted outside that window is refused by the platform,
-        not merely delayed by policy.
+        Occupella does not send messages outside the hours the{" "}
+        <em>recipient&rsquo;s own state</em> allows, read in their local time zone. The
+        federal Telephone Consumer Protection Act sets the widest window at 8:00 a.m. –
+        9:00 p.m., and several states are stricter: Florida, Oklahoma and Washington end at
+        8:00 p.m., and Texas begins at 9:00 a.m. — noon on Sundays. Where we cannot place a
+        number in a state, we apply every one of those rules at once rather than the
+        federal default. A send attempted outside the applicable window is refused by the
+        platform, not merely delayed by policy.
       </p>
 
       <h2>Sample messages</h2>
