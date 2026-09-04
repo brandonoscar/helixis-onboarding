@@ -327,6 +327,21 @@ export default function Features() {
               ))}
             </div>
           </Reveal>
+          {/* ⚠ NEEDS A RE-SHOOT, and it cannot be fixed by cropping.
+              The card itself is accurate — the AC work order, the three
+              noticed bullets, the drafted reply, the approval button are all
+              shipped. But the Today strip down the left carries "3 leads going
+              cold" and "Jordan Reyes is going cold", which are LEASING rows,
+              and Leasing is closed for every company on the deployment. This
+              page marks Leasing "in carrier review" three sections down, so
+              the screenshot quietly contradicts the disclosure.
+              Those two rows sit BETWEEN real ones (payment promises, $4,020
+              owed, 4 work orders stalled), so no crop removes them without
+              removing the rail. The fix is a fresh capture with the lead
+              producers absent from the strip. Left in place deliberately
+              rather than deleted: the rest of the image is the single best
+              artifact on the site, and a missing hero is a worse page than a
+              slightly overstated rail. Re-shoot, then delete this note. */}
           <Reveal delay={120}>
             <div className="ft-shot">
               <img
@@ -381,17 +396,32 @@ export default function Features() {
               with a zero.
             </div>
           </Reveal>
+          {/* ⚠ NOT report.png. THREE reasons, and the first one is fatal on a
+              page whose own header promises everything ships today:
+                1. The image contains the readable words "Demo mode — no email
+                   sent." A screenshot that says demo mode, on a page claiming
+                   to show the product, is the claim contradicting itself.
+                2. It shows a CHART card. Those are built, wired and have never
+                   once been produced by a real question in production.
+                3. Its headline figure is NOI, which is implemented nowhere.
+              property.png is cropped from the real Properties page and every
+              figure in it — occupancy, rent roll, open work orders, delinquent
+              balance, and the two work orders with their priority and status —
+              is mirror-backed and shipped. The crop ENDS above the Renewals
+              card on purpose: that card offers "Draft renewal", and lease
+              renewal is deliberately dark (no clean undo). Do not restore the
+              uncropped cockpit.png. */}
           <Reveal delay={160}>
             <div className="ft-shot">
               <img
-                src="/shots/report.png"
-                alt="An owner report in Occupella's chat: a portfolio summary card with collections, revenue, operating expenses and net operating income"
+                src="/shots/property.png"
+                alt="A property in Occupella: occupancy, rent roll, open work order count and delinquent balance, above the list of open work orders with their priority and status"
                 loading="lazy"
               />
             </div>
           </Reveal>
           <div className="ft-caption">
-            An owner report rendered in the thread, with the source of the figures on the card.
+            One property, from the synced copy of your account — with the open work at the bottom.
           </div>
         </div>
       </section>

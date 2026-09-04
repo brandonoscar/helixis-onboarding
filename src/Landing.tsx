@@ -503,17 +503,22 @@ export default function Landing() {
                   <div className="lp-eyebrow">Owner reporting</div>
                   <h2 className="lp-h2">Ask it what you'd ask your bookkeeper.</h2>
                   <p className="lp-body">
-                    Collections, NOI, work-order age, delinquency — pulled from your ledger and
-                    rendered, not pasted into a paragraph. Every figure traces back to Buildium.
+                    Occupancy, rent roll, what is open and what is owed — read from a synced copy
+                    of your account, not pasted into a paragraph. Every figure traces to Buildium.
                   </p>
                 </div>
               </Reveal>
             </div>
+            {/* ⚠ NOT report.png — see the long note at the same swap in
+                Features.tsx. Short version: that image has "Demo mode — no
+                email sent." readable in it, shows a chart card that has never
+                rendered in production, and leads on NOI, which is implemented
+                nowhere. The copy above dropped "NOI" for the same reason. */}
             <Reveal delay={60}>
               <div className="lp-shot">
                 <img
-                  src="/shots/report.png"
-                  alt="An owner report in Occupella: a portfolio summary card with collections, revenue, operating expenses and net operating income"
+                  src="/shots/property.png"
+                  alt="A property in Occupella: occupancy, rent roll, open work order count and delinquent balance, above the list of open work orders with their priority and status"
                   loading="lazy"
                 />
               </div>
