@@ -258,6 +258,19 @@ export function Terms() {
         one request you send Occupella that produces an answer; we don't count requests that
         fail or return nothing.
       </p>
+      {/* ⚠ These TERMS, not a marketing page. A capability difference between
+          plans is part of what the customer is agreeing to buy, so it is
+          stated here rather than left to the pricing cards — and it is stated
+          for Starter specifically, because Starter is the one where somebody
+          could pay and then find a section closed. */}
+      <p>
+        The <strong>Leasing</strong> section — texting and calling leads from your own
+        registered number, and the applicant pipeline behind it — is included in the free
+        trial, <strong>Pro</strong> and <strong>Scale</strong>. It is <strong>not</strong>{' '}
+        included in <strong>Starter</strong>. Everything else Occupella does is on every
+        plan; the plans differ in how many questions they include and in whether Leasing is
+        part of them.
+      </p>
       <p>
         Paid plans are billed monthly in advance and <strong>renew automatically each month
         until you cancel</strong>. You can cancel at any time in Settings → Billing, which
