@@ -251,11 +251,12 @@ export function Terms() {
         automatically at the end of a trial.
       </p>
       <p>
-        <strong>Starter</strong> is $199 per seat per month and includes 400 questions per
-        seat each month. <strong>Pro</strong> is $500 per month for the whole account, with a
-        pooled fair-use ceiling of 1,200 questions per month. A "question" is one request you
-        send Occupella that produces an answer; we don't count requests that fail or return
-        nothing.
+        <strong>Starter</strong> is $50 per month for the whole account and includes 150
+        questions each month. <strong>Pro</strong> is $199 per seat per month and includes 400
+        questions per seat each month. <strong>Scale</strong> is $500 per month for the whole
+        account, with a pooled fair-use ceiling of 1,200 questions per month. A "question" is
+        one request you send Occupella that produces an answer; we don't count requests that
+        fail or return nothing.
       </p>
       <p>
         Paid plans are billed monthly in advance and <strong>renew automatically each month

@@ -757,8 +757,16 @@ export default function Landing() {
                   watch it handle real work.
                 </p>
               </div>
-              <div className="lp-price-card" data-featured="true">
+              <div className="lp-price-card">
                 <div className="lp-price-name">Starter</div>
+                <div className="lp-price-fig">$50<span> / month</span></div>
+                <p className="lp-price-b">
+                  150 questions a month, every feature. The trial's allowance, kept — for one
+                  person running a small book.
+                </p>
+              </div>
+              <div className="lp-price-card" data-featured="true">
+                <div className="lp-price-name">Pro</div>
                 <div className="lp-price-fig">$199<span> / seat / month</span></div>
                 <p className="lp-price-b">
                   400 questions per seat each month — about eighteen a working day, for one
@@ -766,7 +774,7 @@ export default function Landing() {
                 </p>
               </div>
               <div className="lp-price-card">
-                <div className="lp-price-name">Pro</div>
+                <div className="lp-price-name">Scale</div>
                 <div className="lp-price-fig">$500<span> / month</span></div>
                 <p className="lp-price-b">
                   Your whole team on one bill, pooled across everyone, with a fair-use
