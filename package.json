@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "build": "node scripts/check-assets.mjs && tsc -b && vite build",
+    "preview": "vite preview",
+    "check-assets": "node scripts/check-assets.mjs"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.2.9",

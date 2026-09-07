@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+
+import { FeatureSlideshow, slideshowCss } from "./FeatureSlideshow";
 import {
   CHECK,
   CloseBand,
@@ -212,6 +214,8 @@ const css = `
     .lp-panel { transform: none !important; animation: none !important; }
     .lp-stage::before { opacity: 0.16 !important; animation: none !important; }
   }
+
+${slideshowCss}
 `;
 
 // ── rotating hero word ───────────────────────────────────────────────
@@ -414,25 +418,12 @@ export default function Landing() {
             Ten minutes to connect. Nothing sends without your approval.
           </div>
 
+          {/* The stage was one static screenshot of the inbox. It is the
+              walkthrough plus four capability shots now — the same panel,
+              the same tilt, five things behind it instead of one. The inbox
+              shot is still the lead image on /features, so nothing is lost. */}
           <div className="lp-stage" ref={panelRef}>
-            <div className="lp-panel" data-in={panelIn}>
-              <div className="lp-panel-bar">
-                <span className="lp-panel-dot" />
-                <span className="lp-panel-dot" />
-                <span className="lp-panel-dot" />
-                <span className="lp-panel-url">occupella.com</span>
-              </div>
-              <img
-                src="/shots/inbox.png"
-                alt="Occupella's inbox: an AC work order triaged, with what Occupella noticed across the unit's history and a drafted tenant reply waiting for approval"
-                width={2880}
-                height={1800}
-                fetchPriority="high"
-              />
-            </div>
-            <div className="lp-caption">
-              A real work order — context gathered, reply drafted, waiting on your approval.
-            </div>
+            <FeatureSlideshow panelIn={panelIn} />
           </div>
 
           <div className="lp-proof">
