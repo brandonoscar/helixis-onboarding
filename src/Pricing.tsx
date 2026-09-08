@@ -15,26 +15,33 @@ import { CHECK, Icon, MINUS, Reveal, SitePageShell } from "./Site";
 // billing section. A stale number on a marketing page is a bad look; a stale
 // number in the terms is a different kind of problem.
 //
-// ⚠ WHAT THE PLANS ACTUALLY DIFFER ON. Two things, and only two: how many
-// credits are included, and whether the Leasing pipeline is part of it.
+// ⚠ WHAT THE PLANS ACTUALLY DIFFER ON. Two things, and only two: how much
+// usage is included, and whether the Leasing pipeline is part of it.
 // Everything else Occupella does is on every plan. Presenting it any other way
 // — a feature matrix with invented distinctions to make the dear plans look
 // fuller — is the thing this table is written to avoid.
 //
-// ⚠ VOCABULARY (founder call, 2026-09-08). The metered unit is a CREDIT and
-// the meter itself is USAGE. It has now been "questions" (too narrow once the
-// answer to "what counts" had to include things that are not questions) and
-// then "requests" (accurate and too small — it reads like an HTTP call rather
-// than a piece of work). A credit is one thing you ask that produces an
-// answer, which is the same rule under a bigger name.
+// ⚠ VOCABULARY (founder call, 2026-09-08). This page sells USAGE and does not
+// put a countable number on a card. The unit has now moved three times —
+// "questions" (too narrow once the answer to "what counts" had to include
+// things that are not questions), "requests" (accurate and too small; reads
+// like an HTTP call), "credits" (a countable number on a card invites the
+// buyer to divide it by thirty and decide it is not enough) — and the lesson
+// is that a marketing page should not carry the unit at all. It carries a
+// TIER: Standard, 3x, 8x, relative to Starter.
 //
-// The word is load-bearing across FOUR surfaces and a change is a change in
-// all of them: this page, Legal.tsx's billing section (where it is a defined
-// billing term, not copy), the app's billing panel in AgenticHelixis, and the
-// refusal the backend generates when somebody runs out — billing/gate.py.
-// That last one is the one to check, because it is the sentence a customer
-// reads at the worst moment, and it must use the noun this page sold them.
+// ⚠ The exact figures still exist and still have to be somewhere. They are in
+// Legal.tsx's billing section, as a fair-use ceiling in "answered turns", and
+// in the app where a paying customer can see their own balance. Vague on the
+// page, precise in the contract, precise in the product — which is the split
+// Claude and OpenAI both use, and the one that survives a dispute.
 //
+// ⚠ Four surfaces, and a change is a change in all of them: this page,
+// Legal.tsx, the app's billing panel (AgenticHelixis), and the refusal
+// billing/gate.py generates when somebody runs out. That last one is the
+// sentence a customer reads at the worst moment; it says "usage limit"
+// rather than a number, and a test over there pins it.
+
 // ⚠ TWO PLANS EXCLUDE LEASING, for two different reasons, and the API
 // enforces both: every authenticated Leasing route refuses with a 402.
 //   · Starter — Leasing costs real per-customer money that $50 does not cover.
@@ -147,7 +154,7 @@ const PLANS: Plan[] = [
     name: "Trial",
     fig: "Free",
     unit: " · 14 days",
-    allowance: "150 credits",
+    allowance: "Standard usage",
     // ⚠ Leasing is FALSE on the trial and the reason is arithmetic, not
     // packaging (founder call, 2026-09-04). Carrier approval for texting runs
     // ten to fifteen days; the trial is fourteen. A trialist given Leasing
@@ -167,9 +174,9 @@ const PLANS: Plan[] = [
     name: "Starter",
     fig: "$50",
     unit: " / month",
-    allowance: "150 credits a month",
+    allowance: "Standard usage, every month",
     forWho:
-      "One person running a small book. The trial's allowance, kept — every month, without a card expiring on you.",
+      "One person running a small book. The trial's usage, kept — every month, without a card expiring on you.",
     leasing: false,
     leasingLabel: "No Leasing pipeline",
     cta: "Start free",
@@ -180,9 +187,9 @@ const PLANS: Plan[] = [
     tag: "Most teams",
     fig: "$199",
     unit: " / person / month",
-    allowance: "400 credits each, every month",
+    allowance: "3× more usage, per person",
     forWho:
-      "A team working the whole portfolio. About eighteen credits a working day per person, and the allowance grows as you hire.",
+      "A team working the whole portfolio. Room to work it all day, and the headroom grows as you hire.",
     leasing: true,
     leasingLabel: "Leasing included",
     featured: true,
@@ -193,9 +200,9 @@ const PLANS: Plan[] = [
     name: "Scale",
     fig: "$500",
     unit: " / month",
-    allowance: "1,200 credits a month, pooled",
+    allowance: "8× more usage, pooled",
     forWho:
-      "Put everyone on it for one predictable bill. No per-person charge, and the allowance is shared across the team.",
+      "Put everyone on it for one predictable bill. No per-person charge, and the usage is shared across the team.",
     leasing: true,
     leasingLabel: "Leasing included",
     cta: "Start free",
@@ -212,7 +219,10 @@ type Row = { label: string; values: (string | boolean)[] };
  * mostly "nothing". Showing the ticks all the way across is what says that.
  */
 const ROWS: Row[] = [
-  { label: "Requests included", values: ["150 once", "150 / mo", "400 / person", "1,200 / mo"] },
+  {
+    label: "Usage",
+    values: ["Standard", "Standard", "3× Starter, per person", "8× Starter, pooled"],
+  },
   { label: "People", values: ["Your team", "Your team", "Priced per person", "Your team"] },
   { label: "Buildium sync and history", values: [true, true, true, true] },
   { label: "Inbox with drafted replies", values: [true, true, true, true] },
@@ -233,13 +243,15 @@ const ROWS: Row[] = [
 
 const FAQ: { q: string; a: React.ReactNode }[] = [
   {
-    q: "What counts as a credit?",
+    q: "How much can I use?",
     a: (
       <>
-        One thing you ask Occupella that produces an answer. A question that fails or comes back
-        empty costs nothing, and neither is anything Occupella does on its own — the Inbox
-        drafting a reply to a work order, a nightly sweep, a reminder. Reading the Inbox,
-        approving a draft and browsing your portfolio are free. Asking is what counts.
+        Enough to work the way you already work. Usage counts the things you ask Occupella that
+        produce an answer — a question that fails or comes back empty costs nothing, and neither
+        does anything Occupella does on its own: the Inbox drafting a reply to a work order, a
+        nightly sweep, a reminder. Reading the Inbox, approving a draft and browsing your
+        portfolio are free. If you get near your plan's ceiling we tell you before you hit it,
+        and the exact fair-use figures are in the <a href="/terms">terms</a>.
       </>
     ),
   },
@@ -337,7 +349,7 @@ export default function Pricing() {
       title="Start free for two weeks."
       lede={
         <>
-          No card to begin. Plans differ on two things: how many credits are included, and
+          No card to begin. Plans differ on two things: how much usage is included, and
           whether the Leasing pipeline is part of it. Everything else is on every plan.
         </>
       }
