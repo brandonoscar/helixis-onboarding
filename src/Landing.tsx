@@ -406,7 +406,7 @@ export default function Landing() {
       <header className="lp-hero">
         <div className="lp-wrap">
           <div className="lp-eyebrow rise" style={{ "--d": "0ms" } as React.CSSProperties}>
-            For teams running Buildium
+            Agentic Workflows for Buildium Users
           </div>
           <h1 className="lp-h1 rise" style={{ "--d": "200ms", marginTop: 18 } as React.CSSProperties}>
             We help Buildium users with

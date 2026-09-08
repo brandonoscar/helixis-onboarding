@@ -103,6 +103,17 @@ const css = `
   .pr-faq { margin-top: 32px; }
   @media (min-width: 820px) { .pr-faq { grid-template-columns: 1fr 1fr; } }
   .pr-faq-item { padding: 22px 22px 24px; display: flex; flex-direction: column; gap: 8px; }
+  /* ⚠ An ODD number of questions leaves the second column of the last row
+     empty, and .lp-grid paints its 1px gap background through the hole — so
+     it renders as a grey slab beside the last answer, which reads as a
+     component that failed to load. There were nine.
+
+     The fix is a rule rather than a tenth question: adding or removing one
+     later would silently re-open it, and nobody writes an FAQ entry to
+     satisfy a layout. The last item spans the row when it is odd one out. */
+  @media (min-width: 820px) {
+    .pr-faq-item:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  }
   .pr-faq-q { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
   .pr-faq-a { font-size: 14px; line-height: 1.6; color: var(--ink-muted); }
   .pr-faq-a a { color: var(--iris); text-decoration: none; }

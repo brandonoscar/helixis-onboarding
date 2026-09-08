@@ -67,18 +67,6 @@ const css = `
   .ft-list-item { display: flex; gap: 10px; align-items: flex-start; font-size: 14.5px; line-height: 1.5; color: var(--ink-secondary, var(--ink-muted)); }
   .ft-list-item svg { flex: none; margin-top: 3px; color: var(--iris); }
 
-  /* A caveat that is part of the offer rather than a warning about it —
-     hairline and muted, never a coloured alert box. A yellow panel on a
-     marketing page reads as an apology. */
-  .ft-note {
-    margin-top: 22px; padding: 14px 16px;
-    border: 1px solid var(--line); border-radius: var(--r-sm);
-    background: var(--canvas-1);
-    font-size: 13.5px; line-height: 1.55; color: var(--ink-muted);
-    max-width: 62ch;
-  }
-  .ft-note strong { color: var(--ink); font-weight: 600; }
-
   /* The status chip on a section that is real code and not yet reachable.
      ⚠ Monochrome on purpose — the ONE chromatic accent on this site is
      --iris, and spending it on "not ready yet" would make the unfinished
@@ -219,6 +207,44 @@ const FAIR_HOUSING = [
   "It will not make or draft a decision on a housing application. That tool exists in the codebase and is deliberately switched off.",
   "After it declines, it will not offer school ratings or crime statistics as a substitute — the workaround most systems fall into, and steering either way.",
   "Every outbound message drafted for a resident is screened against the same rules before it reaches the approval card.",
+];
+
+const PLACE = [
+  {
+    t: "Is this address in a flood zone?",
+    b: "Answered off FEMA's National Flood Hazard Layer at the property's own coordinates — the zone letter, whether it sits in a Special Flood Hazard Area, and what that means for insurance. Not a guess from the ZIP code.",
+  },
+  {
+    t: "How does this rent compare with HUD's?",
+    b: "HUD publishes a fair market rent per area per bedroom count. Occupella pulls the figure for the property's ZIP and puts your rent next to it, by unit mix, so the comparison is to the right column.",
+  },
+  {
+    t: "Which of my properties are within 150 miles of here?",
+    b: "A real radius search over your portfolio, with each distance. The kind of question a list of addresses cannot answer and a map you have to read yourself answers slowly.",
+  },
+  {
+    t: "Every property is placed, once.",
+    b: "Addresses are geocoded against the US Census geocoder and kept, so the location questions above do not re-look-up anything. Maps are rendered from OpenStreetMap tiles.",
+  },
+];
+
+const LAW = [
+  {
+    t: "Deposit deadlines and caps.",
+    b: "Ask when a deposit has to go back after a move-out and it answers with the deadline for that property's state and the cap on what may be withheld — with the statute named.",
+  },
+  {
+    t: "The date, computed.",
+    b: "Not “within 30 days.” The actual calendar date, counted from the move-out on the lease in front of it.",
+  },
+  {
+    t: "Notice periods and late-fee rules.",
+    b: "The same treatment for the other state-level numbers a manager has to get right, cited the same way.",
+  },
+  {
+    t: "It shows its source.",
+    b: "When the answer comes from the public web rather than your books, it carries a link back to what it read. Your lawyer is still your lawyer, and every one of these says so.",
+  },
 ];
 
 const CONTEXT = [
@@ -380,22 +406,6 @@ export default function Features() {
               ))}
             </div>
           </Reveal>
-          <Reveal delay={120}>
-            {/* ⚠ This caveat is not optional and not softenable. The
-                open-maintenance count is per PROPERTY: Buildium leaves the
-                unit id null on every mirrored work order and task, so a
-                multi-unit building's count is the building's. On a
-                single-unit property the two are identical, which is exactly
-                why the over-claim is invisible in a demo. */}
-            <div className="ft-note">
-              <strong>Two limits worth knowing before you ask.</strong> The open-maintenance
-              count on those rows is per property, not per unit — Buildium does not carry the
-              unit on a work order, and the answer says so where it matters. And the bills
-              Occupella holds are the unpaid ones, so &ldquo;when did we last pay this
-              vendor&rdquo; is a question it tells you it cannot answer rather than answering it
-              with a zero.
-            </div>
-          </Reveal>
           {/* ⚠ NOT report.png. THREE reasons, and the first one is fatal on a
               page whose own header promises everything ships today:
                 1. The image contains the readable words "Demo mode — no email
@@ -448,29 +458,6 @@ export default function Features() {
               ))}
             </div>
           </Reveal>
-          <Reveal delay={120}>
-            {/* ⚠ The route-by-field sentence reads like an implementation
-                detail and is the most load-bearing claim in this section:
-                Buildium accepts a status or priority on the work-order
-                endpoint, returns 200, and silently ignores it. A product that
-                did the obvious thing would report a change that never
-                happened. Do not cut it for length. */}
-            <div className="ft-note">
-              <strong>Where it routes matters.</strong> Buildium accepts a status or priority
-              change on a work order, returns success, and ignores it. Occupella sends each field
-              where Buildium actually stores it, updates records by reading and merging so an
-              untouched field is never blanked, and on six of these re-reads the record afterwards
-              to confirm the field it changed actually moved.
-            </div>
-          </Reveal>
-          <Reveal delay={160}>
-            <div className="ft-note">
-              <strong>Two things it will not do.</strong> It will not renew a lease — a renewal
-              creates a real term with no clean undo, so that one stays with you in Buildium. And
-              it cannot reopen a work order once closed: Buildium latches that, and no integration
-              can change it. Closing one asks for a manager for the same reason.
-            </div>
-          </Reveal>
         </div>
       </section>
 
@@ -497,13 +484,57 @@ export default function Features() {
               ))}
             </div>
           </Reveal>
-          <Reveal delay={120}>
-            <div className="ft-note">
-              <strong>It is a guardrail, not a compliance opinion.</strong> Occupella will also
-              give you the operational parameters for a property&rsquo;s state — deposit caps and
-              return deadlines, notice periods, late-fee rules — with the statute cited and the
-              actual calendar date computed. Those are state-level and carry a footer saying they
-              are not legal advice. Your lawyer is still your lawyer.
+        </div>
+      </section>
+
+      <section className="lp-section">
+        <div className="lp-wrap">
+          <Reveal>
+            <div className="lp-section-head">
+              <div className="lp-eyebrow">Place and hazard</div>
+              <h2 className="lp-h2">It knows where your properties actually are.</h2>
+              <p className="lp-body">
+                Buildium stores an address as text. Occupella turns it into a point on the
+                ground, which is what lets it answer questions your books cannot: flood
+                exposure, how a rent sits against the federal benchmark, and which properties
+                are near which.
+              </p>
+            </div>
+          </Reveal>
+          <Reveal delay={60}>
+            <div className="lp-grid ft-cards">
+              {PLACE.map((c) => (
+                <div className="ft-card" key={c.t}>
+                  <div className="ft-card-t">{c.t}</div>
+                  <div className="ft-card-b">{c.b}</div>
+                </div>
+              ))}
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      <section className="lp-section">
+        <div className="lp-wrap">
+          <Reveal>
+            <div className="lp-section-head">
+              <div className="lp-eyebrow">Local rules</div>
+              <h2 className="lp-h2">The numbers that change at the state line.</h2>
+              <p className="lp-body">
+                A deposit deadline in Colorado is not a deposit deadline in Texas, and the one
+                that applies is the one where the property sits. Occupella looks it up for that
+                property and does the arithmetic.
+              </p>
+            </div>
+          </Reveal>
+          <Reveal delay={60}>
+            <div className="lp-grid ft-cards">
+              {LAW.map((c) => (
+                <div className="ft-card" key={c.t}>
+                  <div className="ft-card-t">{c.t}</div>
+                  <div className="ft-card-b">{c.b}</div>
+                </div>
+              ))}
             </div>
           </Reveal>
         </div>
@@ -612,15 +643,6 @@ export default function Features() {
               </div>
             </div>
           </Reveal>
-          <Reveal delay={120}>
-            <div className="ft-note">
-              <strong>Nothing here answers a lead on its own.</strong> Every outbound text is
-              drafted and waits for you, the same as everywhere else in the product. Leasing is
-              included on Pro and Scale, and deliberately not on the free trial — the carrier
-              review is longer than the trial, so a trial account would get a setup checklist it
-              could never finish.
-            </div>
-          </Reveal>
         </div>
       </section>
 
@@ -645,14 +667,6 @@ export default function Features() {
                   <div className="ft-card-b">{c.b}</div>
                 </div>
               ))}
-            </div>
-          </Reveal>
-          <Reveal delay={120}>
-            <div className="ft-note">
-              <strong>Also: attach a file to any question.</strong> A lease, an invoice, an
-              inspection report — PDF or image, up to 20 MB — and Occupella pulls the fields out,
-              including from a scan with no text layer. When your books cannot answer, it searches
-              the public web and carries a link back to whatever it based the answer on.
             </div>
           </Reveal>
         </div>
