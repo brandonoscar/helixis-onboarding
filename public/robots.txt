@@ -1,0 +1,14 @@
+# setup.occupella.com — the marketing site and the setup wizard share a host.
+#
+# Written deliberately rather than left absent: with no robots.txt a crawler
+# indexes /oauth/callback, whose whole body is "Connected. You can close this
+# window." That page then competes in search results with the pages that are
+# meant to rank, and it is the one page on the site that says nothing about
+# the product.
+User-agent: *
+Allow: /
+
+# Not a page — a popup return target that closes itself.
+Disallow: /oauth/
+
+Sitemap: https://setup.occupella.com/sitemap.xml
