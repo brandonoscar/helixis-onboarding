@@ -338,7 +338,7 @@ export default function Features() {
         <div className="lp-wrap">
           <DemoPanel
             src="/demo/product-tour.mp4"
-            caption="Inbox, Operations and Leasing — the three surfaces, in thirty seconds."
+            caption="Inbox, Operations and Leasing — the three surfaces, in under twenty seconds."
             width={1440}
             height={900}
           />

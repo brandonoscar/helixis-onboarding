@@ -323,8 +323,9 @@ export function Reveal({ children, delay = 0 }: { children: React.ReactNode; del
  *    this one is below the fold by construction. So it is started again the
  *    moment it intersects; play() on something already playing is a no-op.
  *
- * ⚠ MUTED is the price of autoplay, not a style choice, and `controls` is
- * what lets somebody turn the sound on — so neither is optional.
+ * ⚠ MUTED is the price of autoplay, not a style choice. `controls` is
+ * therefore the only way a viewer can ever hear a narration track, which is
+ * why it is a per-video prop rather than a constant — see the prop's note.
  *
  * `width`/`height` are the video's INTRINSIC size. They reserve the right box
  * before a byte arrives, so the page does not jump when the poster frame
@@ -336,12 +337,24 @@ export function DemoPanel({
   width,
   height,
   url = "occupella.com",
+  controls = false,
 }: {
   src: string;
   caption: string;
   width: number;
   height: number;
   url?: string;
+  /**
+   * ⚠ Per video, and it turns on AUDIO REACH, not playback control. Default
+   * OFF: a silent screen capture on a marketing page is a moving picture, and
+   * a scrub bar under it invites somebody to pause the thing that is selling
+   * them the product.
+   *
+   * A video with a NARRATION TRACK has to set it true. Without controls there
+   * is no unmute button, and muted autoplay is the only kind a browser allows
+   * — so a narrated video with controls off is one nobody can ever hear.
+   */
+  controls?: boolean;
 }) {
   const stage = useRef<HTMLDivElement>(null);
   const video = useRef<HTMLVideoElement>(null);
@@ -354,7 +367,9 @@ export function DemoPanel({
       v.muted = true;
       v.setAttribute("muted", "");
       void v.play().catch(() => {
-        /* Declined by policy. The controls are right there. */
+        /* Declined by policy. Nothing to do about it — and with controls
+           off there is not even a play button, which is the trade this
+           default accepts: a still frame beats a scrub bar. */
       });
     };
     start();
@@ -391,7 +406,7 @@ export function DemoPanel({
           muted
           loop
           playsInline
-          controls
+          controls={controls}
           preload="auto"
           width={width}
           height={height}

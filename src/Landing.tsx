@@ -364,6 +364,10 @@ export default function Landing() {
             caption="A minute of Occupella working a real Buildium account."
             width={1850}
             height={1080}
+            // ⚠ This one is NARRATED (AAC stereo on the file). It autoplays
+            // muted like everything else, so controls are the only route to
+            // the audio — without them the narration can never be heard.
+            controls
           />
 
           <div className="lp-proof">
