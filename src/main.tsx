@@ -6,6 +6,7 @@ import App from './App'
 import Landing from './Landing'
 import Features from './Features'
 import Pricing from './Pricing'
+import NotFound from './NotFound'
 import { Privacy, Sms, Terms } from './Legal'
 import { tokensCss } from './theme'
 
@@ -19,6 +20,7 @@ import { tokensCss } from './theme'
 //   /terms          → terms of service
 //   /sms            → SMS program & consent (the A2P campaign's public CTA URL)
 //   /oauth/callback → Composio OAuth popup return — auto-closes (below)
+//   anything else  → 404
 //
 // ⚠ ORDER MATTERS AND `/start` MUST STAY FIRST. These are prefix matches, so
 // a future route that is a prefix of another shadows it. Nothing here is
@@ -32,7 +34,13 @@ function route() {
   if (p.startsWith('/privacy')) return <Privacy />
   if (p.startsWith('/terms')) return <Terms />
   if (p.startsWith('/sms')) return <Sms />
-  return <Landing />
+  // The root is the landing page; ANYTHING ELSE is a wrong turn and says so.
+  // Falling through to <Landing /> served the front door at 200 for every
+  // mistyped URL — a soft 404, which tells the visitor nothing and shows a
+  // crawler unlimited duplicates of one page. See NotFound.tsx for why the
+  // STATUS code is still 200 and what it would take to change that.
+  if (p === '/' || p === '') return <Landing />
+  return <NotFound />
 }
 
 // Composio OAuth callback — the channels step passes this URL as
