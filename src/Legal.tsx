@@ -261,17 +261,18 @@ export function Terms() {
       <h2>Plans and billing</h2>
       <p>
         Every workspace starts with a <strong>14-day free trial</strong>. No card is required
-        to start it, and it includes 150 requests. When it ends, you pick a plan or your
-        workspace stops answering requests — nothing is deleted and nothing is charged
-        automatically at the end of a trial.
+        to start it, and it includes a usage allowance of 150 answers. When it ends, you
+        pick a plan or your workspace stops answering — nothing is deleted and nothing is
+        charged automatically at the end of a trial.
       </p>
       <p>
-        <strong>Starter</strong> is $50 per month for the whole account and includes 150
-        requests each month. <strong>Pro</strong> is $199 per seat per month and includes 400
-        requests per seat each month. <strong>Scale</strong> is $500 per month for the whole
-        account, with a pooled fair-use ceiling of 1,200 requests per month. A "request" is
-        one thing you ask Occupella that produces an answer; we don't count requests that
-        fail or return nothing, and we don't count work Occupella does on its own, such as
+        <strong>Starter</strong> is $50 per month for the whole account and includes a monthly
+        usage allowance of 150 answers. <strong>Pro</strong> is $199 per seat per month
+        and includes a usage allowance of 400 answers per seat each month.{' '}
+        <strong>Scale</strong> is $500 per month for the whole account, with a pooled
+        fair-use ceiling of 1,200 answers per month. An "answer" is one reply Occupella
+        produces for something you asked it. We do not count a question that fails or
+        returns nothing, and we do not count work Occupella does on its own, such as
         drafting a reply to an incoming work order.
       </p>
       {/* ⚠ These TERMS, not a marketing page. A capability difference between
@@ -284,7 +285,7 @@ export function Terms() {
         registered number, and the applicant pipeline behind it — is included in{' '}
         <strong>Pro</strong> and <strong>Scale</strong> only. It is <strong>not</strong>{' '}
         included in <strong>Starter</strong> or in the free trial. Everything else Occupella
-        does is on every plan; the plans differ in how many requests they include and in
+        does is on every plan; the plans differ in how much usage they include and in
         whether Leasing is part of them.
       </p>
       <p>
@@ -306,7 +307,7 @@ export function Terms() {
       <p>
         If a payment fails we keep your workspace running while the card is retried, rather
         than cutting you off over an expired card. If it ultimately can't be collected, the
-        subscription ends and the workspace stops answering requests — your data stays put
+        subscription ends and the workspace stops answering questions — your data stays put
         and you can start again.
       </p>
       <p>
