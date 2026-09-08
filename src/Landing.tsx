@@ -1,6 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-
-import { FeatureSlideshow, slideshowCss } from "./FeatureSlideshow";
 import {
   CHECK,
   CloseBand,
@@ -215,7 +213,9 @@ const css = `
     .lp-stage::before { opacity: 0.16 !important; animation: none !important; }
   }
 
-${slideshowCss}
+  /* The walkthrough sits in the same panel the screenshot used to, so it gets
+     the same rule -- one line, not a second copy of the layout. */
+  .lp-panel video { display: block; width: 100%; height: auto; background: var(--canvas-1); }
 `;
 
 // ── rotating hero word ───────────────────────────────────────────────
@@ -364,6 +364,21 @@ export default function Landing() {
   const [panelIn, setPanelIn] = useState(false);
   const start = useStartLabel();
 
+  // ⚠ An autoplaying video IS motion, so someone who asked their OS to stop
+  // motion gets the same video, the same controls, and a play button.
+  //
+  // It PAUSES rather than withholding the `autoplay` attribute, and that is
+  // the whole reason this is an effect. A browser decides about autoplay when
+  // the element loads; setting the attribute afterwards does not retroactively
+  // start anything, so a conditional attribute reads correctly in the diff and
+  // leaves the video stopped for everyone. Let it start, then stop it.
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  useEffect(() => {
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      videoRef.current?.pause();
+    }
+  }, []);
+
   // Product panel tilts up once, at 40% visible.
   useEffect(() => {
     const el = panelRef.current;
@@ -418,12 +433,40 @@ export default function Landing() {
             Ten minutes to connect. Nothing sends without your approval.
           </div>
 
-          {/* The stage was one static screenshot of the inbox. It is the
-              walkthrough plus four capability shots now — the same panel,
-              the same tilt, five things behind it instead of one. The inbox
-              shot is still the lead image on /features, so nothing is lost. */}
+          {/* The stage is the walkthrough, and nothing else. It briefly held a
+              five-slide carousel of capability screenshots; that was removed
+              by founder instruction (2026-09-08) because it looked bad, not
+              because it was broken. The shots are still in public/demo/ if it
+              is ever wanted back. */}
           <div className="lp-stage" ref={panelRef}>
-            <FeatureSlideshow panelIn={panelIn} />
+            <div className="lp-panel" data-in={panelIn}>
+              <div className="lp-panel-bar">
+                <span className="lp-panel-dot" />
+                <span className="lp-panel-dot" />
+                <span className="lp-panel-dot" />
+                <span className="lp-panel-url">occupella.com</span>
+              </div>
+              <video
+                src="/demo/walkthrough.mp4"
+                // ⚠ MUTED is not a style choice — it is the price of autoplay.
+                // Every browser blocks a video that starts with sound, and the
+                // block is silent: the element simply never plays and nothing
+                // reports why. `controls` is what lets someone turn the sound
+                // on, so it is not optional either.
+                ref={videoRef}
+                autoPlay
+                muted
+                loop
+                playsInline
+                controls
+                preload="auto"
+                width={1850}
+                height={1080}
+              />
+            </div>
+            <div className="lp-caption">
+              A minute of Occupella working a real Buildium account.
+            </div>
           </div>
 
           <div className="lp-proof">
