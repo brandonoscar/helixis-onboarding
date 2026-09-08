@@ -364,20 +364,39 @@ export default function Landing() {
   const [panelIn, setPanelIn] = useState(false);
   const start = useStartLabel();
 
-  // ⚠ An autoplaying video IS motion, so someone who asked their OS to stop
-  // motion gets the same video, the same controls, and a play button.
+  // The walkthrough starts itself. Three separate things stop that from
+  // happening, and shipping only the `autoPlay` attribute fixes none of them.
   //
-  // It PAUSES rather than withholding the `autoplay` attribute, and that is
-  // the whole reason this is an effect. A browser decides about autoplay when
-  // the element loads; setting the attribute afterwards does not retroactively
-  // start anything, so a conditional attribute reads correctly in the diff and
-  // leaves the video stopped for everyone. Let it start, then stop it.
+  // ⚠ 1. React does NOT put a `muted` ATTRIBUTE on the element. `muted` is a
+  // property, and React assigns properties in prop order — so the browser can
+  // read `autoplay` on an element that is not yet muted, apply its
+  // block-audible-autoplay rule, and refuse. The refusal is silent. Setting
+  // BOTH the property and the attribute from a ref closes it.
+  //
+  // ⚠ 2. `play()` returns a promise that REJECTS when the browser declines.
+  // Unhandled, that is a console error on the front page; handled, it is the
+  // only way to know the attribute alone was not enough.
+  //
+  // ⚠ 3. Safari will not autoplay an element that is not on screen, and this
+  // one sits below the fold on a laptop. So it is also started from the same
+  // intersection observer that tilts the panel — belt and braces, and calling
+  // play() on something already playing is a no-op.
+  //
+  // Deliberately NOT gated on prefers-reduced-motion. That gate was here and
+  // it is the likeliest reason this looked broken on Windows, where the OS
+  // animation setting is commonly off. The video is muted and carries
+  // controls, which is the pause mechanism WCAG 2.2.2 actually asks for.
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  useEffect(() => {
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
-      videoRef.current?.pause();
-    }
-  }, []);
+  const startVideo = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.muted = true;
+    v.setAttribute("muted", "");
+    void v.play().catch(() => {
+      /* Declined by policy. The controls are right there. */
+    });
+  };
+  useEffect(startVideo, []);
 
   // Product panel tilts up once, at 40% visible.
   useEffect(() => {
@@ -387,6 +406,7 @@ export default function Landing() {
       ([e]) => {
         if (e.isIntersecting) {
           setPanelIn(true);
+          startVideo();
           io.disconnect();
         }
       },
