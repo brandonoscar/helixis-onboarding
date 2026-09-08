@@ -16,19 +16,24 @@ import { CHECK, Icon, MINUS, Reveal, SitePageShell } from "./Site";
 // number in the terms is a different kind of problem.
 //
 // ⚠ WHAT THE PLANS ACTUALLY DIFFER ON. Two things, and only two: how many
-// requests are included, and whether the Leasing pipeline is part of it.
+// credits are included, and whether the Leasing pipeline is part of it.
 // Everything else Occupella does is on every plan. Presenting it any other way
 // — a feature matrix with invented distinctions to make the dear plans look
 // fuller — is the thing this table is written to avoid.
 //
-// ⚠ VOCABULARY (founder call, 2026-09-04). The metered unit is a REQUEST and
-// the meter itself is USAGE. It used to be "questions" here and in the app,
-// which broke the moment the answer to "what counts" had to include things
-// that are not questions. Both words are load-bearing across three surfaces —
-// this page, Legal.tsx's billing section, and the app's own billing panel and
-// refusal messages — so a change is a change in all of them. The refusal a
-// customer reads when they run out is generated from the backend, and it must
-// use the same noun this page sold them.
+// ⚠ VOCABULARY (founder call, 2026-09-08). The metered unit is a CREDIT and
+// the meter itself is USAGE. It has now been "questions" (too narrow once the
+// answer to "what counts" had to include things that are not questions) and
+// then "requests" (accurate and too small — it reads like an HTTP call rather
+// than a piece of work). A credit is one thing you ask that produces an
+// answer, which is the same rule under a bigger name.
+//
+// The word is load-bearing across FOUR surfaces and a change is a change in
+// all of them: this page, Legal.tsx's billing section (where it is a defined
+// billing term, not copy), the app's billing panel in AgenticHelixis, and the
+// refusal the backend generates when somebody runs out — billing/gate.py.
+// That last one is the one to check, because it is the sentence a customer
+// reads at the worst moment, and it must use the noun this page sold them.
 //
 // ⚠ TWO PLANS EXCLUDE LEASING, for two different reasons, and the API
 // enforces both: every authenticated Leasing route refuses with a 402.
@@ -142,7 +147,7 @@ const PLANS: Plan[] = [
     name: "Trial",
     fig: "Free",
     unit: " · 14 days",
-    allowance: "150 requests",
+    allowance: "150 credits",
     // ⚠ Leasing is FALSE on the trial and the reason is arithmetic, not
     // packaging (founder call, 2026-09-04). Carrier approval for texting runs
     // ten to fifteen days; the trial is fourteen. A trialist given Leasing
@@ -162,7 +167,7 @@ const PLANS: Plan[] = [
     name: "Starter",
     fig: "$50",
     unit: " / month",
-    allowance: "150 requests a month",
+    allowance: "150 credits a month",
     forWho:
       "One person running a small book. The trial's allowance, kept — every month, without a card expiring on you.",
     leasing: false,
@@ -175,9 +180,9 @@ const PLANS: Plan[] = [
     tag: "Most teams",
     fig: "$199",
     unit: " / person / month",
-    allowance: "400 requests each, every month",
+    allowance: "400 credits each, every month",
     forWho:
-      "A team working the whole portfolio. About eighteen requests a working day per person, and the allowance grows as you hire.",
+      "A team working the whole portfolio. About eighteen credits a working day per person, and the allowance grows as you hire.",
     leasing: true,
     leasingLabel: "Leasing included",
     featured: true,
@@ -188,7 +193,7 @@ const PLANS: Plan[] = [
     name: "Scale",
     fig: "$500",
     unit: " / month",
-    allowance: "1,200 requests a month, pooled",
+    allowance: "1,200 credits a month, pooled",
     forWho:
       "Put everyone on it for one predictable bill. No per-person charge, and the allowance is shared across the team.",
     leasing: true,
@@ -228,11 +233,11 @@ const ROWS: Row[] = [
 
 const FAQ: { q: string; a: React.ReactNode }[] = [
   {
-    q: "What counts as a request?",
+    q: "What counts as a credit?",
     a: (
       <>
-        One thing you ask Occupella that produces an answer. A request that fails or comes back
-        empty is not counted, and neither is anything Occupella does on its own — the Inbox
+        One thing you ask Occupella that produces an answer. A question that fails or comes back
+        empty costs nothing, and neither is anything Occupella does on its own — the Inbox
         drafting a reply to a work order, a nightly sweep, a reminder. Reading the Inbox,
         approving a draft and browsing your portfolio are free. Asking is what counts.
       </>
@@ -332,7 +337,7 @@ export default function Pricing() {
       title="Start free for two weeks."
       lede={
         <>
-          No card to begin. Plans differ on two things: how many requests are included, and
+          No card to begin. Plans differ on two things: how many credits are included, and
           whether the Leasing pipeline is part of it. Everything else is on every plan.
         </>
       }
