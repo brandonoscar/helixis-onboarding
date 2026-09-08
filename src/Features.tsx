@@ -1,4 +1,4 @@
-import { CHECK, Icon, LOCK, Reveal, SHIELD, BELL, MINUS, SitePageShell } from "./Site";
+import { CHECK, DemoPanel, Icon, LOCK, Reveal, SHIELD, BELL, MINUS, SitePageShell } from "./Site";
 
 // ─────────────────────────────────────────────────────────────────────
 // /features — what Occupella actually does, in detail.
@@ -331,6 +331,20 @@ export default function Features() {
         body: "Connect Buildium and watch it triage a real work order from your account. Fourteen days, no card.",
       }}
     >
+      {/* The tour before the detail. Somebody who lands on /features from the
+          nav has not seen the product at all, and eleven sections of prose is
+          the wrong first thing to hand them. */}
+      <section className="lp-section">
+        <div className="lp-wrap">
+          <DemoPanel
+            src="/demo/product-tour.mp4"
+            caption="Inbox, Operations and Leasing — the three surfaces, in thirty seconds."
+            width={1440}
+            height={900}
+          />
+        </div>
+      </section>
+
       <section className="lp-section">
         <div className="lp-wrap">
           <Reveal>

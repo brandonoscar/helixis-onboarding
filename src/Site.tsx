@@ -155,6 +155,53 @@ export const siteCss = `
   .lp-note { font-size: 13px; color: var(--ink-subtle); }
 
   /* ── the entrance: elements settle DOWN into place ── */
+  /* ── product panel ──────────────────────────────────────────────
+     Moved out of Landing.tsx when /features gained a video: DemoPanel
+     is shared, so its styles have to be too. A second copy would drift,
+     and the drift is invisible until somebody opens the other page. */
+  .lp-stage { position: relative; perspective: 2000px; margin-top: clamp(40px, 6vw, 72px); }
+  .lp-stage::before {
+    content: ""; position: absolute; inset: 12% 8% 28%;
+    background: radial-gradient(ellipse at 50% 40%, var(--iris) 0%, transparent 68%);
+    filter: blur(120px); opacity: 0; z-index: 0;
+    animation: glow 4100ms 600ms ease-out forwards;
+  }
+  @keyframes glow {
+    0%   { opacity: 0; animation-timing-function: cubic-bezier(0.74, 0.25, 0.76, 1); }
+    10%  { opacity: 0.5; animation-timing-function: cubic-bezier(0.12, 0.01, 0.08, 0.99); }
+    100% { opacity: 0.16; }
+  }
+  .lp-panel {
+    position: relative; z-index: 1;
+    border-radius: var(--r-panel);
+    border: 1px solid var(--card-edge);
+    background: var(--canvas);
+    overflow: hidden;
+    box-shadow: 0 1px 2px rgba(14,22,32,0.04), 0 24px 64px -28px rgba(14,22,32,0.28);
+    transform: rotateX(22deg);
+  }
+  .lp-panel[data-in="true"] { animation: tilt 1400ms var(--ease-out) forwards; }
+  /* Hold at the tilt, dip, then land flat — the hold is what makes it read
+     mechanical rather than floaty. */
+  @keyframes tilt {
+    0%   { transform: rotateX(22deg); }
+    25%  { transform: rotateX(22deg) scale(0.94); }
+    60%  { transform: none; }
+    100% { transform: none; }
+  }
+  .lp-panel img { display: block; width: 100%; height: auto; }
+  .lp-panel-bar {
+    display: flex; align-items: center; gap: 7px;
+    padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--canvas-1);
+  }
+  .lp-panel-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--line-strong); }
+  .lp-panel-url {
+    margin-left: 8px; font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-faint);
+  }
+  .lp-caption { margin-top: 14px; font-size: 13px; color: var(--ink-subtle); text-align: center; }
+
+  .lp-panel video { display: block; width: 100%; height: auto; background: var(--canvas-1); }
+
   .rise { opacity: 0; transform: translateY(-10px); animation: rise var(--dur-entrance) var(--ease-out) var(--d, 0ms) forwards; }
   @keyframes rise { to { opacity: 1; transform: none; } }
 
@@ -220,6 +267,8 @@ export const siteCss = `
   }
 
   @media (prefers-reduced-motion: reduce) {
+    .lp-panel { transform: none !important; animation: none !important; }
+    .lp-stage::before { opacity: 0.16 !important; animation: none !important; }
     .reveal { transition: none; }
   }
 `;
@@ -253,6 +302,102 @@ export function Reveal({ children, delay = 0 }: { children: React.ReactNode; del
   return (
     <div ref={ref} className="reveal" data-in={seen} style={{ transitionDelay: `${delay}ms` }}>
       {children}
+    </div>
+  );
+}
+
+/**
+ * A video in the product panel — browser chrome, the tilt, a caption under it.
+ *
+ * ⚠ ONE definition, used by the landing hero and by /features. Two copies of
+ * an autoplay path drift, and the ways this one fails are all silent:
+ *
+ * 1. React does NOT render a `muted` ATTRIBUTE. It assigns `muted` as a DOM
+ *    property, in prop order, so the browser can evaluate `autoplay` against
+ *    an element that is not yet muted, apply its block-audible-autoplay rule,
+ *    and refuse — with no error, no log, just a still frame. `start()` sets
+ *    both the property and the attribute from a ref.
+ * 2. `play()` returns a promise that REJECTS when the browser declines.
+ *    Unhandled, that is a console error on a marketing page.
+ * 3. Safari will not autoplay an element that is off screen, and on /features
+ *    this one is below the fold by construction. So it is started again the
+ *    moment it intersects; play() on something already playing is a no-op.
+ *
+ * ⚠ MUTED is the price of autoplay, not a style choice, and `controls` is
+ * what lets somebody turn the sound on — so neither is optional.
+ *
+ * `width`/`height` are the video's INTRINSIC size. They reserve the right box
+ * before a byte arrives, so the page does not jump when the poster frame
+ * lands.
+ */
+export function DemoPanel({
+  src,
+  caption,
+  width,
+  height,
+  url = "occupella.com",
+}: {
+  src: string;
+  caption: string;
+  width: number;
+  height: number;
+  url?: string;
+}) {
+  const stage = useRef<HTMLDivElement>(null);
+  const video = useRef<HTMLVideoElement>(null);
+  const [tilted, setTilted] = useState(false);
+
+  useEffect(() => {
+    const start = () => {
+      const v = video.current;
+      if (!v) return;
+      v.muted = true;
+      v.setAttribute("muted", "");
+      void v.play().catch(() => {
+        /* Declined by policy. The controls are right there. */
+      });
+    };
+    start();
+
+    const el = stage.current;
+    if (!el || typeof IntersectionObserver === "undefined") return setTilted(true);
+    const io = new IntersectionObserver(
+      ([e]) => {
+        if (e.isIntersecting) {
+          setTilted(true);
+          start();
+          io.disconnect();
+        }
+      },
+      { threshold: 0.4 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  return (
+    <div className="lp-stage" ref={stage}>
+      <div className="lp-panel" data-in={tilted}>
+        <div className="lp-panel-bar">
+          <span className="lp-panel-dot" />
+          <span className="lp-panel-dot" />
+          <span className="lp-panel-dot" />
+          <span className="lp-panel-url">{url}</span>
+        </div>
+        <video
+          ref={video}
+          src={src}
+          autoPlay
+          muted
+          loop
+          playsInline
+          controls
+          preload="auto"
+          width={width}
+          height={height}
+        />
+      </div>
+      <div className="lp-caption">{caption}</div>
     </div>
   );
 }

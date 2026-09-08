@@ -11,6 +11,7 @@ import {
   SiteFooter,
   SiteNav,
   siteCss,
+  DemoPanel,
 } from "./Site";
 
 // ─────────────────────────────────────────────────────────────────────
@@ -132,48 +133,6 @@ const css = `
   /* ── hero ── */
   .lp-hero { padding: clamp(56px, 9vw, 104px) 0 0; }
   .lp-hero-ctas { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
-  /* ── product panel ── */
-  .lp-stage { position: relative; perspective: 2000px; margin-top: clamp(40px, 6vw, 72px); }
-  .lp-stage::before {
-    content: ""; position: absolute; inset: 12% 8% 28%;
-    background: radial-gradient(ellipse at 50% 40%, var(--iris) 0%, transparent 68%);
-    filter: blur(120px); opacity: 0; z-index: 0;
-    animation: glow 4100ms 600ms ease-out forwards;
-  }
-  @keyframes glow {
-    0%   { opacity: 0; animation-timing-function: cubic-bezier(0.74, 0.25, 0.76, 1); }
-    10%  { opacity: 0.5; animation-timing-function: cubic-bezier(0.12, 0.01, 0.08, 0.99); }
-    100% { opacity: 0.16; }
-  }
-  .lp-panel {
-    position: relative; z-index: 1;
-    border-radius: var(--r-panel);
-    border: 1px solid var(--card-edge);
-    background: var(--canvas);
-    overflow: hidden;
-    box-shadow: 0 1px 2px rgba(14,22,32,0.04), 0 24px 64px -28px rgba(14,22,32,0.28);
-    transform: rotateX(22deg);
-  }
-  .lp-panel[data-in="true"] { animation: tilt 1400ms var(--ease-out) forwards; }
-  /* Hold at the tilt, dip, then land flat — the hold is what makes it read
-     mechanical rather than floaty. */
-  @keyframes tilt {
-    0%   { transform: rotateX(22deg); }
-    25%  { transform: rotateX(22deg) scale(0.94); }
-    60%  { transform: none; }
-    100% { transform: none; }
-  }
-  .lp-panel img { display: block; width: 100%; height: auto; }
-  .lp-panel-bar {
-    display: flex; align-items: center; gap: 7px;
-    padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--canvas-1);
-  }
-  .lp-panel-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--line-strong); }
-  .lp-panel-url {
-    margin-left: 8px; font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-faint);
-  }
-  .lp-caption { margin-top: 14px; font-size: 13px; color: var(--ink-subtle); text-align: center; }
-
   /* ── proof strip ── */
   .lp-proof {
     display: flex; flex-wrap: wrap; gap: 10px 28px; justify-content: center;
@@ -209,13 +168,7 @@ const css = `
        a looping opacity animation carrying no content, which is exactly
        what this query is for. */
     .lp-rotor-caret { animation: none !important; opacity: 0.85 !important; }
-    .lp-panel { transform: none !important; animation: none !important; }
-    .lp-stage::before { opacity: 0.16 !important; animation: none !important; }
   }
-
-  /* The walkthrough sits in the same panel the screenshot used to, so it gets
-     the same rule -- one line, not a second copy of the layout. */
-  .lp-panel video { display: block; width: 100%; height: auto; background: var(--canvas-1); }
 `;
 
 // ── rotating hero word ───────────────────────────────────────────────
@@ -360,61 +313,9 @@ const TRUST = [
 ];
 
 export default function Landing() {
-  const panelRef = useRef<HTMLDivElement>(null);
-  const [panelIn, setPanelIn] = useState(false);
   const start = useStartLabel();
 
-  // The walkthrough starts itself. Three separate things stop that from
-  // happening, and shipping only the `autoPlay` attribute fixes none of them.
-  //
-  // ⚠ 1. React does NOT put a `muted` ATTRIBUTE on the element. `muted` is a
-  // property, and React assigns properties in prop order — so the browser can
-  // read `autoplay` on an element that is not yet muted, apply its
-  // block-audible-autoplay rule, and refuse. The refusal is silent. Setting
-  // BOTH the property and the attribute from a ref closes it.
-  //
-  // ⚠ 2. `play()` returns a promise that REJECTS when the browser declines.
-  // Unhandled, that is a console error on the front page; handled, it is the
-  // only way to know the attribute alone was not enough.
-  //
-  // ⚠ 3. Safari will not autoplay an element that is not on screen, and this
-  // one sits below the fold on a laptop. So it is also started from the same
-  // intersection observer that tilts the panel — belt and braces, and calling
-  // play() on something already playing is a no-op.
-  //
-  // Deliberately NOT gated on prefers-reduced-motion. That gate was here and
-  // it is the likeliest reason this looked broken on Windows, where the OS
-  // animation setting is commonly off. The video is muted and carries
-  // controls, which is the pause mechanism WCAG 2.2.2 actually asks for.
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const startVideo = () => {
-    const v = videoRef.current;
-    if (!v) return;
-    v.muted = true;
-    v.setAttribute("muted", "");
-    void v.play().catch(() => {
-      /* Declined by policy. The controls are right there. */
-    });
-  };
-  useEffect(startVideo, []);
 
-  // Product panel tilts up once, at 40% visible.
-  useEffect(() => {
-    const el = panelRef.current;
-    if (!el || typeof IntersectionObserver === "undefined") return setPanelIn(true);
-    const io = new IntersectionObserver(
-      ([e]) => {
-        if (e.isIntersecting) {
-          setPanelIn(true);
-          startVideo();
-          io.disconnect();
-        }
-      },
-      { threshold: 0.4 },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, []);
 
   return (
     <div className="lp">
@@ -458,36 +359,12 @@ export default function Landing() {
               by founder instruction (2026-09-08) because it looked bad, not
               because it was broken. The shots are still in public/demo/ if it
               is ever wanted back. */}
-          <div className="lp-stage" ref={panelRef}>
-            <div className="lp-panel" data-in={panelIn}>
-              <div className="lp-panel-bar">
-                <span className="lp-panel-dot" />
-                <span className="lp-panel-dot" />
-                <span className="lp-panel-dot" />
-                <span className="lp-panel-url">occupella.com</span>
-              </div>
-              <video
-                src="/demo/walkthrough.mp4"
-                // ⚠ MUTED is not a style choice — it is the price of autoplay.
-                // Every browser blocks a video that starts with sound, and the
-                // block is silent: the element simply never plays and nothing
-                // reports why. `controls` is what lets someone turn the sound
-                // on, so it is not optional either.
-                ref={videoRef}
-                autoPlay
-                muted
-                loop
-                playsInline
-                controls
-                preload="auto"
-                width={1850}
-                height={1080}
-              />
-            </div>
-            <div className="lp-caption">
-              A minute of Occupella working a real Buildium account.
-            </div>
-          </div>
+          <DemoPanel
+            src="/demo/walkthrough.mp4"
+            caption="A minute of Occupella working a real Buildium account."
+            width={1850}
+            height={1080}
+          />
 
           <div className="lp-proof">
             <span><i />Works on your live Buildium account</span>
