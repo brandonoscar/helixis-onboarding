@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "./lib/supabase";
 import { apiFetch, apiJson, APP_URL, BUILDIUM_WEBHOOK_URL } from "./lib/api";
 import { loadWizard, saveWizard } from "./lib/persist";
+import { requirements, strength, meetsRequirements } from "./lib/passwordStrength";
 
 // ─────────────────────────────────────────────────────────
 // SETUP WIZARD — 4 steps + launch (2026-07 research rebuild):
@@ -34,6 +35,59 @@ interface IntegrationState {
 
 // Versioned ToS/Privacy acceptance recorded at signup (the wizard is the
 // one front door — keep in sync with the app's TERMS_VERSION).
+/**
+ * The meter, and the checklist under it.
+ *
+ * ⚠ **Requirements are visible from the FIRST keystroke**, not revealed as
+ * errors after a failed submit. Somebody who can see the bar clears it on the
+ * first try; somebody who cannot types a password, gets rejected, and blames
+ * the product. Before this the only hint was the field's own placeholder.
+ *
+ * ⚠ **The meter and the checklist deliberately DISAGREE.** Composition rules
+ * are what produce `Password1!` — it ticks every box and is in every cracking
+ * wordlist — so the checklist gates submission while the meter still ranks it
+ * below a four-word phrase. A product doing only the first half teaches the
+ * wrong lesson; only the second is a bar nobody can see. The reasoning lives
+ * in full in `lib/passwordStrength.ts`.
+ */
+function PasswordStrength({ password }: { password: string }) {
+  const reqs = requirements(password);
+  const { score, label, hint } = strength(password);
+
+  const colour =
+    score >= 4 ? "var(--positive)" : score === 3 ? "var(--iris)" : score === 2 ? "var(--caution)" : "var(--danger)";
+
+  return (
+    <>
+      {password && (
+        <div className="pw-meter">
+          <div className="pw-row">
+            <div className="pw-bands" aria-hidden="true">
+              {[1, 2, 3, 4].map((band) => (
+                <div key={band} className="pw-band" style={score >= band ? { background: colour } : undefined} />
+              ))}
+            </div>
+            {/* aria-live so a screen-reader user hears the band change rather
+                than only seeing four bars they cannot perceive. */}
+            <span className="pw-label" style={{ color: colour }} aria-live="polite">
+              {label}
+            </span>
+          </div>
+          {hint && <div className="pw-hint">{hint}</div>}
+        </div>
+      )}
+      <ul className="pw-reqs">
+        {reqs.map((r) => (
+          <li key={r.id} className={r.met ? "pw-req met" : "pw-req"}>
+            <span aria-hidden="true">{r.met ? "\u2713" : "\u00b7"}</span>
+            {r.label}
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
 const TOS_VERSION = "2026-07-05";
 // Legal pages are served by THIS app (main.tsx routes /terms + /privacy
 // → Legal.tsx). occupella.com is the main app — an SPA that renders the
@@ -239,6 +293,31 @@ const css = `
   }
 
   .panel-desc { font-size: 14px; color: var(--ink-muted); line-height: 1.6; }
+
+  /* ⚠ The title's 8px bottom margin exists to separate it from the
+     description. On a step that no longer HAS one it becomes dead space, and
+     the header's own 28px turns into 36 — a gap that reads as slightly wrong
+     without being obviously broken, which is how it survives review. A
+     last-child rule handles every such step, present and future, without the
+     JSX having to know whether it rendered a paragraph.
+     ⚠ NO BACKTICKS ANYWHERE IN THIS BLOCK — the whole stylesheet is a
+     template literal, so one in a comment ends it and the file stops
+     parsing several hundred lines later. */
+  .panel-title:last-child { margin-bottom: 0; }
+
+  /* Password strength. Four segments rather than one continuous bar: a bar
+     reads as a percentage and invites "how do I get to 100?", which is not a
+     question an estimate like this can answer honestly. Segments read as
+     bands. */
+  .pw-meter { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+  .pw-bands { display: flex; gap: 4px; flex: 1; }
+  .pw-band { height: 3px; flex: 1; border-radius: 999px; background: var(--line); transition: background 120ms ease; }
+  .pw-row { display: flex; align-items: center; gap: 8px; }
+  .pw-label { font-size: 12px; font-weight: 500; min-width: 62px; text-align: right; }
+  .pw-hint { font-size: 12px; color: var(--ink-muted); line-height: 1.5; }
+  .pw-reqs { list-style: none; padding: 0; margin: 10px 0 0; display: flex; flex-direction: column; gap: 4px; }
+  .pw-req { font-size: 12px; color: var(--ink-muted); display: flex; align-items: center; gap: 6px; }
+  .pw-req.met { color: var(--positive); }
 
   .btn-primary.wide { width: 100%; padding: 12px; font-size: 15px; font-weight: 500; margin-top: 8px; }
 
@@ -682,7 +761,14 @@ function StepIdentify({
   };
 
   const savePassword = async () => {
-    if (!verifiedToken || password.length < 8 || loading) return;
+    // ⚠ **`meetsRequirements`, not `password.length < 8`, and the Enter key is
+    // why.** The field's `onKeyDown` calls this directly, so the disabled
+    // button gates nothing for anybody who types their password and presses
+    // Enter — which is most people. Left as a length check, the new checklist
+    // would sit on screen with two boxes unticked while the submit went
+    // through anyway: a bar that is shown and not enforced, which is worse
+    // than no bar because it is a promise the product breaks in front of you.
+    if (!verifiedToken || !meetsRequirements(password) || loading) return;
     setLoading(true);
     setError("");
     const { error: e } = await supabase.auth.updateUser({ password });
@@ -702,13 +788,20 @@ function StepIdentify({
               ? "Check your email"
               : "Create your account"}
         </h1>
-        <p className="panel-desc">
-          {verifiedToken
-            ? "You'll use this to sign in at occupella.com."
-            : sent
-              ? `We sent a 6-digit code to ${email}. Enter it below to continue.`
-              : "Your email and your company name. No Buildium credentials yet."}
-        </p>
+        {/* ⚠ Only the CODE step keeps a description, and the other two were
+            deleted rather than reworded (founder call, 2026-09-09). "Your
+            email and your company name" under a form whose two fields are
+            Email and Company, and "You'll use this to sign in" under a heading
+            that says Create your password, are the label restated — the same
+            register being stripped out of Settings in the main app. This one
+            stays because it carries a FACT the screen does not otherwise
+            have: which address the code went to, and how many digits to
+            expect. */}
+        {sent && !verifiedToken && (
+          <p className="panel-desc">
+            We sent a 6-digit code to {email}. Enter it below to continue.
+          </p>
+        )}
       </div>
 
       {verifiedToken ? (
@@ -725,12 +818,20 @@ function StepIdentify({
                 autoFocus
                 onKeyDown={(e) => { if (e.key === "Enter") savePassword(); }}
               />
+              <PasswordStrength password={password} />
             </div>
             {error && (
               <div className="test-result error"><span>⚠</span> {error}</div>
             )}
           </div>
-          <button className="btn btn-primary wide" onClick={savePassword} disabled={password.length < 8 || loading}>
+          {/* ⚠ `meetsRequirements`, not `length < 8`. The checklist above is
+              the bar somebody can SEE, so the button has to gate on the same
+              predicate — a visible requirement the submit ignores teaches
+              people the list is decorative, and one the submit enforces
+              without showing is the rejection-after-the-fact this replaces.
+              `savePassword` keeps its own floor: a disabled button is the
+              explanation, never the enforcement. */}
+          <button className="btn btn-primary wide" onClick={savePassword} disabled={!meetsRequirements(password) || loading}>
             {loading ? <><span className="spinner" /> Saving…</> : "Save password & continue →"}
           </button>
         </>
