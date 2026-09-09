@@ -370,6 +370,10 @@ const css = `
   @media (prefers-reduced-motion: reduce) { .pw-fill { transition: none; } }
 
   .btn-primary.wide { width: 100%; padding: 12px; font-size: 15px; font-weight: 500; margin-top: 8px; }
+  /* NO BACKTICKS: .wide was scoped to .btn-primary only, so a ghost button
+     carrying it silently stayed auto-width — a secondary action that does not
+     line up under the primary one reads as unrelated to it. */
+  .btn-ghost.wide { width: 100%; padding: 10px; margin-top: 6px; }
 
   .trust-line {
     display: flex;
@@ -1813,6 +1817,12 @@ export default function App() {
   const [googleConnected, setGoogleConnected] = useState(false);
   const [creatingWorkspace, setCreatingWorkspace] = useState(false);
   const didResume = useRef(false);
+  // See persist.ts: true only between "send me a code" and step 1 completing.
+  const [awaitingLink, setAwaitingLink] = useState(Boolean(persisted.awaitingLink));
+  // ⚠ A session was found and this is NOT the magic-link continuation, so the
+  // wizard STOPS and asks instead of silently carrying somebody back into the
+  // account they already made. Holds the email so the question can name it.
+  const [returningAs, setReturningAs] = useState<string | null>(null);
 
   // Where "back" goes, as a stack rather than a table of predecessors: the
   // flow is not linear. handleBuildiumSkip jumps buildium → channels, so a
@@ -1844,8 +1854,8 @@ export default function App() {
   // attempt it interrupted. Progress is deliberately NOT written — see
   // persist.ts for why a five-minute flow should not be resumable.
   useEffect(() => {
-    saveWizard({ workspace, userEmail, doors });
-  }, [workspace, userEmail, doors]);
+    saveWizard({ workspace, userEmail, doors, awaitingLink });
+  }, [workspace, userEmail, doors, awaitingLink]);
 
   // Idempotently create the company + apply the workspace name. Shared by the
   // inline-OTP path (explicit token) and the magic-link resume path
@@ -1868,6 +1878,36 @@ export default function App() {
     [],
   );
 
+  /**
+   * Finish step 1 against a session that already exists.
+   *
+   * ⚠ Shared by the magic-link continuation and by the "Continue setup" answer
+   * to the gate below — two callers, one definition, so the automatic path and
+   * the chosen path cannot drift into doing different things.
+   */
+  const resumeInto = useCallback(
+    async (email: string) => {
+      setUserEmail(email);
+      setReturningAs(null);
+      setCreatingWorkspace(true);
+      try {
+        const companyId = await bootstrapWorkspace(undefined, workspace.name);
+        setAwaitingLink(false);
+        complete("identify");
+        setWorkspace((prev) => ({ ...prev, id: companyId }));
+        setStep((prev) => (prev === "identify" ? "buildium" : prev));
+      } catch (e: any) {
+        alert(e.message || "Failed to restore your workspace session");
+      } finally {
+        setCreatingWorkspace(false);
+      }
+    },
+    // Reads the mount snapshot of `workspace.name` deliberately — this is a
+    // one-shot resume, not a live subscription to the name field.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [bootstrapWorkspace],
+  );
+
   // Recover an existing session on load (e.g. after a magic-link redirect,
   // which reloads the SPA). The inline-OTP path runs handleVerified itself
   // and marks 'identify' done; only resume-bootstrap when we're authenticated
@@ -1879,17 +1919,17 @@ export default function App() {
       setUserEmail(session.user.email || "");
       if (didResume.current || completed.has("identify")) return;
       didResume.current = true;
-      setCreatingWorkspace(true);
-      try {
-        const companyId = await bootstrapWorkspace(undefined, workspace.name);
-        complete("identify");
-        setWorkspace((prev) => ({ ...prev, id: companyId }));
-        setStep((prev) => (prev === "identify" ? "buildium" : prev));
-      } catch (e: any) {
-        alert(e.message || "Failed to restore your workspace session");
-      } finally {
-        setCreatingWorkspace(false);
+
+      // ⚠ **A live session is not permission to continue.** This effect used
+      // to bootstrap on ANY session, so clicking "Start setup" a week later
+      // ran the same code path as coming back from a magic link — the button
+      // said start and the app resumed (founder report, 2026-09-09). The
+      // marker is the only thing that tells those two apart; without it, ask.
+      if (!awaitingLink) {
+        setReturningAs(session.user.email || "your account");
+        return;
       }
+      await resumeInto(session.user.email || "");
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) setUserEmail(session.user.email || "");
@@ -1919,11 +1959,18 @@ export default function App() {
     } catch {
       // Already signed out, or offline. The local clear below is what matters.
     }
+    // ⚠ clearWizard() drops the marker with the profile. Left behind, the
+    // fresh wizard would read "a magic link is coming" and auto-resume the
+    // account the person just signed out of.
     clearWizard();
     window.location.assign("/start");
   }, []);
 
   const handleProfile = (p: { email: string; name: string; doors: string }) => {
+    // ⚠ Called by `sendCode` immediately before the code goes out — the exact
+    // moment an attempt begins, and the only point at which "a magic link is
+    // coming back to this browser" becomes true.
+    setAwaitingLink(true);
     setUserEmail(p.email);
     setDoors(p.doors);
     setWorkspace((prev) => ({
@@ -1944,6 +1991,10 @@ export default function App() {
     setCreatingWorkspace(true);
     try {
       const companyId = await bootstrapWorkspace(accessToken, workspace.name);
+      // ⚠ The attempt is FINISHED. Leaving this true is what would make the
+      // next visit auto-resume again — the marker has to close the window it
+      // opened, or it is just the old always-resume behaviour with a flag.
+      setAwaitingLink(false);
       complete("identify");
       setWorkspace((prev) => ({ ...prev, id: companyId }));
       setStep("buildium");
@@ -1999,13 +2050,45 @@ export default function App() {
               ← Back
             </button>
           )}
-          {step === "identify" && !creatingWorkspace && (
+          {/* ⚠ Stands IN FRONT of step 1 whenever a session was found that is
+              not a magic-link continuation. Two states used to run the same
+              code silently — "Start setup" bootstrapped the existing account
+              and dropped you mid-flow, so the button said one thing and did
+              another. Now the two states are two buttons. */}
+          {returningAs && !creatingWorkspace ? (
+            <div className="panel" key="returning">
+              <div className="panel-header">
+                <div className="panel-tag">Already signed in</div>
+                {/* ⚠ The address goes in the DESCRIPTION, not the heading. An
+                    email is long and unbreakable, so at display size it
+                    overflows the panel and pushes the actual question off
+                    screen — and it is the detail, not the point. */}
+                <h1 className="panel-title">You're already signed in</h1>
+                <p className="panel-desc">
+                  This browser is signed in as <strong>{returningAs}</strong>. Carry on with that
+                  account, or sign out and set up a different one.
+                </p>
+              </div>
+              <button
+                className="btn btn-primary wide"
+                onClick={() => resumeInto(returningAs)}
+              >
+                Continue with this account →
+              </button>
+              {/* Secondary on purpose: continuing is the common case, and a
+                  destructive-looking sign-out should not be the default
+                  target for someone who just wanted to get back in. */}
+              <button className="btn btn-ghost wide" onClick={startOver}>
+                Set up a different account
+              </button>
+            </div>
+          ) : step === "identify" && !creatingWorkspace ? (
             <StepIdentify
               initial={{ email: userEmail, name: workspace.name, doors }}
               onProfile={handleProfile}
               onVerified={handleVerified}
             />
-          )}
+          ) : null}
           {creatingWorkspace && (
             <div className="panel">
               <div className="panel-header">

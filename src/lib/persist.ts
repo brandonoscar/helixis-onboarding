@@ -33,6 +33,21 @@ export interface PersistedWizard {
   userEmail?: string;
   /** Segmentation collected in step 1 (research: 2 early questions max). */
   doors?: string;
+  /**
+   * A code has been sent and this browser is waiting to come back signed in.
+   *
+   * ⚠ **This is the ONLY thing that separates a magic-link continuation from a
+   * returning visitor**, and both look identical otherwise: same origin, same
+   * live Supabase session, same stored profile. Without it the wizard cannot
+   * tell "finish the attempt I am halfway through" from "someone clicked Start
+   * setup a week later", so it silently did the first for both — which is the
+   * resume-that-was-not-asked-for the founder hit on 2026-09-09.
+   *
+   * Set when the code goes out, CLEARED the moment step 1 completes. So it is
+   * true for exactly the window where an automatic continue is what the person
+   * asked for, and false everywhere else.
+   */
+  awaitingLink?: boolean;
 }
 
 /**
