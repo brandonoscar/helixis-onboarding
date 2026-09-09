@@ -149,6 +149,35 @@ function alphabetSize(password: string): number {
 }
 
 /**
+ * The shape an attacker gets for free: one run of letters, then a few digits,
+ * then maybe a symbol. `Basketball1`, `Summer2026`, `Dragon99!`.
+ *
+ * ⚠ **This exists because enumerating words is unwinnable, and COMMON proved
+ * it.** That list holds `football` and `baseball` and not `basketball`, so
+ * `Basketball1` — a wordlist entry with the single most predictable suffix in
+ * use — scored **4/Strong**, the same band as a 12-character random string
+ * (measured 2026-09-09). Adding `basketball` fixes one password; the next
+ * sport is still missing. A shape covers the whole class at once.
+ *
+ * The letter run is capped at 3-12 characters on purpose: English words are
+ * almost all inside that, and a longer run is far more likely to be several
+ * words jammed together (`brandonoscarbasketball`), which no wordlist carries
+ * and which genuinely earns its length. Guessing high there would tell someone
+ * their good password is weak, which is the direction that gets a meter
+ * ignored.
+ */
+const SINGLE_WORD_SHAPE = /^([A-Za-z]{3,12})([0-9]{0,4})([!@#$%^&*.?_-]{0,2})$/;
+
+/**
+ * log2 of a cracking wordlist. ~200k entries is a normal English list, and
+ * the capitalisation variants an attacker also tries (all-lower, Capitalised,
+ * ALL-CAPS) are worth about 2 bits on top — not the ~4.7 per letter the
+ * textbook formula would hand out.
+ */
+const WORDLIST_BITS = 17.6;
+const CAPITALISATION_BITS = 2;
+
+/**
  * Rough bits of entropy, then penalties. `log2(alphabet) * length` is the
  * textbook figure and it is an OVER-estimate for anything a human typed, so
  * every penalty below is subtracting back toward the truth rather than
@@ -160,6 +189,22 @@ function bits(password: string): number {
   let value = Math.log2(size) * password.length;
 
   const lower = password.toLowerCase();
+
+  // The whole password is word-then-digits. Price it as the attack that
+  // actually breaks it — walk a wordlist, try each suffix — rather than as
+  // its length. This REPLACES the length estimate instead of discounting it,
+  // because the length is not what an attacker pays for here.
+  const shaped = SINGLE_WORD_SHAPE.exec(password);
+  if (shaped) {
+    const [, , digits, symbols] = shaped;
+    value = Math.min(
+      value,
+      WORDLIST_BITS +
+        CAPITALISATION_BITS +
+        Math.log2(10) * digits.length +
+        Math.log2(32) * symbols.length,
+    );
+  }
 
   // A known word anywhere in it means an attacker starts from that word, not
   // from the empty string — so most of the length above is not real.
@@ -199,7 +244,7 @@ export function strength(password: string): Strength {
   // Bands chosen against the penalised figure above, not against raw entropy:
   // 28 bits of *penalised* estimate is already a password with no dictionary
   // word and some variety in it.
-  const score = value >= 60 ? 4 : value >= 45 ? 3 : value >= 30 ? 2 : 1;
+  const score = value >= 70 ? 4 : value >= 58 ? 3 : value >= 46 ? 2 : 1;
 
   const label: StrengthLabel =
     score === 4 ? 'Strong' : score === 3 ? 'Good' : score === 2 ? 'Fair' : 'Weak';

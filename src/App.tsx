@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "./lib/supabase";
 import { apiFetch, apiJson, APP_URL, BUILDIUM_WEBHOOK_URL } from "./lib/api";
-import { loadWizard, saveWizard } from "./lib/persist";
+import { clearWizard, loadWizard, saveWizard } from "./lib/persist";
 import { requirements, strength, meetsRequirements } from "./lib/passwordStrength";
 
 // ─────────────────────────────────────────────────────────
@@ -53,39 +53,74 @@ interface IntegrationState {
 function PasswordStrength({ password }: { password: string }) {
   const reqs = requirements(password);
   const { score, label, hint } = strength(password);
+  const unmet = reqs.filter((r) => !r.met);
 
   const colour =
     score >= 4 ? "var(--positive)" : score === 3 ? "var(--iris)" : score === 2 ? "var(--caution)" : "var(--danger)";
 
   return (
-    <>
-      {password && (
-        <div className="pw-meter">
-          <div className="pw-row">
-            <div className="pw-bands" aria-hidden="true">
-              {[1, 2, 3, 4].map((band) => (
-                <div key={band} className="pw-band" style={score >= band ? { background: colour } : undefined} />
-              ))}
-            </div>
-            {/* aria-live so a screen-reader user hears the band change rather
-                than only seeing four bars they cannot perceive. */}
-            <span className="pw-label" style={{ color: colour }} aria-live="polite">
-              {label}
-            </span>
-          </div>
-          {hint && <div className="pw-hint">{hint}</div>}
-        </div>
-      )}
-      <ul className="pw-reqs">
-        {reqs.map((r) => (
-          <li key={r.id} className={r.met ? "pw-req met" : "pw-req"}>
-            <span aria-hidden="true">{r.met ? "\u2713" : "\u00b7"}</span>
-            {r.label}
-          </li>
-        ))}
-      </ul>
-    </>
+    <div className="pw">
+      {/* One continuous track that FILLS, not four separate pills. Four pills
+          read as four independent things and made the empty ones look like
+          missing requirements sitting next to the real checklist below. */}
+      <div className="pw-track" aria-hidden="true">
+        <div
+          className="pw-fill"
+          style={{ width: `${(Math.max(score, password ? 1 : 0) / 4) * 100}%`, background: colour }}
+        />
+      </div>
+
+      <div className="pw-line">
+        {/* \u26a0 The checklist COLLAPSES once it is satisfied, and this line takes
+            its place. Three permanently-visible ticked boxes are the thing
+            that read as unfinished: a bar you have already cleared should
+            stop asking. While anything is unmet the requirements lead,
+            because that is what the disabled button is waiting on. */}
+        {unmet.length > 0 ? (
+          <span className="pw-reqs">
+            {reqs.map((r) => (
+              <span key={r.id} className={r.met ? "pw-req met" : "pw-req"}>
+                <span className="pw-tick" aria-hidden="true">
+                  {r.met ? "\u2713" : ""}
+                </span>
+                {r.label}
+              </span>
+            ))}
+          </span>
+        ) : (
+          <span className="pw-hint">{hint || "Good password."}</span>
+        )}
+
+        {/* aria-live so a screen-reader user hears the band change rather than
+            only seeing a bar they cannot perceive. Empty until there is
+            something to say \u2014 announcing "Too short" on the first keystroke
+            is noise. */}
+        <span className="pw-label" style={{ color: colour }} aria-live="polite">
+          {password ? label : ""}
+        </span>
+      </div>
+    </div>
   );
+}
+
+/**
+ * GoTrue's "New password should be different from the old password".
+ *
+ * ⚠ **In THIS flow that error means the step already succeeded.** The user
+ * just verified a one-time code and is choosing a password; if the account
+ * already has the one they typed, the state they asked for holds and the only
+ * thing left is the workspace bootstrap. Treating it as a failure strands
+ * them — the account exists, the password is right, and the wizard demands a
+ * *different* password before it will move on (founder report, 2026-09-09).
+ *
+ * ⚠ Matched on `code` FIRST and the message only as a fallback: the code is
+ * the stable contract and the sentence is user-facing copy Supabase is free to
+ * reword. Anchored on "different from" rather than the whole sentence for the
+ * same reason.
+ */
+function isSamePasswordError(e: { code?: string; message?: string }): boolean {
+  if (e.code === "same_password") return true;
+  return /different from the old password/i.test(e.message || "");
 }
 
 const TOS_VERSION = "2026-07-05";
@@ -309,15 +344,30 @@ const css = `
      reads as a percentage and invites "how do I get to 100?", which is not a
      question an estimate like this can answer honestly. Segments read as
      bands. */
-  .pw-meter { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
-  .pw-bands { display: flex; gap: 4px; flex: 1; }
-  .pw-band { height: 3px; flex: 1; border-radius: 999px; background: var(--line); transition: background 120ms ease; }
-  .pw-row { display: flex; align-items: center; gap: 8px; }
-  .pw-label { font-size: 12px; font-weight: 500; min-width: 62px; text-align: right; }
-  .pw-hint { font-size: 12px; color: var(--ink-muted); line-height: 1.5; }
-  .pw-reqs { list-style: none; padding: 0; margin: 10px 0 0; display: flex; flex-direction: column; gap: 4px; }
-  .pw-req { font-size: 12px; color: var(--ink-muted); display: flex; align-items: center; gap: 6px; }
+  /* NO BACKTICKS ANYWHERE IN THIS BLOCK — the whole stylesheet is one
+     template literal and a backtick in a comment terminates it (TS1005). */
+  .signed-in { margin-bottom: 6px; }
+  .linklike { background: none; border: 0; padding: 0; font: inherit; color: var(--iris); cursor: pointer; text-decoration: underline; }
+  .linklike:hover { color: var(--iris-hover); }
+
+  /* 14px, not 10: at 10 the track sits close enough to the input's bottom
+     border to read as part of it rather than as a separate readout. */
+  .pw { margin-top: 14px; }
+  .pw-track { height: 4px; border-radius: 999px; background: var(--line); overflow: hidden; }
+  .pw-fill { height: 100%; border-radius: 999px; width: 0; transition: width 160ms ease, background 160ms ease; }
+  .pw-line { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-top: 7px; min-height: 16px; }
+  .pw-label { font-size: 12px; font-weight: 550; white-space: nowrap; }
+  .pw-hint { font-size: 12px; color: var(--ink-muted); line-height: 1.45; }
+  /* Requirements sit on ONE wrapping row, not a stacked list: three short
+     phrases in a column is a lot of vertical furniture under a single field. */
+  .pw-reqs { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+  .pw-req { font-size: 12px; color: var(--ink-muted); display: inline-flex; align-items: baseline; gap: 5px; }
   .pw-req.met { color: var(--positive); }
+  /* Fixed width so ticking a box does not reflow the row. The unmet state is
+     an empty box rather than a middot: a dot beside a tick reads as a second
+     kind of status, when it only ever means "not yet". */
+  .pw-tick { display: inline-block; width: 9px; font-size: 11px; }
+  @media (prefers-reduced-motion: reduce) { .pw-fill { transition: none; } }
 
   .btn-primary.wide { width: 100%; padding: 12px; font-size: 15px; font-weight: 500; margin-top: 8px; }
 
@@ -668,7 +718,10 @@ function StepIdentify({
 }: {
   initial: Profile;
   onProfile: (p: Profile) => void;
-  onVerified: (email: string, accessToken: string) => void;
+  // ⚠ Returns a promise and THROWS on failure. It used to swallow the error
+  // into an `alert()`, which left this step with no way to tell that the
+  // workspace half had failed while the password half had succeeded.
+  onVerified: (email: string, accessToken: string) => Promise<void>;
 }) {
   const [email, setEmail] = useState(initial.email);
   const [name, setName] = useState(initial.name);
@@ -683,6 +736,11 @@ function StepIdentify({
   // at occupella.com (password-only). Same decision, same date.
   const [verifiedToken, setVerifiedToken] = useState<string | null>(null);
   const [password, setPassword] = useState("");
+  // ⚠ Remembers that `updateUser` already landed, so a retry after a FAILED
+  // workspace bootstrap does not re-send the password and collect GoTrue's
+  // "must be different from the old password". Survives only this render —
+  // `isSamePasswordError` is the half that covers a page reload.
+  const [passwordSaved, setPasswordSaved] = useState(false);
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -771,10 +829,40 @@ function StepIdentify({
     if (!verifiedToken || !meetsRequirements(password) || loading) return;
     setLoading(true);
     setError("");
-    const { error: e } = await supabase.auth.updateUser({ password });
-    setLoading(false);
-    if (e) { setError(e.message); return; }
-    onVerified(email, verifiedToken);
+
+    // ⚠ **Setting the password and building the workspace are TWO operations,
+    // and only the second one can fail retryably.** The founder hit this on
+    // 2026-09-09: `updateUser` succeeded, `onVerified` → `bootstrapWorkspace`
+    // then failed ("Failed to fetch"), the screen stayed on this step, and the
+    // retry re-submitted the SAME password — which GoTrue refuses with "New
+    // password should be different from the old password". The account existed,
+    // the password was set, and the only way forward was to invent a different
+    // password. A retry must not re-run a step that already succeeded.
+    if (!passwordSaved) {
+      const { error: e } = await supabase.auth.updateUser({ password });
+      if (e && !isSamePasswordError(e)) {
+        setLoading(false);
+        setError(e.message);
+        return;
+      }
+      // ⚠ `same_password` is treated as SUCCESS, and that is the whole fix
+      // for a reloaded page: the flag above is gone after a refresh, but the
+      // account still has this password. The user asked for their password to
+      // be X and it is X — the end state they wanted already holds, so
+      // reporting it as an error blocks them on a step that is done.
+      setPasswordSaved(true);
+    }
+
+    try {
+      await onVerified(email, verifiedToken);
+    } catch (err) {
+      // ⚠ Inline, not `alert()`. This panel already renders errors, and the
+      // step is now RESUMABLE — saying so is the difference between "try
+      // again" and "your account is broken". The password is not re-sent.
+      setError(err instanceof Error ? err.message : "Could not finish setting up your workspace.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -1646,7 +1734,17 @@ const STEPS: { id: Step; label: string; tag?: string }[] = [
   { id: "finish", label: "Launch scan" },
 ];
 
-function Sidebar({ current, completed }: { current: Step; completed: Set<Step> }) {
+function Sidebar({
+  current,
+  completed,
+  signedInAs,
+  onStartOver,
+}: {
+  current: Step;
+  completed: Set<Step>;
+  signedInAs: string;
+  onStartOver: () => void;
+}) {
   return (
     <div className="sidebar">
       <a className="logo" href="/">
@@ -1668,6 +1766,22 @@ function Sidebar({ current, completed }: { current: Step; completed: Set<Step> }
       </div>
 
       <div className="sidebar-footer">
+        {/* ⚠ The ONE thing that lets somebody set up a second account on the
+            same machine. Wizard progress is no longer persisted, but the
+            Supabase session is — so without this a returning visitor is
+            silently carried back into the account they already made, with no
+            visible reason and nothing to click (founder report, 2026-09-09).
+            Shown only when a session actually exists: an empty "signed in as"
+            on a fresh visit would be the same confusion pointed the other
+            way. */}
+        {signedInAs && (
+          <p className="signed-in">
+            Signed in as {signedInAs} ·{" "}
+            <button type="button" className="linklike" onClick={onStartOver}>
+              Use a different account
+            </button>
+          </p>
+        )}
         <p>Stuck on a step? Email <a href="mailto:team@occupella.com">team@occupella.com</a> — a human answers.</p>
         {/* Legal-entity attribution (A2P/Twilio verification crawls). */}
         <p style={{ marginTop: 6 }}>Occupella is operated by Oscar Ventures LLC.</p>
@@ -1681,26 +1795,22 @@ function Sidebar({ current, completed }: { current: Step; completed: Set<Step> }
 // ─────────────────────────────────────────────────────────
 
 export default function App() {
-  // Hydrate once from localStorage so a refresh / magic-link redirect resumes
-  // where the user was instead of dropping them back at step 1.
+  // ⚠ Only the in-flight profile is hydrated (see persist.ts). Step and
+  // completion ALWAYS start fresh: the flow is five minutes long, so restoring
+  // a half-finished one buys nothing and costs anyone making a second account
+  // on the same device a wizard pre-filled from the first.
   const [persisted] = useState(loadWizard);
-  const [step, setStep] = useState<Step>((persisted.step as Step) || "identify");
-  const [completed, setCompleted] = useState<Set<Step>>(
-    new Set((persisted.completed as Step[]) || []),
-  );
+  const [step, setStep] = useState<Step>("identify");
+  const [completed, setCompleted] = useState<Set<Step>>(new Set());
   const [workspace, setWorkspace] = useState<WorkspaceData>(
     persisted.workspace || { name: "", slug: "" },
   );
   const [userEmail, setUserEmail] = useState(persisted.userEmail || "");
   const [doors, setDoors] = useState(persisted.doors || "");
-  const [buildiumCount, setBuildiumCount] = useState<number | null>(
-    persisted.buildiumCount ?? null,
-  );
-  const [buildiumConnected, setBuildiumConnected] = useState(
-    persisted.buildiumConnected || false,
-  );
-  const [liveUpdates, setLiveUpdates] = useState(persisted.webhooksConfigured || false);
-  const [googleConnected, setGoogleConnected] = useState(persisted.googleConnected || false);
+  const [buildiumCount, setBuildiumCount] = useState<number | null>(null);
+  const [buildiumConnected, setBuildiumConnected] = useState(false);
+  const [liveUpdates, setLiveUpdates] = useState(false);
+  const [googleConnected, setGoogleConnected] = useState(false);
   const [creatingWorkspace, setCreatingWorkspace] = useState(false);
   const didResume = useRef(false);
 
@@ -1730,20 +1840,12 @@ export default function App() {
 
   const complete = (s: Step) => setCompleted((prev) => new Set([...prev, s]));
 
-  // Persist progress on every meaningful change (no secrets — see persist.ts).
+  // ⚠ The in-flight profile only, so the magic-link reload can finish the
+  // attempt it interrupted. Progress is deliberately NOT written — see
+  // persist.ts for why a five-minute flow should not be resumable.
   useEffect(() => {
-    saveWizard({
-      step,
-      completed: [...completed],
-      workspace,
-      webhooksConfigured: liveUpdates,
-      userEmail,
-      doors,
-      buildiumCount,
-      buildiumConnected,
-      googleConnected,
-    });
-  }, [step, completed, workspace, liveUpdates, userEmail, doors, buildiumCount, buildiumConnected, googleConnected]);
+    saveWizard({ workspace, userEmail, doors });
+  }, [workspace, userEmail, doors]);
 
   // Idempotently create the company + apply the workspace name. Shared by the
   // inline-OTP path (explicit token) and the magic-link resume path
@@ -1800,6 +1902,27 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /**
+   * Sign out, forget the in-flight profile, and start from a blank wizard.
+   *
+   * ⚠ **A hard reload, not a state reset.** The Supabase client caches the
+   * session in memory as well as in storage, the resume effect is a one-shot
+   * guarded by a ref, and half a dozen step components hold their own state —
+   * so clearing React state would leave a signed-out wizard still holding the
+   * previous account's session object. Reloading is the only version of this
+   * that is obviously correct, and it costs one page load on an action
+   * somebody takes at most once.
+   */
+  const startOver = useCallback(async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      // Already signed out, or offline. The local clear below is what matters.
+    }
+    clearWizard();
+    window.location.assign("/start");
+  }, []);
+
   const handleProfile = (p: { email: string; name: string; doors: string }) => {
     setUserEmail(p.email);
     setDoors(p.doors);
@@ -1810,6 +1933,10 @@ export default function App() {
     }));
   };
 
+  // ⚠ THROWS rather than alerting. `StepIdentify` renders the failure inline
+  // and — crucially — keeps its `passwordSaved` flag, so the retry re-runs
+  // only the half that failed. Swallowing this into an `alert()` is what made
+  // a transient backend blip look like a broken account (2026-09-09).
   const handleVerified = async (email: string, accessToken: string) => {
     setUserEmail(email);
     // Token passed explicitly — right after verifyOtp the persisted session
@@ -1820,8 +1947,6 @@ export default function App() {
       complete("identify");
       setWorkspace((prev) => ({ ...prev, id: companyId }));
       setStep("buildium");
-    } catch (e: any) {
-      alert(e.message || "Failed to set up your workspace");
     } finally {
       setCreatingWorkspace(false);
     }
@@ -1859,7 +1984,12 @@ export default function App() {
     <>
       <style>{css}</style>
       <div className="app">
-        <Sidebar current={step} completed={completed} />
+        <Sidebar
+          current={step}
+          completed={completed}
+          signedInAs={userEmail}
+          onStartOver={startOver}
+        />
         <div className="main">
           {/* Hidden on `finish` — the scan has been launched, so there is
               nothing behind it to go back to. Hidden while the workspace is

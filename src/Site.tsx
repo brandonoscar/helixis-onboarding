@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import { APP_URL } from "./lib/api";
-import { loadWizard } from "./lib/persist";
 
 // ─────────────────────────────────────────────────────────────────────
 // SITE CHROME — the nav, the footer, and everything more than one page
@@ -443,23 +442,22 @@ export const BELL = "M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9 M13.7 21a2 2 0 
 export const MINUS = "M5 12h14";
 
 /**
- * "Start setup" or "Resume setup", from the wizard's saved progress.
+ * Always "Start setup".
  *
- * ⚠ Shared so every page agrees. It lived in Landing and read localStorage
- * there; a second page reading it separately is how a visitor gets offered
- * "Start setup" on /pricing after being offered "Resume setup" on /.
+ * ⚠ **"Resume setup" was removed, not broken** (founder call, 2026-09-09).
+ * It read the wizard's persisted `completed` set and promised a saved draft;
+ * what the click actually produced depended on the live Supabase session
+ * underneath, so a visitor offered "Resume setup" could land in the app
+ * instead of in the wizard. Two different states behind one label is worse
+ * than no label — and setup is five minutes long, so there is little to
+ * resume. Progress is no longer persisted at all (see `lib/persist.ts`).
+ *
+ * Kept as a hook rather than inlining the string: three pages render this
+ * button, and a shared source is what stopped them disagreeing in the first
+ * place. Someone re-introducing a two-state label has one place to do it.
  */
 export function useStartLabel(): string {
-  const [hasProgress, setHasProgress] = useState(false);
-  useEffect(() => {
-    try {
-      const w = loadWizard();
-      setHasProgress(Boolean(w.completed && (w.completed as string[]).length > 0));
-    } catch {
-      /* fresh visitor */
-    }
-  }, []);
-  return hasProgress ? "Resume setup" : "Start setup";
+  return "Start setup";
 }
 
 /** The nav's hairline appears only once the page has moved. */
