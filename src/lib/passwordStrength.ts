@@ -1,20 +1,21 @@
 /**
- * Password strength, scored honestly.
+ * Password strength — the ordinary three-band kind.
  *
- * The point of a meter is to change what someone types. A meter that calls
- * `Password1!` "Strong" — because it ticks upper, lower, digit and symbol —
- * teaches the opposite of the truth: that password is in every cracking
- * wordlist and falls in seconds, while `correct horse battery staple` scores
- * badly on the same rules and is genuinely hard. So this scores what actually
- * costs an attacker time (LENGTH, then how much of the character space is in
- * play) and then SUBTRACTS for the shapes that make a long password cheap:
- * a dictionary word, a keyboard run, a repeated character, a trailing year.
+ * ⚠ **This was rewritten DOWN on 2026-09-09.** The previous version scored
+ * entropy, penalised dictionary words, keyboard runs, repeated characters and
+ * trailing years, priced a "word + digits" shape as a wordlist walk, and
+ * reported five bands plus a rotating one-line hint. Every part of it was
+ * defensible and the whole was wrong for the job: it argued with people about
+ * passwords that are fine, on the signup screen of a property-management app.
+ * The founder's words were "too much... I really just want like a standard
+ * UI, not the CIA database one."
  *
- * Deliberately dependency-free. zxcvbn is the better estimator and it is
- * ~400 KB of dictionaries on the login route of an app whose users are
- * property managers on office wifi. This is a nudge, not a security control —
- * the real floor is `MIN_LENGTH`, enforced on submit, and Supabase's own
- * policy behind that.
+ * So: length and character variety, three bands, no advice. That is what
+ * every signup form ships and what people already know how to read.
+ *
+ * The REAL floor is `requirements()` below, which gates the submit button.
+ * The meter is decoration on top of it and is deliberately not consulted
+ * anywhere that decides anything.
  */
 
 /*
@@ -35,14 +36,12 @@
 
 export const MIN_LENGTH = 8;
 
-export type StrengthLabel = 'Too short' | 'Weak' | 'Fair' | 'Good' | 'Strong';
+export type StrengthLabel = 'Weak' | 'Medium' | 'Strong';
 
 export interface Strength {
-  /** 0-4. 0 is unusable, 4 is the top band. */
+  /** 1-3, or 0 for an empty field. The meter renders this and nothing else. */
   score: number;
   label: StrengthLabel;
-  /** The single most useful next thing to change, or null when there isn't one. */
-  hint: string | null;
 }
 
 export interface Requirement {
@@ -52,22 +51,10 @@ export interface Requirement {
 }
 
 /**
- * Shown BEFORE the field is touched, not revealed as errors after a failed
- * submit — "minimum requirements shown up front". Someone who can see the bar
- * clears it on the first try; someone who can't types a password, gets
- * rejected, and blames the product.
- *
- * ⚠ These are the ENFORCED FLOOR; `strength()` below is the honest estimate,
- * and the two deliberately disagree. Composition rules — one capital, one
- * number — are what produce `Password1`, and NIST has recommended against
- * them for years precisely because they push people toward that shape. They
- * are here as a founder decision (2026-09-08): a visible checklist makes the
- * account *feel* protected, and feeling protected is why somebody bothers.
- *
- * The resolution is that the checklist gates submission and the METER still
- * tells the truth — `Password1!` clears every box and is still ranked below a
- * four-word phrase. A product that only did the first half would be teaching
- * the wrong lesson; one that only did the second is a bar nobody can see.
+ * The enforced floor, shown BEFORE the field is touched rather than revealed
+ * as errors after a failed submit. Someone who can see the bar clears it on
+ * the first try; someone who can't types a password, gets rejected, and blames
+ * the product.
  */
 export function requirements(password: string): Requirement[] {
   return [
@@ -76,20 +63,12 @@ export function requirements(password: string): Requirement[] {
       label: `At least ${MIN_LENGTH} characters`,
       met: password.length >= MIN_LENGTH,
     },
-    {
-      id: 'capital',
-      label: 'One capital letter',
-      met: /[A-Z]/.test(password),
-    },
-    {
-      id: 'number',
-      label: 'One number',
-      met: /[0-9]/.test(password),
-    },
+    { id: 'capital', label: 'One capital letter', met: /[A-Z]/.test(password) },
+    { id: 'number', label: 'One number', met: /[0-9]/.test(password) },
   ];
 }
 
-/** Every box ticked. The submit gate — see the note on `requirements`. */
+/** Every box ticked. This — not `strength()` — is the submit gate. */
 export function meetsRequirements(password: string): boolean {
   return requirements(password).every((r) => r.met);
 }
@@ -98,8 +77,7 @@ export function meetsRequirements(password: string): boolean {
  * The first unmet requirement, phrased as an instruction, or null.
  *
  * ⚠ ONE at a time. Listing three failures at once reads as a telling-off, and
- * the checklist beside the field is already showing all of them — this is for
- * the single line under the button that says why it is disabled.
+ * the checklist beside the field is already showing all of them.
  */
 export function firstUnmet(password: string): string | null {
   const missing = requirements(password).find((r) => !r.met);
@@ -109,164 +87,30 @@ export function firstUnmet(password: string): string | null {
     : `Add ${missing.label.toLowerCase()}.`;
 }
 
-/** Substrings that make a password cheap regardless of how long it is. */
-const COMMON = [
-  'password',
-  'passw0rd',
-  'qwerty',
-  'asdf',
-  'zxcv',
-  '1234',
-  'abcd',
-  'letmein',
-  'welcome',
-  'admin',
-  'iloveyou',
-  'monkey',
-  'dragon',
-  'sunshine',
-  'princess',
-  'football',
-  'baseball',
-  'occupella',
-  'buildium',
-  'property',
-  'manager',
-];
-
-/**
- * The size of the alphabet the password draws from. This is what makes a
- * brute force expensive, and it is why "add a symbol" is real advice while
- * "add another lowercase letter" is nearly free.
- */
-function alphabetSize(password: string): number {
-  let size = 0;
-  if (/[a-z]/.test(password)) size += 26;
-  if (/[A-Z]/.test(password)) size += 26;
-  if (/[0-9]/.test(password)) size += 10;
-  if (/[^a-zA-Z0-9]/.test(password)) size += 32;
-  return size;
+/** Lower, upper, digit, symbol — how many kinds of character are in play. */
+function variety(password: string): number {
+  return [/[a-z]/, /[A-Z]/, /[0-9]/, /[^a-zA-Z0-9]/].filter((re) => re.test(password)).length;
 }
 
 /**
- * The shape an attacker gets for free: one run of letters, then a few digits,
- * then maybe a symbol. `Basketball1`, `Summer2026`, `Dragon99!`.
+ * Length and variety. Nothing else.
  *
- * ⚠ **This exists because enumerating words is unwinnable, and COMMON proved
- * it.** That list holds `football` and `baseball` and not `basketball`, so
- * `Basketball1` — a wordlist entry with the single most predictable suffix in
- * use — scored **4/Strong**, the same band as a 12-character random string
- * (measured 2026-09-09). Adding `basketball` fixes one password; the next
- * sport is still missing. A shape covers the whole class at once.
- *
- * The letter run is capped at 3-12 characters on purpose: English words are
- * almost all inside that, and a longer run is far more likely to be several
- * words jammed together (`brandonoscarbasketball`), which no wordlist carries
- * and which genuinely earns its length. Guessing high there would tell someone
- * their good password is weak, which is the direction that gets a meter
- * ignored.
+ * ⚠ **Tuned so a password that clears the checklist never reads Weak.** The
+ * checklist demands 8 characters, a capital and a number — which is 8 chars
+ * with variety 3 — so the bands are placed to call that Medium. A form that
+ * tells you your password is bad *after* you satisfied the rules it printed
+ * is picking a fight it does not need; that mismatch is what "too much"
+ * actually described.
  */
-const SINGLE_WORD_SHAPE = /^([A-Za-z]{3,12})([0-9]{0,4})([!@#$%^&*.?_-]{0,2})$/;
-
-/**
- * log2 of a cracking wordlist. ~200k entries is a normal English list, and
- * the capitalisation variants an attacker also tries (all-lower, Capitalised,
- * ALL-CAPS) are worth about 2 bits on top — not the ~4.7 per letter the
- * textbook formula would hand out.
- */
-const WORDLIST_BITS = 17.6;
-const CAPITALISATION_BITS = 2;
-
-/**
- * Rough bits of entropy, then penalties. `log2(alphabet) * length` is the
- * textbook figure and it is an OVER-estimate for anything a human typed, so
- * every penalty below is subtracting back toward the truth rather than
- * punishing the user for style.
- */
-function bits(password: string): number {
-  const size = alphabetSize(password);
-  if (size === 0) return 0;
-  let value = Math.log2(size) * password.length;
-
-  const lower = password.toLowerCase();
-
-  // The whole password is word-then-digits. Price it as the attack that
-  // actually breaks it — walk a wordlist, try each suffix — rather than as
-  // its length. This REPLACES the length estimate instead of discounting it,
-  // because the length is not what an attacker pays for here.
-  const shaped = SINGLE_WORD_SHAPE.exec(password);
-  if (shaped) {
-    const [, , digits, symbols] = shaped;
-    value = Math.min(
-      value,
-      WORDLIST_BITS +
-        CAPITALISATION_BITS +
-        Math.log2(10) * digits.length +
-        Math.log2(32) * symbols.length,
-    );
-  }
-
-  // A known word anywhere in it means an attacker starts from that word, not
-  // from the empty string — so most of the length above is not real.
-  for (const word of COMMON) {
-    if (lower.includes(word)) {
-      value -= Math.log2(size) * word.length * 0.8;
-      break;
-    }
-  }
-
-  // "aaaaaaaa" has the length of eight characters and the entropy of about
-  // two. Same for a run of the same character anywhere inside.
-  const repeats = lower.match(/(.)\1{2,}/g) ?? [];
-  for (const run of repeats) value -= Math.log2(size) * (run.length - 1) * 0.7;
-
-  // A trailing year or a trailing "1!" is the single most predictable way
-  // people satisfy a complexity rule. It adds almost nothing.
-  if (/(19|20)\d{2}$/.test(password)) value -= Math.log2(size) * 2.5;
-  else if (/\d{1,2}[!@#$]?$/.test(password)) value -= Math.log2(size) * 0.8;
-
-  return Math.max(0, value);
-}
-
 export function strength(password: string): Strength {
-  if (!password) return { score: 0, label: 'Too short', hint: null };
-  if (password.length < MIN_LENGTH) {
-    return {
-      score: 0,
-      label: 'Too short',
-      hint: `${MIN_LENGTH - password.length} more character${
-        MIN_LENGTH - password.length === 1 ? '' : 's'
-      } to go.`,
-    };
-  }
+  if (!password) return { score: 0, label: 'Weak' };
 
-  const value = bits(password);
-  // Bands chosen against the penalised figure above, not against raw entropy:
-  // 28 bits of *penalised* estimate is already a password with no dictionary
-  // word and some variety in it.
-  const score = value >= 70 ? 4 : value >= 58 ? 3 : value >= 46 ? 2 : 1;
+  const long = password.length >= 12;
+  const varied = variety(password) >= 3;
 
-  const label: StrengthLabel =
-    score === 4 ? 'Strong' : score === 3 ? 'Good' : score === 2 ? 'Fair' : 'Weak';
-
-  return { score, label, hint: hintFor(password, score) };
-}
-
-/**
- * ONE hint, the most valuable one — a list of five suggestions is read as
- * nagging and acted on by nobody. Length leads because it is the term with
- * the biggest exponent.
- */
-function hintFor(password: string, score: number): string | null {
-  if (score >= 4) return null;
-
-  const lower = password.toLowerCase();
-  for (const word of COMMON) {
-    if (lower.includes(word)) return `Avoid common words like "${word}".`;
-  }
-  if (/(.)\1{2,}/.test(password)) return 'Avoid repeated characters.';
-  if (password.length < 14) return 'Longer is stronger — try a short phrase.';
-  if (!/[^a-zA-Z0-9]/.test(password)) return 'Add a symbol.';
-  if (!/[0-9]/.test(password)) return 'Add a number.';
-  return 'Add a little more variety.';
+  // Strong needs BOTH: 12+ characters and three kinds of character.
+  if (long && varied) return { score: 3, label: 'Strong' };
+  // Medium is either one of them — which the checklist's own floor satisfies.
+  if (password.length >= MIN_LENGTH && (long || varied)) return { score: 2, label: 'Medium' };
+  return { score: 1, label: 'Weak' };
 }

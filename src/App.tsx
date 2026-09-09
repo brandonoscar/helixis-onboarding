@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "./lib/supabase";
 import { apiFetch, apiJson, APP_URL, BUILDIUM_WEBHOOK_URL } from "./lib/api";
 import { clearWizard, loadWizard, saveWizard } from "./lib/persist";
-import { requirements, strength, meetsRequirements } from "./lib/passwordStrength";
+import { firstUnmet, meetsRequirements, requirements, strength } from "./lib/passwordStrength";
 
 // ─────────────────────────────────────────────────────────
 // SETUP WIZARD — 4 steps + launch (2026-07 research rebuild):
@@ -52,49 +52,35 @@ interface IntegrationState {
  */
 function PasswordStrength({ password }: { password: string }) {
   const reqs = requirements(password);
-  const { score, label, hint } = strength(password);
-  const unmet = reqs.filter((r) => !r.met);
+  const { score, label } = strength(password);
 
   const colour =
-    score >= 4 ? "var(--positive)" : score === 3 ? "var(--iris)" : score === 2 ? "var(--caution)" : "var(--danger)";
+    score >= 3 ? "var(--positive)" : score === 2 ? "var(--caution)" : "var(--danger)";
 
   return (
     <div className="pw">
-      {/* One continuous track that FILLS, not four separate pills. Four pills
-          read as four independent things and made the empty ones look like
-          missing requirements sitting next to the real checklist below. */}
-      <div className="pw-track" aria-hidden="true">
-        <div
-          className="pw-fill"
-          style={{ width: `${(Math.max(score, password ? 1 : 0) / 4) * 100}%`, background: colour }}
-        />
+      <div className="pw-bands" aria-hidden="true">
+        {[1, 2, 3].map((band) => (
+          <div
+            key={band}
+            className="pw-band"
+            style={score >= band ? { background: colour } : undefined}
+          />
+        ))}
       </div>
-
       <div className="pw-line">
-        {/* \u26a0 The checklist COLLAPSES once it is satisfied, and this line takes
-            its place. Three permanently-visible ticked boxes are the thing
-            that read as unfinished: a bar you have already cleared should
-            stop asking. While anything is unmet the requirements lead,
-            because that is what the disabled button is waiting on. */}
-        {unmet.length > 0 ? (
-          <span className="pw-reqs">
-            {reqs.map((r) => (
-              <span key={r.id} className={r.met ? "pw-req met" : "pw-req"}>
-                <span className="pw-tick" aria-hidden="true">
-                  {r.met ? "\u2713" : ""}
-                </span>
-                {r.label}
+        <span className="pw-reqs">
+          {reqs.map((r) => (
+            <span key={r.id} className={r.met ? "pw-req met" : "pw-req"}>
+              <span className="pw-tick" aria-hidden="true">
+                {r.met ? "\u2713" : ""}
               </span>
-            ))}
-          </span>
-        ) : (
-          <span className="pw-hint">{hint || "Good password."}</span>
-        )}
-
+              {r.label}
+            </span>
+          ))}
+        </span>
         {/* aria-live so a screen-reader user hears the band change rather than
-            only seeing a bar they cannot perceive. Empty until there is
-            something to say \u2014 announcing "Too short" on the first keystroke
-            is noise. */}
+            only seeing bars they cannot perceive. */}
         <span className="pw-label" style={{ color: colour }} aria-live="polite">
           {password ? label : ""}
         </span>
@@ -346,28 +332,21 @@ const css = `
      bands. */
   /* NO BACKTICKS ANYWHERE IN THIS BLOCK — the whole stylesheet is one
      template literal and a backtick in a comment terminates it (TS1005). */
-  .signed-in { margin-bottom: 6px; }
-  .linklike { background: none; border: 0; padding: 0; font: inherit; color: var(--iris); cursor: pointer; text-decoration: underline; }
-  .linklike:hover { color: var(--iris-hover); }
-
-  /* 14px, not 10: at 10 the track sits close enough to the input's bottom
-     border to read as part of it rather than as a separate readout. */
   .pw { margin-top: 14px; }
-  .pw-track { height: 4px; border-radius: 999px; background: var(--line); overflow: hidden; }
-  .pw-fill { height: 100%; border-radius: 999px; width: 0; transition: width 160ms ease, background 160ms ease; }
-  .pw-line { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-top: 7px; min-height: 16px; }
+  /* Three segments, not a continuous fill: a fill reads as a percentage and
+     invites "how do I get to 100%", which this does not answer. */
+  .pw-bands { display: flex; gap: 4px; }
+  .pw-band { height: 4px; flex: 1; border-radius: 999px; background: var(--line); transition: background 140ms ease; }
+  .pw-line { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-top: 8px; min-height: 16px; }
   .pw-label { font-size: 12px; font-weight: 550; white-space: nowrap; }
-  .pw-hint { font-size: 12px; color: var(--ink-muted); line-height: 1.45; }
-  /* Requirements sit on ONE wrapping row, not a stacked list: three short
-     phrases in a column is a lot of vertical furniture under a single field. */
+  /* Requirements on ONE wrapping row: three short phrases stacked in a column
+     is a lot of vertical furniture under a single field. */
   .pw-reqs { display: flex; flex-wrap: wrap; gap: 4px 14px; }
   .pw-req { font-size: 12px; color: var(--ink-muted); display: inline-flex; align-items: baseline; gap: 5px; }
   .pw-req.met { color: var(--positive); }
-  /* Fixed width so ticking a box does not reflow the row. The unmet state is
-     an empty box rather than a middot: a dot beside a tick reads as a second
-     kind of status, when it only ever means "not yet". */
+  /* Fixed width so ticking a box does not reflow the row. */
   .pw-tick { display: inline-block; width: 9px; font-size: 11px; }
-  @media (prefers-reduced-motion: reduce) { .pw-fill { transition: none; } }
+  @media (prefers-reduced-motion: reduce) { .pw-band { transition: none; } }
 
   .btn-primary.wide { width: 100%; padding: 12px; font-size: 15px; font-weight: 500; margin-top: 8px; }
   /* NO BACKTICKS: .wide was scoped to .btn-primary only, so a ghost button
@@ -830,7 +809,14 @@ function StepIdentify({
     // would sit on screen with two boxes unticked while the submit went
     // through anyway: a bar that is shown and not enforced, which is worse
     // than no bar because it is a promise the product breaks in front of you.
-    if (!verifiedToken || !meetsRequirements(password) || loading) return;
+    if (!verifiedToken || loading) return;
+    // ⚠ **A refusal nobody can perceive is indistinguishable from a send.**
+    // The button is disabled, but the field's onKeyDown calls this directly,
+    // so anyone who types a password and presses Enter — most people — hit a
+    // bare `return` and got nothing: no error, no movement, no clue which of
+    // the three rules was unmet. Say it (gotcha 44's rule, one repo over).
+    const blocker = firstUnmet(password);
+    if (blocker) { setError(blocker); return; }
     setLoading(true);
     setError("");
 
