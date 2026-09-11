@@ -1,57 +1,80 @@
 /**
- * Lightweight localStorage persistence for wizard progress.
+ * The three fields that have to survive ONE page reload. Not a saved session.
  *
- * Without this, all wizard state lives in in-memory React state, so a page
- * refresh — or a magic-link redirect, which reloads the SPA — silently
- * discards the user's workspace name, current step, and invites and drops
- * them back at step 1. This persists the non-sensitive progress so a
- * reload/redirect resumes where they were.
+ * ⚠ **This used to persist the whole wizard — step, completed-set, every
+ * connector flag — and that was the wrong shape for a five-minute flow**
+ * (founder call, 2026-09-09). Two things it caused:
  *
- * SECURITY: never stores secrets. Buildium client_id/secret and the webhook
- * signing secret are entered in step-local component state and are never
- * lifted into App state, so they never reach this module. Only workspace
- * name/slug, step, completed-set, invited emails, and the user's email are
- * persisted — all non-sensitive (and the email is already in the JWT).
+ *  - The marketing pages offered **"Resume setup"** off the persisted
+ *    `completed` set, which read as a saved draft and behaved like one until
+ *    the live Supabase session underneath it took the visitor straight into
+ *    the app instead.
+ *  - Making a SECOND account on the same device meant fighting a wizard
+ *    pre-filled from the first — the shape a short flow should never have.
+ *
+ * What genuinely needs to outlive a reload is narrower: the magic-link path
+ * **fully reloads the SPA** between "send me a code" and coming back signed
+ * in, and `bootstrapWorkspace` needs the company name the person typed before
+ * they left. That is a single attempt continuing, not progress being restored,
+ * so only those fields are kept. Step and completion are derived on load from
+ * whether a session exists (`App.tsx`'s resume effect) — a fact about the
+ * world rather than a claim this file makes about it.
+ *
+ * SECURITY unchanged: never stores secrets. Buildium client_id/secret and the
+ * webhook signing secret live in step-local component state and never reach
+ * this module. The email is already in the JWT.
  */
 
 const KEY = "helixis_onboarding_v1";
 
 export interface PersistedWizard {
-  step?: string;
-  completed?: string[];
+  /** Only `name`/`slug` are written; `id` is read back for an in-flight reload. */
   workspace?: { name: string; slug: string; id?: string };
-  members?: { email: string; role: string; status: string }[];
-  webhooksConfigured?: boolean;
   userEmail?: string;
   /** Segmentation collected in step 1 (research: 2 early questions max). */
   doors?: string;
-  goal?: string;
-  /** Rentals count from the successful /buildium/test — the launch screen's value reveal. */
-  buildiumCount?: number | null;
-  /** False when step 2 was skipped — the launch screen stays honest about it. */
-  buildiumConnected?: boolean;
-  googleConnected?: boolean;
+  /**
+   * A code has been sent and this browser is waiting to come back signed in.
+   *
+   * ⚠ **This is the ONLY thing that separates a magic-link continuation from a
+   * returning visitor**, and both look identical otherwise: same origin, same
+   * live Supabase session, same stored profile. Without it the wizard cannot
+   * tell "finish the attempt I am halfway through" from "someone clicked Start
+   * setup a week later", so it silently did the first for both — which is the
+   * resume-that-was-not-asked-for the founder hit on 2026-09-09.
+   *
+   * Set when the code goes out, CLEARED the moment step 1 completes. So it is
+   * true for exactly the window where an automatic continue is what the person
+   * asked for, and false everywhere else.
+   */
+  awaitingLink?: boolean;
 }
 
-/** The 2026-07 flow rename (6 steps → 4 + launch). Visitors who saved
- *  progress under the old step ids resume at the equivalent new step. */
-const STEP_MIGRATION: Record<string, string> = {
-  workspace: "identify",
-  auth: "identify",
-  integration: "buildium",
-  webhooks: "live",
-  team: "channels",
-};
+/**
+ * ⚠ Keys this app WROTE before 2026-09-09 and no longer reads. They are
+ * stripped on load rather than left in place: a returning visitor's stored
+ * `completed: ["identify","buildium"]` would otherwise sit in localStorage
+ * forever, and the next person to reintroduce a `loadWizard().completed` read
+ * would find it populated and working — which is how a deleted feature comes
+ * back by accident.
+ */
+const RETIRED_KEYS = [
+  "step",
+  "completed",
+  "members",
+  "webhooksConfigured",
+  "buildiumCount",
+  "buildiumConnected",
+  "googleConnected",
+  "goal",
+] as const;
 
 export function loadWizard(): PersistedWizard {
   try {
     const raw = localStorage.getItem(KEY);
-    const state = raw ? (JSON.parse(raw) as PersistedWizard) : {};
-    if (state.step && STEP_MIGRATION[state.step]) state.step = STEP_MIGRATION[state.step];
-    if (state.completed) {
-      state.completed = [...new Set(state.completed.map((s) => STEP_MIGRATION[s] || s))];
-    }
-    return state;
+    const state = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+    for (const key of RETIRED_KEYS) delete state[key];
+    return state as PersistedWizard;
   } catch {
     // Corrupt JSON, private-mode storage block, etc. — start fresh.
     return {};

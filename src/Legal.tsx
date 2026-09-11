@@ -1,4 +1,3 @@
-import Mark from "./Mark";
 
 // Plain-English Privacy Policy + Terms of Service. Written to be honest and
 // specific to what Occupella actually does (Buildium API mirror, Composio-managed
@@ -103,8 +102,12 @@ function Shell({
     <div className="legal">
       <style>{css}</style>
       <nav className="legal-nav">
+        {/* ⚠ Wordmark only — the ◐/grid Mark was removed here (founder call,
+            2026-09-09). At 22px beside 17px text it rendered as a smudge of
+            pale squares rather than as a logo, and a mark somebody has to
+            squint at is worse for the brand than no mark. The word alone is
+            still the link home. */}
         <a className="legal-wordmark" href="/">
-          <Mark size={22} />
           Occupella
         </a>
         <a href="/" style={{ fontSize: 13, color: "var(--ink-muted)", textDecoration: "none" }}>
