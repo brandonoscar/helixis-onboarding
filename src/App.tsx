@@ -3,6 +3,7 @@ import { supabase } from "./lib/supabase";
 import { apiFetch, apiJson, APP_URL, BUILDIUM_WEBHOOK_URL } from "./lib/api";
 import { clearWizard, loadWizard, saveWizard } from "./lib/persist";
 import { firstUnmet, meetsRequirements, requirements, strength } from "./lib/passwordStrength";
+import { resumeAction } from "./lib/resume";
 
 // ─────────────────────────────────────────────────────────
 // SETUP WIZARD — 4 steps + launch (2026-07 research rebuild):
@@ -698,13 +699,30 @@ function StepIdentify({
   initial,
   onProfile,
   onVerified,
+  resumedSession = false,
 }: {
   initial: Profile;
   onProfile: (p: Profile) => void;
   // ⚠ Returns a promise and THROWS on failure. It used to swallow the error
   // into an `alert()`, which left this step with no way to tell that the
   // workspace half had failed while the password half had succeeded.
-  onVerified: (email: string, accessToken: string) => Promise<void>;
+  //
+  // ⚠ The token is OPTIONAL because the magic-link door has no `verifyOtp`
+  // result to hand over — it arrives already signed in. `bootstrapWorkspace`
+  // has always accepted `undefined` and fallen back to the persisted session
+  // (that is how the old resume path called it), so this widens a signature
+  // rather than adding a code path.
+  onVerified: (email: string, accessToken: string | undefined) => Promise<void>;
+  /**
+   * This browser came back from the emailed LINK rather than typing the code,
+   * so it is already signed in and has never been asked for a password.
+   *
+   * ⚠ Without this, the link door skipped the password screen entirely and
+   * produced an account that could not sign in at occupella.com — the app is
+   * password-only. Supabase's OTP email carries both a code and a link, so
+   * this is not an edge case; it is half the people who read the email.
+   */
+  resumedSession?: boolean;
 }) {
   const [email, setEmail] = useState(initial.email);
   const [name, setName] = useState(initial.name);
@@ -718,6 +736,15 @@ function StepIdentify({
   // OTP-created users are otherwise passwordless and could never sign in
   // at occupella.com (password-only). Same decision, same date.
   const [verifiedToken, setVerifiedToken] = useState<string | null>(null);
+  /**
+   * ⚠ ONE name for "show the password screen", because there are TWO ways to
+   * earn it and the defect was that only one of them counted. A freshly
+   * verified code gives a token; the emailed link gives a live session and no
+   * token at all. Every place that used to test `verifiedToken` — the heading,
+   * the render branch, the submit guard — reads this instead, so a future
+   * fourth door cannot satisfy some of them and not others.
+   */
+  const needsPassword = Boolean(verifiedToken) || resumedSession;
   const [password, setPassword] = useState("");
   // ⚠ Remembers that `updateUser` already landed, so a retry after a FAILED
   // workspace bootstrap does not re-send the password and collect GoTrue's
@@ -809,7 +836,7 @@ function StepIdentify({
     // would sit on screen with two boxes unticked while the submit went
     // through anyway: a bar that is shown and not enforced, which is worse
     // than no bar because it is a promise the product breaks in front of you.
-    if (!verifiedToken || loading) return;
+    if (!needsPassword || loading) return;
     // ⚠ **A refusal nobody can perceive is indistinguishable from a send.**
     // The button is disabled, but the field's onKeyDown calls this directly,
     // so anyone who types a password and presses Enter — most people — hit a
@@ -844,7 +871,7 @@ function StepIdentify({
     }
 
     try {
-      await onVerified(email, verifiedToken);
+      await onVerified(email, verifiedToken ?? undefined);
     } catch (err) {
       // ⚠ Inline, not `alert()`. This panel already renders errors, and the
       // step is now RESUMABLE — saying so is the difference between "try
@@ -860,7 +887,7 @@ function StepIdentify({
       <div className="panel-header">
         <div className="panel-tag">Step 1 of 4</div>
         <h1 className="panel-title">
-          {verifiedToken
+          {needsPassword
             ? "Create your password"
             : sent
               ? "Check your email"
@@ -875,14 +902,14 @@ function StepIdentify({
             stays because it carries a FACT the screen does not otherwise
             have: which address the code went to, and how many digits to
             expect. */}
-        {sent && !verifiedToken && (
+        {sent && !needsPassword && (
           <p className="panel-desc">
             We sent a 6-digit code to {email}. Enter it below to continue.
           </p>
         )}
       </div>
 
-      {verifiedToken ? (
+      {needsPassword ? (
         <>
           <div className="card">
             <div className="field">
@@ -1805,6 +1832,12 @@ export default function App() {
   const didResume = useRef(false);
   // See persist.ts: true only between "send me a code" and step 1 completing.
   const [awaitingLink, setAwaitingLink] = useState(Boolean(persisted.awaitingLink));
+  // ⚠ Set ONLY by the magic-link continuation, and deliberately NOT persisted:
+  // it describes this page load, not the attempt. Written to storage it would
+  // survive a sign-out and open a password screen for a session that no longer
+  // exists — `updateUser` would then fail with something about auth, on a
+  // screen that says nothing about signing in.
+  const [awaitingPassword, setAwaitingPassword] = useState(false);
   // ⚠ A session was found and this is NOT the magic-link continuation, so the
   // wizard STOPS and asks instead of silently carrying somebody back into the
   // account they already made. Holds the email so the question can name it.
@@ -1865,11 +1898,28 @@ export default function App() {
   );
 
   /**
-   * Finish step 1 against a session that already exists.
+   * Finish step 1 against a session belonging to an ESTABLISHED account.
    *
-   * ⚠ Shared by the magic-link continuation and by the "Continue setup" answer
-   * to the gate below — two callers, one definition, so the automatic path and
-   * the chosen path cannot drift into doing different things.
+   * ⚠ **This used to be shared with the magic-link continuation, and that is
+   * exactly what the password bug was.** The old docstring said "two callers,
+   * one definition, so the automatic path and the chosen path cannot drift" —
+   * true of everything except the one thing that mattered. A magic-link
+   * arrival is an account created MINUTES AGO that has never been asked for a
+   * password; this caller is somebody coming back to an account they already
+   * finished. Running one code path for both meant the new account skipped the
+   * password step and could not then sign in at occupella.com.
+   *
+   * So the split is the fix, not a regression of the old comment's intent: the
+   * continuation goes to `collect-password` and reaches `handleVerified` — the
+   * SAME tail the code path uses — while this stays the returning-visitor
+   * answer to the gate below.
+   *
+   * ⚠ Residual, stated rather than papered over: an account created through
+   * the link BEFORE this fix is still passwordless, and "Continue with this
+   * account" carries it forward without asking. Demanding a password here
+   * would charge every returning visitor for that small cohort — and anyone
+   * who already has one would have to type it exactly, or silently change it.
+   * They recover through the app's "Forgot password", which works.
    */
   const resumeInto = useCallback(
     async (email: string) => {
@@ -1896,26 +1946,41 @@ export default function App() {
 
   // Recover an existing session on load (e.g. after a magic-link redirect,
   // which reloads the SPA). The inline-OTP path runs handleVerified itself
-  // and marks 'identify' done; only resume-bootstrap when we're authenticated
-  // but 'identify' hasn't completed yet — i.e. we got here via the email link.
+  // and marks 'identify' done; this effect decides what a session found on
+  // load means — see `lib/resume.ts`, which owns the decision.
   useEffect(() => {
     let active = true;
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!active || !session?.user) return;
       setUserEmail(session.user.email || "");
-      if (didResume.current || completed.has("identify")) return;
+
+      // ⚠ **A live session is not permission to continue, and it is not proof
+      // of a password either.** This effect used to bootstrap on ANY session,
+      // so clicking "Start setup" a week later ran the same code path as
+      // coming back from a magic link (founder report, 2026-09-09) — which the
+      // `awaitingLink` marker fixed. What the marker did NOT fix: the
+      // continuation then skipped step 1's password screen entirely, because
+      // it went straight to bootstrap. Both questions are answered in one
+      // place now, so a third caller cannot answer either differently.
+      const action = resumeAction({
+        hasSession: true,
+        alreadyResumed: didResume.current,
+        identifyComplete: completed.has("identify"),
+        awaitingLink,
+      });
+      if (action === "ignore") return;
       didResume.current = true;
 
-      // ⚠ **A live session is not permission to continue.** This effect used
-      // to bootstrap on ANY session, so clicking "Start setup" a week later
-      // ran the same code path as coming back from a magic link — the button
-      // said start and the app resumed (founder report, 2026-09-09). The
-      // marker is the only thing that tells those two apart; without it, ask.
-      if (!awaitingLink) {
+      if (action === "ask-which-account") {
         setReturningAs(session.user.email || "your account");
         return;
       }
-      await resumeInto(session.user.email || "");
+
+      // A magic-link continuation. Hand it to the SAME screen the emailed code
+      // reaches instead of bootstrapping here: `savePassword` runs
+      // `updateUser({ password })` against this live session and then calls
+      // `handleVerified`, which is the one place step 1 is marked complete.
+      setAwaitingPassword(true);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) setUserEmail(session.user.email || "");
@@ -1970,7 +2035,7 @@ export default function App() {
   // and — crucially — keeps its `passwordSaved` flag, so the retry re-runs
   // only the half that failed. Swallowing this into an `alert()` is what made
   // a transient backend blip look like a broken account (2026-09-09).
-  const handleVerified = async (email: string, accessToken: string) => {
+  const handleVerified = async (email: string, accessToken: string | undefined) => {
     setUserEmail(email);
     // Token passed explicitly — right after verifyOtp the persisted session
     // may not be readable yet.
@@ -2070,9 +2135,17 @@ export default function App() {
             </div>
           ) : step === "identify" && !creatingWorkspace ? (
             <StepIdentify
+              // ⚠ Keyed on the resumed email so a magic-link arrival REMOUNTS
+              // with the address the session actually carries. The component
+              // reads `initial` once, at mount, and on this path it mounted
+              // from localStorage before the session was read — so without the
+              // key it would show, and hand back, whatever the last attempt in
+              // this browser stored.
+              key={awaitingPassword ? `resumed:${userEmail}` : "fresh"}
               initial={{ email: userEmail, name: workspace.name, doors }}
               onProfile={handleProfile}
               onVerified={handleVerified}
+              resumedSession={awaitingPassword}
             />
           ) : null}
           {creatingWorkspace && (
