@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "node scripts/check-assets.mjs && tsc -b && vite build",
+    "build": "node scripts/check-assets.mjs && tsc -b && vitest run && vite build",
     "preview": "vite preview",
-    "check-assets": "node scripts/check-assets.mjs"
+    "check-assets": "node scripts/check-assets.mjs",
+    "test": "vitest run"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.2.9",
@@ -21,6 +22,7 @@
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.4",
     "typescript": "~5.7.0",
-    "vite": "^6.2.0"
+    "vite": "^6.2.0",
+    "vitest": "^5.0.0"
   }
 }
