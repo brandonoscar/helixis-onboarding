@@ -17,7 +17,7 @@
  * `StepIdentify`'s own comment says why that matters, in the code that shipped:
  *
  *     "the user SETS A PASSWORD before continuing — OTP-created users are
- *      otherwise passwordless and could never sign in at occupella.com
+ *      otherwise passwordless and could never sign in at app.occupella.com
  *      (password-only)."
  *
  * The requirement was written down and enforced on ONE of the two paths. So

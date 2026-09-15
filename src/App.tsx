@@ -112,9 +112,12 @@ function isSamePasswordError(e: { code?: string; message?: string }): boolean {
 
 const TOS_VERSION = "2026-07-05";
 // Legal pages are served by THIS app (main.tsx routes /terms + /privacy
-// → Legal.tsx). occupella.com is the main app — an SPA that renders the
+// → Legal.tsx). app.occupella.com is the main app — an SPA that renders the
 // login for any path, so absolute links there showed the login screen
-// (founder-reported 2026-08-20). Same-origin paths always resolve.
+// (founder-reported 2026-08-20; the host was the apex until the 2026-09-15
+// swap moved this site to occupella.com and the app to app.occupella.com —
+// the defect moved with the app, it did not go away). Same-origin paths
+// always resolve, which is why this is a path and not a URL.
 const TERMS_URL = "/terms";
 const PRIVACY_URL = "/privacy";
 
@@ -718,7 +721,7 @@ function StepIdentify({
    * so it is already signed in and has never been asked for a password.
    *
    * ⚠ Without this, the link door skipped the password screen entirely and
-   * produced an account that could not sign in at occupella.com — the app is
+   * produced an account that could not sign in at app.occupella.com — the app is
    * password-only. Supabase's OTP email carries both a code and a link, so
    * this is not an edge case; it is half the people who read the email.
    */
@@ -734,7 +737,7 @@ function StepIdentify({
   const [agreed, setAgreed] = useState(false);
   // After the code verifies, the user SETS A PASSWORD before continuing —
   // OTP-created users are otherwise passwordless and could never sign in
-  // at occupella.com (password-only). Same decision, same date.
+  // at app.occupella.com (password-only). Same decision, same date.
   const [verifiedToken, setVerifiedToken] = useState<string | null>(null);
   /**
    * ⚠ ONE name for "show the password screen", because there are TWO ways to
@@ -1907,7 +1910,7 @@ export default function App() {
    * arrival is an account created MINUTES AGO that has never been asked for a
    * password; this caller is somebody coming back to an account they already
    * finished. Running one code path for both meant the new account skipped the
-   * password step and could not then sign in at occupella.com.
+   * password step and could not then sign in at app.occupella.com.
    *
    * So the split is the fix, not a regression of the old comment's intent: the
    * continuation goes to `collect-password` and reaches `handleVerified` — the

@@ -335,7 +335,7 @@ export function DemoPanel({
   caption,
   width,
   height,
-  url = "occupella.com",
+  url = "app.occupella.com",
   controls = false,
 }: {
   src: string;

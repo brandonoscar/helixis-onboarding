@@ -476,7 +476,7 @@ export function Sms() {
           maintenance and work-order updates, appointment confirmations, and account
           notices. Message frequency varies. Message and data rates may apply. Consent is
           not a condition of renting or of any purchase. Reply STOP to unsubscribe or HELP
-          for help. See setup.occupella.com/sms and setup.occupella.com/privacy.”
+          for help. See occupella.com/sms and occupella.com/privacy.”
         </p>
       </div>
       <p>

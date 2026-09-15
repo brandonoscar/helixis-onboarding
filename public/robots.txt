@@ -1,4 +1,4 @@
-# setup.occupella.com — the marketing site and the setup wizard share a host.
+# occupella.com — the marketing site and the setup wizard share a host.
 #
 # Written deliberately rather than left absent: with no robots.txt a crawler
 # indexes /oauth/callback, whose whole body is "Connected. You can close this
@@ -11,4 +11,4 @@ Allow: /
 # Not a page — a popup return target that closes itself.
 Disallow: /oauth/
 
-Sitemap: https://setup.occupella.com/sitemap.xml
+Sitemap: https://occupella.com/sitemap.xml

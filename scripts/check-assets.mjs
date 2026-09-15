@@ -61,7 +61,7 @@ if (missing.length) {
   }
   console.error(
     "\nThe capability screenshots come from the AgenticHelixis repo:\n" +
-      "  python scripts/feature_shots.py --url https://occupella.com\n" +
+      "  python scripts/feature_shots.py --url https://app.occupella.com\n" +
       "then copy shots\\0*.png into this repo's public/demo/ folder.\n",
   );
   process.exit(1);
