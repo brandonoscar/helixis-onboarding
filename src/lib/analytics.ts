@@ -22,12 +22,22 @@
  *
  * # Privacy posture, and why it is STRICTER than the app's
  *
- * The app records sessions and autocaptures, because it is an authenticated
- * product surface used by somebody who signed an agreement. A person reading
- * the landing page has agreed to nothing, so:
+ * The app autocaptures, because it is an authenticated product surface used by
+ * somebody who signed an agreement. A person reading the landing page has
+ * agreed to nothing, so:
  *
  *   - `disable_session_recording` — recording a stranger's screen is the most
  *     invasive thing available here and buys the least.
+ *
+ *     ⚠ THIS LINE SAID "the app records sessions" UNTIL 2026-09-15 AND THE
+ *     APP DID NOT. Nothing anywhere records: the PostHog project has session
+ *     replay disabled, and the app now sets `disable_session_recording: true`
+ *     as well, so the difference between the two surfaces on this point is
+ *     the *reason* rather than the setting — a stranger could never be
+ *     recorded, a customer could have been by a dashboard click. Written down
+ *     because a comment asserting a behaviour the product does not have is
+ *     what stops the next reader checking (gotcha 48), and this one was mine,
+ *     two hours old.
  *   - `autocapture: false` — named events only. Autocapture on a public page
  *     captures every DOM interaction and leaves data that needs a selector
  *     archaeologist to read a year later.
