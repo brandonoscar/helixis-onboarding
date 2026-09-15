@@ -3,7 +3,9 @@ import { createRoot } from 'react-dom/client'
 import '@fontsource-variable/geist'
 import '@fontsource-variable/geist-mono'
 import App from './App'
+import { ConsentBar } from './ConsentBar'
 import { initAnalytics, watchStartClicks } from './lib/analytics'
+import { maybeLoadVisitorTracker } from './lib/visitorTracking'
 import Landing from './Landing'
 import Features from './Features'
 import Pricing from './Pricing'
@@ -61,11 +63,17 @@ if (window.location.pathname.startsWith('/oauth/callback')) {
   // path here that carries a signed-in person's context.
   initAnalytics()
   watchStartClicks()
+  // ⚠ Called here as well as from the consent bar's accept handler, and it is
+  // a no-op in every state that has not earned it (see lib/visitorTracking).
+  // A returning visitor who already said yes must not be asked again, so the
+  // load cannot live only behind the bar.
+  maybeLoadVisitorTracker()
 
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <style>{tokensCss}</style>
       {route()}
+      <ConsentBar />
     </StrictMode>,
   )
 }

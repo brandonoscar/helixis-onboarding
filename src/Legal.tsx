@@ -177,6 +177,16 @@ export function Privacy() {
           We do not record your session, capture what you type, or use any of it for
           advertising. If your browser sends a Do Not Track signal, we collect nothing.
         </li>
+        <li>
+          <strong>Which business is visiting:</strong> we use Apollo, an analytics provider,
+          to work out which company a visitor is from. Your IP address is shared with them
+          for that purpose and they may set a cookie. It tells us something like
+          &ldquo;someone at a property-management company read the pricing page&rdquo; — it is
+          not needed to use the site, and you can switch it off from the{" "}
+          <strong>Do not track my visit</strong> link in the footer of any page. If your
+          browser sends a Do Not Track or Global Privacy Control signal, it does not run at
+          all.
+        </li>
       </ul>
 
       <h2>How data is protected</h2>
