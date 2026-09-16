@@ -3,6 +3,9 @@ import { createRoot } from 'react-dom/client'
 import '@fontsource-variable/geist'
 import '@fontsource-variable/geist-mono'
 import App from './App'
+import { ConsentBar } from './ConsentBar'
+import { initAnalytics, watchStartClicks } from './lib/analytics'
+import { maybeLoadVisitorTracker } from './lib/visitorTracking'
 import Landing from './Landing'
 import Features from './Features'
 import Pricing from './Pricing'
@@ -53,10 +56,24 @@ if (window.location.pathname.startsWith('/oauth/callback')) {
     '<div style="font: 14px \'Geist Variable\', system-ui, sans-serif; padding: 48px; text-align: center; color: #9a97ad">Connected. You can close this window.</div>'
   setTimeout(() => window.close(), 250)
 } else {
+  // ⚠ INSIDE the else, deliberately. The branch above is the Composio OAuth
+  // popup: it belongs to an authenticated wizard session, auto-closes in
+  // 250ms, and is not a page anybody visits. Counting it would inflate every
+  // marketing figure with a window the visitor never sees, and it is the one
+  // path here that carries a signed-in person's context.
+  initAnalytics()
+  watchStartClicks()
+  // ⚠ Called here as well as from the consent bar's accept handler, and it is
+  // a no-op in every state that has not earned it (see lib/visitorTracking).
+  // A returning visitor who already said yes must not be asked again, so the
+  // load cannot live only behind the bar.
+  maybeLoadVisitorTracker()
+
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <style>{tokensCss}</style>
       {route()}
+      <ConsentBar />
     </StrictMode>,
   )
 }

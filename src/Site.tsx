@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { TrackingOptOut } from "./ConsentBar";
 import { APP_URL } from "./lib/api";
 
 // ─────────────────────────────────────────────────────────────────────
@@ -258,6 +259,17 @@ export const siteCss = `
   .lp-footer-col { display: flex; flex-direction: column; gap: 9px; }
   .lp-footer-col a { font-size: 13.5px; color: var(--deep-muted); text-decoration: none; transition: color var(--dur-state) var(--ease-std); }
   .lp-footer-col a:hover { color: var(--deep-ink); }
+  /* The tracking opt-out sits in the Legal column and has to read as one of
+     its links, but it is a button — it changes a stored preference rather
+     than navigating, and an <a> with no href is not reachable by keyboard. */
+  .lp-optout {
+    font: inherit; font-size: 13.5px; text-align: left;
+    background: none; border: 0; padding: 0; cursor: pointer;
+    color: var(--deep-muted); transition: color var(--dur-state) var(--ease-std);
+  }
+  .lp-optout:hover { color: var(--deep-ink); }
+  .lp-optout:focus-visible { outline: 2px solid var(--iris-light); outline-offset: 2px; border-radius: 2px; }
+  .lp-optout-done { font-size: 13.5px; color: var(--deep-muted); }
   .lp-footer-legal {
     margin-top: clamp(36px, 5vw, 52px); padding-top: 20px;
     border-top: 1px solid var(--deep-line);
@@ -335,7 +347,7 @@ export function DemoPanel({
   caption,
   width,
   height,
-  url = "occupella.com",
+  url = "app.occupella.com",
   controls = false,
 }: {
   src: string;
@@ -591,6 +603,7 @@ export function SiteFooter() {
               <a href="/terms">Terms</a>
               <a href="/privacy">Privacy</a>
               <a href="/sms">SMS program</a>
+              <TrackingOptOut />
             </div>
           </div>
 
