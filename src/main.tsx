@@ -5,6 +5,7 @@ import '@fontsource-variable/geist-mono'
 import App from './App'
 import { ConsentBar } from './ConsentBar'
 import { initAnalytics, watchStartClicks } from './lib/analytics'
+import { rescueAuthLanding } from './lib/authRescue'
 import { maybeLoadVisitorTracker } from './lib/visitorTracking'
 import Landing from './Landing'
 import Features from './Features'
@@ -46,11 +47,23 @@ function route() {
   return <NotFound />
 }
 
+// ⚠ FIRST BRANCH, ABOVE EVERYTHING, AND THAT ORDER IS LOAD-BEARING TWICE.
+// A Supabase invite whose `redirect_to` was not allowlisted lands HERE holding
+// a live session in the fragment — GoTrue falls back to the Site URL rather
+// than erroring, and since the 2026-09-15 swap that can be this site. See
+// lib/authRescue for the whole mechanism. Forwarding first is what stops the
+// invite being silently dead, AND what keeps the access token out of the
+// analytics pageview: posthog builds $current_url from location.href, fragment
+// included. `rescueAuthLanding` returns true only when it has navigated.
+if (rescueAuthLanding()) {
+  // Navigating away. Nothing else may run — rendering or counting a pageview
+  // underneath a redirect is exactly what this branch exists to prevent.
+}
 // Composio OAuth callback — the channels step passes this URL as
 // ``callbackUrl`` so the consent popup redirects here on success instead of
 // parking on Composio's hosted success page. Auto-close returns the user to
 // the wizard tab, where the poll loop picks up the new connection.
-if (window.location.pathname.startsWith('/oauth/callback')) {
+else if (window.location.pathname.startsWith('/oauth/callback')) {
   document.body.style.background = '#0a0910'
   document.body.innerHTML =
     '<div style="font: 14px \'Geist Variable\', system-ui, sans-serif; padding: 48px; text-align: center; color: #9a97ad">Connected. You can close this window.</div>'
