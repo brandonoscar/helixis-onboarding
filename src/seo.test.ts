@@ -39,6 +39,7 @@ import html from '../index.html?raw';
 import vercelRaw from '../vercel.json?raw';
 import robots from '../public/robots.txt?raw';
 import sitemap from '../public/sitemap.xml?raw';
+import manifestRaw from '../public/manifest.webmanifest?raw';
 import mainTsx from './main.tsx?raw';
 
 /** Every file sitting at the root of public/, by name. Keys only — the
@@ -152,6 +153,77 @@ describe('sitemap.xml', () => {
     for (const p of paths) {
       if (p === '/') continue; // the landing page is routed by equality, not prefix
       expect(routed, `the sitemap lists ${p} and main.tsx routes nothing there`).toContain(p);
+    }
+  });
+});
+
+/**
+ * The mark a tab and a search result show.
+ *
+ * ⚠ THE DEFECT THESE EXIST FOR WAS INVISIBLE FROM INSIDE THE REPO. The icon
+ * was declared as an inline `data:` URI, so index.html looked complete, every
+ * test passed, and /favicon.ico was never written — MEASURED 2026-09-21, a
+ * real 404 rather than the SPA shell. Google asks for that path by convention
+ * and rendered occupella.com with the generic globe. Nothing failed anywhere:
+ * the only symptom was a search result that looked abandoned.
+ *
+ * So the properties below are about FILES ON DISK, not about the HTML reading
+ * plausibly. A declaration is not an icon.
+ */
+describe('the brand mark reaches a browser and a crawler', () => {
+  /** Every `/…` icon path index.html points at, however it is spelled. */
+  const declared = [...html.matchAll(/<link rel="(?:icon|apple-touch-icon|manifest)"[^>]*>/g)]
+    .map((m) => m[0].match(/href="([^"]+)"/)?.[1])
+    .filter((h): h is string => Boolean(h));
+
+  it('found the declarations to judge', () => {
+    // A tag rewritten across several lines, or `rel` moved after `href`, makes
+    // the regex find nothing — and then every assertion below passes against
+    // the empty set while the site ships no icon at all.
+    expect(declared.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it('points at real files, never an inline drawing', () => {
+    for (const href of declared) {
+      expect(
+        href.startsWith('data:'),
+        `${href} is drawn inline. That is a SECOND copy of the mark, free to ` +
+          'drift from the files this site actually serves — and it is what ' +
+          'hid the missing favicon.ico, because the tab looked right.',
+      ).toBe(false);
+      expect(PUBLIC_FILES, `index.html declares ${href} and public/ has no such file`).toContain(
+        href.replace(/^\//, ''),
+      );
+    }
+  });
+
+  it('ships favicon.ico whatever the HTML says', () => {
+    // Deliberately NOT derived from `declared`. Google's crawler asks for this
+    // path by convention even when nothing links to it, so a guard that only
+    // read the HTML would pass with the file absent — which is exactly the
+    // state that produced the globe.
+    expect(PUBLIC_FILES).toContain('favicon.ico');
+  });
+
+  it('gives iOS a PNG, because it ignores an SVG apple-touch-icon', () => {
+    // This line pointed at /favicon.svg and therefore did nothing: iOS
+    // screenshots the page instead. The file existing is not the property —
+    // its FORMAT is.
+    const touch = html.match(/<link rel="apple-touch-icon"[^>]*href="([^"]+)"/)?.[1];
+    expect(touch, 'no apple-touch-icon at all').toBeTruthy();
+    expect(touch!.endsWith('.png'), `apple-touch-icon is ${touch} — iOS needs a PNG`).toBe(true);
+  });
+
+  it('names manifest icons that exist', () => {
+    // A manifest pointing at a 404 is the same silent failure one layer over:
+    // Android substitutes a generated letter tile, so the customer's phone
+    // shows somebody else's icon and nothing reports it.
+    const icons = (JSON.parse(manifestRaw) as { icons: { src: string }[] }).icons;
+    expect(icons.length).toBeGreaterThan(0);
+    for (const { src } of icons) {
+      expect(PUBLIC_FILES, `manifest names ${src} and public/ has no such file`).toContain(
+        src.replace(/^\//, ''),
+      );
     }
   });
 });

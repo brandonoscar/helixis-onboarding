@@ -8,13 +8,47 @@
       name="description"
       content="Occupella helps Buildium users turn maintenance chaos into completed work orders — faster fixes, cleaner owner updates, fewer resident follow-ups — without hiring another coordinator."
     />
-    <link
-      rel="icon"
-      type="image/svg+xml"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 30'%3E%3Crect x='1.12' y='1.17' width='4.6' height='4.6' rx='1.1' fill='%23C3D3E6'/%3E%3Crect x='6.84' y='1.17' width='4.6' height='4.6' rx='1.1' fill='%231E73BC'/%3E%3Crect x='12.56' y='1.17' width='4.6' height='4.6' rx='1.1' fill='%23C3D3E6'/%3E%3Crect x='18.28' y='1.17' width='4.6' height='4.6' rx='1.1' fill='%23C3D3E6'/%3E%3Crect x='1.12' y='6.93' width='4.6' height='4.6' rx='1.1' fill='%231E73BC'/%3E%3Crect x='6.84' y='6.93' width='4.6' height='4.6' rx='1.1' fill='%23C3D3E6'/%3E%3Crect x='12.56' y='6.93' width='4.6' height='4.6' rx='1.1' fill='%231E73BC'/%3E%3Crect x='18.28' y='6.93' width='4.6' height='4.6' rx='1.1' fill='%23C3D3E6'/%3E%3Crect x='1.12' y='12.70' width='4.6' height='4.6' rx='1.1' fill='%23C3D3E6'/%3E%3Crect x='6.84' y='12.70' width='4.6' height='4.6' rx='1.1' fill='%23C3D3E6'/%3E%3Crect x='12.56' y='12.70' width='4.6' height='4.6' rx='1.1' fill='%23C3D3E6'/%3E%3Crect x='18.28' y='12.70' width='4.6' height='4.6' rx='1.1' fill='%231E73BC'/%3E%3Crect x='1.12' y='18.47' width='4.6' height='4.6' rx='1.1' fill='%23C3D3E6'/%3E%3Crect x='6.84' y='18.47' width='4.6' height='4.6' rx='1.1' fill='%231E73BC'/%3E%3Crect x='12.56' y='18.47' width='4.6' height='4.6' rx='1.1' fill='%23C3D3E6'/%3E%3Crect x='18.28' y='18.47' width='4.6' height='4.6' rx='1.1' fill='%23C3D3E6'/%3E%3Crect x='1.12' y='24.23' width='4.6' height='4.6' rx='1.1' fill='%23C3D3E6'/%3E%3Crect x='6.84' y='24.23' width='4.6' height='4.6' rx='1.1' fill='%23C3D3E6'/%3E%3Crect x='12.56' y='24.23' width='4.6' height='4.6' rx='1.1' fill='%231E73BC'/%3E%3Crect x='18.28' y='24.23' width='4.6' height='4.6' rx='1.1' fill='%23C3D3E6'/%3E%3C/svg%3E"
-    />
+    <!-- THE BRAND MARK. These files are BYTE COPIES of the ones the app ships
+         at app.occupella.com — the same relationship social-preview.png has
+         always had. One product, one mark, on both hosts.
+
+         ⚠ THEY MUST BE REPLACED IN BOTH REPOS TOGETHER. This site shipped a
+         square-grid mark while the app shipped the wordmark for six days after
+         the 2026-09-15 swap, because the wordmark change landed in the app repo
+         and nothing carried it here — so the tab a prospect opened and the tab
+         a customer opened showed two different companies. The app's own comment
+         claimed "same mark as the marketing site" throughout. A comment cannot
+         fail (authority-repo gotcha 48), and a fix that reaches one surface and
+         not the other is gotcha 25's fan-out.
+
+         ⚠ AND THE ICON WAS AN INLINE data: URI, which is why /favicon.ico was
+         never missed. MEASURED 2026-09-21: https://occupella.com/favicon.ico
+         answered 404 — a real 404, not the SPA shell, so the rewrite was
+         innocent and the file simply was not there. Google's favicon crawler
+         asks for that path by convention, got nothing, and rendered the domain
+         with the generic globe in search while every other result on the page
+         showed its mark. A data: URI cannot satisfy that request at any size.
+         48px is in the .ico because Google resizes from a multiple of 48.
+
+         Ordered .ico FIRST for that crawler; a modern browser still prefers
+         the SVG below, because `sizes="any"` outranks a fixed-size raster. -->
+    <link rel="icon" href="/favicon.ico" sizes="48x48 32x32 16x16" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any" />
     <meta name="author" content="Oscar Ventures LLC" />
-    <link rel="apple-touch-icon" href="/favicon.svg" />
+    <!-- ⚠ A PNG, not the SVG — this line USED to point at /favicon.svg and did
+         nothing at all. iOS ignores an SVG apple-touch-icon entirely and
+         screenshots the page instead, so a prospect who added the site to their
+         home screen got a thumbnail of whatever they were looking at. It also
+         paints BLACK behind transparency, which is why the plate in these files
+         is what controls what an install actually shows. -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <!-- Android Chrome refuses an SVG-only manifest for the home screen and
+         substitutes a generated letter tile — somebody else's icon on the
+         customer's phone. -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- The browser chrome colour, NOT the icon's. It matches this site's dark
+         canvas; the icon carries its own white plate and the two are unrelated
+         (the app sets #FFFFFF here for the same reason and is not in conflict). -->
     <meta name="theme-color" content="#0a0910" />
     <link rel="canonical" href="https://occupella.com/" />
 
