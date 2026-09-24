@@ -1,22 +1,43 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 30">
-  <rect x="1.12" y="1.17" width="4.6" height="4.6" rx="1.1" fill="#C3D3E6"/>
-  <rect x="6.84" y="1.17" width="4.6" height="4.6" rx="1.1" fill="#1E73BC"/>
-  <rect x="12.56" y="1.17" width="4.6" height="4.6" rx="1.1" fill="#C3D3E6"/>
-  <rect x="18.28" y="1.17" width="4.6" height="4.6" rx="1.1" fill="#C3D3E6"/>
-  <rect x="1.12" y="6.93" width="4.6" height="4.6" rx="1.1" fill="#1E73BC"/>
-  <rect x="6.84" y="6.93" width="4.6" height="4.6" rx="1.1" fill="#C3D3E6"/>
-  <rect x="12.56" y="6.93" width="4.6" height="4.6" rx="1.1" fill="#1E73BC"/>
-  <rect x="18.28" y="6.93" width="4.6" height="4.6" rx="1.1" fill="#C3D3E6"/>
-  <rect x="1.12" y="12.70" width="4.6" height="4.6" rx="1.1" fill="#C3D3E6"/>
-  <rect x="6.84" y="12.70" width="4.6" height="4.6" rx="1.1" fill="#C3D3E6"/>
-  <rect x="12.56" y="12.70" width="4.6" height="4.6" rx="1.1" fill="#C3D3E6"/>
-  <rect x="18.28" y="12.70" width="4.6" height="4.6" rx="1.1" fill="#1E73BC"/>
-  <rect x="1.12" y="18.47" width="4.6" height="4.6" rx="1.1" fill="#C3D3E6"/>
-  <rect x="6.84" y="18.47" width="4.6" height="4.6" rx="1.1" fill="#1E73BC"/>
-  <rect x="12.56" y="18.47" width="4.6" height="4.6" rx="1.1" fill="#C3D3E6"/>
-  <rect x="18.28" y="18.47" width="4.6" height="4.6" rx="1.1" fill="#C3D3E6"/>
-  <rect x="1.12" y="24.23" width="4.6" height="4.6" rx="1.1" fill="#C3D3E6"/>
-  <rect x="6.84" y="24.23" width="4.6" height="4.6" rx="1.1" fill="#C3D3E6"/>
-  <rect x="12.56" y="24.23" width="4.6" height="4.6" rx="1.1" fill="#1E73BC"/>
-  <rect x="18.28" y="24.23" width="4.6" height="4.6" rx="1.1" fill="#C3D3E6"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!--
+    The Occupella wordmark — the same word, the same typeface (Geist 600) and
+    the same two colours as the first-paint shell in index.html, so the tab,
+    the search result and the loading screen are one thing.
+
+    ⚠ REPLACED A SQUARE-GRID MARK ON 2026-09-15, at the founder's call, and
+    BOTH files had to change together. Browsers prefer this SVG over
+    favicon.ico (`sizes="any"` outranks a fixed raster), so leaving the grid
+    here and shipping a wordmark .ico would have put one mark in the tab and a
+    different one in Google — the incoherence being fixed, re-created.
+
+    ⚠ THE TEXT IS OUTLINES, NOT A <text> ELEMENT. A favicon renders in
+    contexts with no CSS and no webfont — a browser tab, a bookmark bar, a
+    crawler's rasteriser — and a <text> tag there falls back to whatever the
+    host has, so the mark would silently become Times on somebody's machine.
+    These paths are Geist 600 instanced from the variable font the app itself
+    loads, so there is nothing left to resolve at render time.
+
+    ⚠ THE WHITE PLATE IS LOAD-BEARING and is why there is no dark-mode
+    variant. #0E1620 text on a transparent ground disappears against a dark
+    tab strip; the plate is also exactly the loading screen's background, so
+    honouring the brief and staying legible are the same decision here.
+
+    ⚠ At 16px the word is about three pixels tall and reads as a dark smear.
+    That is understood and accepted — the full word was the explicit ask, and
+    Google prints the legible site name beside the icon anyway (the WebSite
+    JSON-LD in index.html is what feeds it). favicon.ico carries the same
+    artwork at 16/32/48.
+  -->
+  <rect width="100" height="100" fill="#FFFFFF"/>
+  <g fill="#0E1620" transform="translate(6.0000 55.1659) scale(0.017937 -0.017937)">
+      <path transform="translate(0 0)" d="M381 -16Q276 -16 200.0 28.5Q124 73 83.5 156.0Q43 239 43 354Q43 469 83.5 552.5Q124 636 200.0 681.0Q276 726 381 726Q488 726 563.5 681.0Q639 636 679.5 552.5Q720 469 720 354Q720 239 679.5 156.0Q639 73 563.5 28.5Q488 -16 381 -16ZM381 97Q446 97 491.5 127.5Q537 158 561.5 215.5Q586 273 586 354Q586 435 561.5 493.0Q537 551 491.5 582.0Q446 613 381 613Q318 613 272.0 582.0Q226 551 201.5 493.0Q177 435 177 354Q177 273 201.5 215.5Q226 158 272.0 127.5Q318 97 381 97Z"/>
+      <path transform="translate(763 0)" d="M302 -12Q222 -12 163.0 22.5Q104 57 71.5 120.0Q39 183 39 267Q39 351 71.5 413.5Q104 476 163.0 511.0Q222 546 302 546Q370 546 423.0 522.0Q476 498 509.5 453.5Q543 409 551 345L419 338Q411 389 379.5 415.5Q348 442 302 442Q240 442 206.0 395.5Q172 349 172 267Q172 184 206.0 138.0Q240 92 302 92Q349 92 380.5 119.0Q412 146 419 203L551 197Q543 133 510.0 86.0Q477 39 424.0 13.5Q371 -12 302 -12Z"/>
+      <path transform="translate(1343 0)" d="M302 -12Q222 -12 163.0 22.5Q104 57 71.5 120.0Q39 183 39 267Q39 351 71.5 413.5Q104 476 163.0 511.0Q222 546 302 546Q370 546 423.0 522.0Q476 498 509.5 453.5Q543 409 551 345L419 338Q411 389 379.5 415.5Q348 442 302 442Q240 442 206.0 395.5Q172 349 172 267Q172 184 206.0 138.0Q240 92 302 92Q349 92 380.5 119.0Q412 146 419 203L551 197Q543 133 510.0 86.0Q477 39 424.0 13.5Q371 -12 302 -12Z"/>
+      <path transform="translate(1923 0)" d="M246 -12Q165 -12 117.5 41.5Q70 95 70 190V534H198V222Q198 155 220.5 123.5Q243 92 289 92Q341 92 369.5 126.5Q398 161 398 227V534H526V0H409L406 147L422 142Q410 66 365.0 27.0Q320 -12 246 -12Z"/>
+      <path transform="translate(2520 0)" d="M70 -150V534H193L196 420L183 426Q203 485 248.5 515.5Q294 546 355 546Q431 546 481.5 508.0Q532 470 557.0 407.0Q582 344 582 267Q582 190 556.5 127.0Q531 64 480.5 26.0Q430 -12 354 -12Q314 -12 279.5 2.0Q245 16 220.5 42.0Q196 68 186 103L198 113V-150ZM324 92Q382 92 415.5 138.5Q449 185 449 267Q449 349 415.5 395.5Q382 442 324 442Q285 442 257.0 422.5Q229 403 213.5 364.0Q198 325 198 267Q198 209 213.0 170.0Q228 131 256.5 111.5Q285 92 324 92Z"/>
+      <path transform="translate(3141 0)" d="M301 -12Q221 -12 162.0 22.5Q103 57 71.0 120.0Q39 183 39 267Q39 351 71.0 413.5Q103 476 161.5 511.0Q220 546 298 546Q374 546 431.5 512.0Q489 478 520.0 414.0Q551 350 551 260V231H172Q176 161 210.5 125.5Q245 90 302 90Q345 90 373.5 109.5Q402 129 413 164L544 156Q522 78 457.5 33.0Q393 -12 301 -12ZM172 317H419Q415 382 382.0 413.5Q349 445 298 445Q247 445 213.5 412.0Q180 379 172 317Z"/>
+      <path transform="translate(3732 0)" d="M198 0Q140 0 105.0 30.0Q70 60 70 126V710H198V139Q198 119 208.5 109.0Q219 99 238 99H277V0Z"/>
+      <path transform="translate(4029 0)" d="M198 0Q140 0 105.0 30.0Q70 60 70 126V710H198V139Q198 119 208.5 109.0Q219 99 238 99H277V0Z"/>
+      <path transform="translate(4326 0)" d="M225 -12Q141 -12 90.0 26.5Q39 65 39 134Q39 203 82.0 242.0Q125 281 213 298L390 333Q390 390 364.0 418.5Q338 447 287 447Q241 447 214.5 425.5Q188 404 178 364L48 370Q64 455 126.0 500.5Q188 546 287 546Q401 546 459.5 488.5Q518 431 518 324V130Q518 109 525.5 101.0Q533 93 548 93H565V0Q559 -2 545.5 -3.0Q532 -4 518 -4Q485 -4 459.0 6.5Q433 17 419.0 43.5Q405 70 405 116L416 108Q408 73 381.5 45.5Q355 18 315.0 3.0Q275 -12 225 -12ZM251 81Q294 81 325.0 98.0Q356 115 373.0 145.0Q390 175 390 216V246L252 218Q209 209 190.5 191.5Q172 174 172 146Q172 115 192.5 98.0Q213 81 251 81Z"/>
+  </g>
 </svg>
