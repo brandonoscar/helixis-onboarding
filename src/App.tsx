@@ -4,20 +4,33 @@ import { apiFetch, apiJson, APP_URL, BUILDIUM_WEBHOOK_URL } from "./lib/api";
 import { clearWizard, loadWizard, saveWizard } from "./lib/persist";
 import { firstUnmet, meetsRequirements, requirements, strength } from "./lib/passwordStrength";
 import { resumeAction } from "./lib/resume";
+import {
+  asksForAccountCode,
+  findingCards,
+  PMS_NAME,
+  PMS_READS,
+  rentvineAvailability,
+  rentvineCredentialsBody,
+  stepAfterConnect,
+  type Pms,
+  type RentvineAvailability,
+  type ScanData,
+} from "./lib/pms";
 
 // ─────────────────────────────────────────────────────────
 // SETUP WIZARD — 4 steps + launch (2026-07 research rebuild):
 //   1 identify  — secure account: email OTP + company + doors,
 //                 saved BEFORE any credential is asked for
-//   2 buildium  — the one high-friction required connection, with an
-//                 an admin handoff on request and a value reveal on test
-//   3 live      — webhooks, reframed as "live Buildium updates", skippable
+//   2 pms       — pick Buildium or Rentvine, then the one high-friction
+//                 required connection (admin handoff on request for Buildium)
+//   3 live      — Buildium webhooks, reframed as "live updates", skippable;
+//                 not shown for Rentvine (lib/pms.ts stepAfterConnect)
 //   4 channels  — Google OAuth, optional
 //   finish      — launch: what Occupella is scanning now, not a summary
 // Team invites moved to the in-app Getting Started checklist.
 // ─────────────────────────────────────────────────────────
 
-type Step = "identify" | "buildium" | "live" | "channels" | "finish";
+type Step = "identify" | "pms" | "live" | "channels" | "finish";
 
 interface WorkspaceData {
   name: string;
@@ -1063,11 +1076,13 @@ function StepBuildium({
   workspaceName,
   onNext,
   onSkip,
+  onChangePms,
 }: {
   userEmail: string;
   workspaceName: string;
   onNext: (count: number | null) => void;
   onSkip: () => void;
+  onChangePms: () => void;
 }) {
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
   const [apiKey, setApiKey] = useState("");
@@ -1294,6 +1309,254 @@ function StepBuildium({
       >
         Skip for now — connect Buildium later from Settings →
       </button>
+      <button className="handoff-link" onClick={onChangePms} disabled={integration.status === "testing"}>
+        ← We use Rentvine, not Buildium
+      </button>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────
+// STEP 2: WHICH SYSTEM? (Buildium or Rentvine)
+// ─────────────────────────────────────────────────────────
+
+function StepPms({
+  userEmail,
+  workspaceName,
+  onConnected,
+  onSkip,
+}: {
+  userEmail: string;
+  workspaceName: string;
+  onConnected: (pms: Pms) => void;
+  onSkip: () => void;
+}) {
+  const [choice, setChoice] = useState<Pms | null>(null);
+  // Asked once, before any keys are collected: a customer on a deployment
+  // where the Rentvine connector is off is told so here, not after pasting
+  // both keys and hitting the backend's 503.
+  const [rentvine, setRentvine] = useState<RentvineAvailability>("unknown");
+
+  useEffect(() => {
+    let active = true;
+    apiJson<unknown>("/api/v1/rentvine/credentials")
+      .then((status) => active && setRentvine(rentvineAvailability(status)))
+      .catch(() => active && setRentvine("unknown"));
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  if (choice === "buildium") {
+    return (
+      <StepBuildium
+        userEmail={userEmail}
+        workspaceName={workspaceName}
+        onNext={() => onConnected("buildium")}
+        onSkip={onSkip}
+        onChangePms={() => setChoice(null)}
+      />
+    );
+  }
+  if (choice === "rentvine") {
+    return (
+      <StepRentvine
+        onNext={() => onConnected("rentvine")}
+        onSkip={onSkip}
+        onChangePms={() => setChoice(null)}
+      />
+    );
+  }
+
+  return (
+    <div className="panel" key="pms">
+      <div className="panel-header">
+        <div className="panel-tag">Step 2 of 4</div>
+        <h1 className="panel-title">Which property-management system do you use?</h1>
+        <p className="panel-desc">
+          Occupella reads your portfolio from it. Each workspace connects to one system.
+        </p>
+      </div>
+
+      <div className="btn-row" style={{ flexDirection: "column", gap: 10 }}>
+        <button className="btn btn-secondary wide" onClick={() => setChoice("buildium")}>
+          Buildium
+        </button>
+        <button
+          className="btn btn-secondary wide"
+          onClick={() => setChoice("rentvine")}
+          disabled={rentvine === "off"}
+        >
+          Rentvine
+        </button>
+      </div>
+      {rentvine === "off" && (
+        <p className="hint" style={{ marginTop: 10 }}>
+          Rentvine isn't switched on for new workspaces yet. Email{" "}
+          <a href="mailto:team@occupella.com?subject=Rentvine%20access">team@occupella.com</a> and
+          we'll turn it on for you, or skip this step and come back to occupella.com/start later.
+        </p>
+      )}
+
+      <button className="btn btn-ghost" style={{ width: "100%", marginTop: 16 }} onClick={onSkip}>
+        Skip for now →
+      </button>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────
+// STEP 2b: CONNECT RENTVINE (keys → test → continue)
+// ─────────────────────────────────────────────────────────
+
+function StepRentvine({
+  onNext,
+  onSkip,
+  onChangePms,
+}: {
+  onNext: () => void;
+  onSkip: () => void;
+  onChangePms: () => void;
+}) {
+  const [apiKey, setApiKey] = useState("");
+  const [apiSecret, setApiSecret] = useState("");
+  const [accountCode, setAccountCode] = useState("");
+  // Hidden until needed: the backend works the subdomain out from the keys,
+  // and asks for it (422) only when it can't.
+  const [showAccountCode, setShowAccountCode] = useState(false);
+  const [integration, setIntegration] = useState<IntegrationState>({ status: "idle" });
+
+  const testConnection = async () => {
+    if (!apiKey || !apiSecret) return;
+    setIntegration({ status: "testing" });
+    try {
+      await apiFetch("/api/v1/rentvine/credentials", {
+        method: "PUT",
+        body: JSON.stringify(rentvineCredentialsBody(apiKey, apiSecret, accountCode)),
+      });
+      const testData = await apiJson<{ ok: boolean; error?: string | null }>(
+        "/api/v1/rentvine/test",
+        { method: "POST" },
+      );
+      if (testData.ok) {
+        setIntegration({
+          status: "connected",
+          testMessage: "Connected. Occupella has started reading your portfolio.",
+        });
+      } else {
+        setIntegration({ status: "error", testMessage: testData.error || "Connection failed" });
+      }
+    } catch (e: any) {
+      // The backend's refusals are sentences for the customer (connector off,
+      // workspace already on Buildium, subdomain needed). Show them as written.
+      if (asksForAccountCode(e?.status)) setShowAccountCode(true);
+      setIntegration({ status: "error", testMessage: e?.message || "Connection failed" });
+    }
+  };
+
+  const testing = integration.status === "testing";
+
+  return (
+    <div className="panel" key="rentvine">
+      <div className="panel-header">
+        <div className="panel-tag">Step 2 of 4</div>
+        <h1 className="panel-title">Connect Rentvine</h1>
+        <p className="panel-desc">
+          Occupella reads your {PMS_READS.rentvine}. It never writes anything back to Rentvine
+          without your approval.
+        </p>
+      </div>
+
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="card-title">Rentvine API key</div>
+        <div className="field">
+          <label>Access key</label>
+          <input
+            className="secret-input"
+            type="password"
+            placeholder="••••••••••••••••••••"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            autoComplete="new-password"
+          />
+        </div>
+        <div className="field">
+          <label>Secret</label>
+          <input
+            className="secret-input"
+            type="password"
+            placeholder="••••••••••••••••••••"
+            value={apiSecret}
+            onChange={(e) => setApiSecret(e.target.value)}
+            autoComplete="new-password"
+          />
+          <span className="hint">
+            Rentvine shows the secret once, when the key is created. If you don't have it, create a
+            new key and use that pair.
+          </span>
+        </div>
+        {showAccountCode ? (
+          <div className="field">
+            <label>Rentvine account code</label>
+            <input
+              value={accountCode}
+              placeholder="yourcompany"
+              onChange={(e) => setAccountCode(e.target.value)}
+              autoComplete="off"
+            />
+            <span className="hint">
+              The word before “.rentvine.com” in your browser's address bar when you're signed in.
+            </span>
+          </div>
+        ) : (
+          <button className="handoff-link" onClick={() => setShowAccountCode(true)}>
+            I know my Rentvine account code
+          </button>
+        )}
+
+        {testing && (
+          <div className="test-result" style={{ background: "var(--canvas-2)", border: "1px solid var(--line)", color: "var(--ink-muted)" }}>
+            <span className="spinner accent" /> Testing read access to your Rentvine account…
+          </div>
+        )}
+        {integration.status === "connected" && (
+          <div className="test-result success">
+            <span>✓</span>
+            <span>{integration.testMessage}</span>
+          </div>
+        )}
+        {integration.status === "error" && (
+          <div className="test-result error">
+            <span>⚠</span> {integration.testMessage}
+          </div>
+        )}
+
+        <div className="btn-row" style={{ marginTop: 12 }}>
+          <button
+            className="btn btn-secondary"
+            onClick={testConnection}
+            disabled={!apiKey || !apiSecret || testing}
+            style={{ flex: 1 }}
+          >
+            {testing ? <><span className="spinner accent" /> Testing…</> : "Test Rentvine connection"}
+          </button>
+          <button
+            className="btn btn-primary"
+            style={{ flex: 1, margin: 0 }}
+            onClick={onNext}
+            disabled={integration.status !== "connected"}
+          >
+            Continue →
+          </button>
+        </div>
+      </div>
+
+      <button className="btn btn-ghost" style={{ width: "100%", marginTop: 8 }} onClick={onSkip} disabled={testing}>
+        Skip for now — come back to occupella.com/start to connect Rentvine
+      </button>
+      <button className="handoff-link" onClick={onChangePms} disabled={testing}>
+        ← We use Buildium, not Rentvine
+      </button>
     </div>
   );
 }
@@ -1503,40 +1766,18 @@ function StepChannels({ onNext }: { onNext: (connected: boolean) => void }) {
 // LAUNCH: FIRST OPERATIONS SCAN
 // ─────────────────────────────────────────────────────────
 
-interface ScanData {
-  synced: boolean;
-  properties: number;
-  units: number;
-  tenants: number;
-  active_leases: number;
-  open_work_orders: number;
-  stalled_work_orders: number;
-  expiring_leases: number;
-  expiring_window_days: number;
-  delinquent_leases: number;
-  delinquent_total: number;
-  pending_promises: number;
-}
-
-const usd = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  maximumFractionDigits: 0,
-});
-
 function StepFinish({
   workspace,
-  buildiumCount,
-  buildiumConnected,
+  connectedPms,
   liveUpdates,
   googleConnected,
 }: {
   workspace: WorkspaceData;
-  buildiumCount: number | null;
-  buildiumConnected: boolean;
+  connectedPms: Pms | null;
   liveUpdates: boolean;
   googleConnected: boolean;
 }) {
+  const pmsName = connectedPms ? PMS_NAME[connectedPms] : "Buildium or Rentvine";
   // The real day-one scan (GET /reports/first-scan): deterministic mirror
   // counts. Poll while the initial backfill fills the mirror (synced=false);
   // any error falls back to the static setup-status cards so an older
@@ -1549,8 +1790,8 @@ function StepFinish({
     let active = true;
     let attempts = 0;
 
-    // No Buildium yet → nothing to scan; go straight to the setup cards.
-    if (!buildiumConnected) {
+    // No system connected → nothing to scan; go straight to the setup cards.
+    if (!connectedPms) {
       setScanning(false);
       return;
     }
@@ -1617,50 +1858,33 @@ function StepFinish({
     googleConnected ? "Gmail & Calendar: connected" : "Gmail & Calendar: skipped",
   ].join(" · ");
 
-  const findings =
-    scan && scan.synced
-      ? [
-          {
-            num: String(scan.open_work_orders),
-            label: `open work order${scan.open_work_orders === 1 ? "" : "s"}`,
-            sub:
-              scan.stalled_work_orders > 0
-                ? `${scan.stalled_work_orders} look stalled — no update in over 7 days.`
-                : "None look stalled right now.",
-          },
-          {
-            num: String(scan.expiring_leases),
-            label: `lease${scan.expiring_leases === 1 ? "" : "s"} ending in the next ${scan.expiring_window_days} days`,
-            sub: "Occupella tracks these dates.",
-          },
-          {
-            num: usd.format(scan.delinquent_total),
-            label: `owed across ${scan.delinquent_leases} lease${scan.delinquent_leases === 1 ? "" : "s"}`,
-            sub:
-              scan.pending_promises > 0
-                ? `${scan.pending_promises} tenant${scan.pending_promises === 1 ? " has" : "s have"} promised payment — Occupella tracks those dates.`
-                : "Rent reminders Occupella will send once you approve them.",
-          },
-        ]
-      : null;
+  // ⚠ Built in lib/pms.ts, which leaves the rent-owed card out when the
+  // backend cannot know it (Rentvine sends no balances) instead of showing $0.
+  const findings = findingCards(scan);
 
   const fallbackCards = [
-    buildiumConnected
+    connectedPms
       ? {
           // No count — the shallow test probe undercounts (see StepBuildium);
           // real numbers come from the mirror-backed scan `findings` above.
           num: "✓",
-          label: "Buildium connected",
-          sub: "Occupella is mirroring your properties, leases, tenants, work orders, and bills now.",
+          label: `${pmsName} connected`,
+          sub: `Occupella is mirroring your ${PMS_READS[connectedPms]} now.`,
         }
       : {
           num: "off",
-          label: "Buildium",
-          sub: "Skipped — connect from Settings → Connectors to run your first scan.",
+          label: "Property-management system",
+          sub: "Skipped — come back to occupella.com/start to connect Buildium or Rentvine.",
         },
-    liveUpdates
-      ? { num: "on", label: "Live updates", sub: "New Buildium events land in your Inbox in real time." }
-      : { num: "off", label: "Live updates", sub: "Skipped — turn on later from Settings for real-time events." },
+    connectedPms === "rentvine"
+      ? {
+          num: "—",
+          label: "Live updates",
+          sub: "Not available for Rentvine yet. Occupella re-reads Rentvine on a schedule instead.",
+        }
+      : liveUpdates
+        ? { num: "on", label: "Live updates", sub: "New Buildium events land in your Inbox in real time." }
+        : { num: "off", label: "Live updates", sub: "Skipped — turn on later from Settings for real-time events." },
     googleConnected
       ? { num: "on", label: "Gmail & Calendar", sub: "Ask Occupella about a thread or a date and it can read them." }
       : { num: "off", label: "Gmail & Calendar", sub: "Skipped — connect later from Settings → Connectors." },
@@ -1672,7 +1896,7 @@ function StepFinish({
         <h1 className="panel-title" style={{ textAlign: "center" }}>
           {findings
             ? `Here's what Occupella found in ${workspace.name || "your portfolio"}`
-            : buildiumConnected
+            : connectedPms
               ? `${workspace.name || "Your workspace"} is live — first scan running`
               : `${workspace.name || "Your workspace"} is live`}
         </h1>
@@ -1681,12 +1905,12 @@ function StepFinish({
             <>
               {scan!.properties} propert{scan!.properties === 1 ? "y" : "ies"} · {scan!.units} unit
               {scan!.units === 1 ? "" : "s"} · {scan!.tenants} tenant{scan!.tenants === 1 ? "" : "s"} mirrored.
-              Every number below is read straight from your Buildium data.
+              Every number below is read straight from your {pmsName} data.
             </>
-          ) : buildiumConnected ? (
+          ) : connectedPms ? (
             "Occupella is reading your portfolio now. Open the app — the Inbox fills in as the scan runs."
           ) : (
-            "Open the app and connect Buildium whenever you're ready — your first scan runs the moment it's linked."
+            "Open the app now, and come back to occupella.com/start to connect Buildium or Rentvine — your first scan runs the moment it's linked."
           )}
         </p>
       </div>
@@ -1748,7 +1972,7 @@ function StepFinish({
 
 const STEPS: { id: Step; label: string; tag?: string }[] = [
   { id: "identify", label: "Secure account" },
-  { id: "buildium", label: "Connect Buildium" },
+  { id: "pms", label: "Connect your PMS" },
   { id: "live", label: "Live updates", tag: "rec" },
   { id: "channels", label: "Gmail & Calendar", tag: "opt" },
   { id: "finish", label: "Launch scan" },
@@ -1827,8 +2051,8 @@ export default function App() {
   );
   const [userEmail, setUserEmail] = useState(persisted.userEmail || "");
   const [doors, setDoors] = useState(persisted.doors || "");
-  const [buildiumCount, setBuildiumCount] = useState<number | null>(null);
-  const [buildiumConnected, setBuildiumConnected] = useState(false);
+  // Which system step 2 connected, or null when it was skipped.
+  const [connectedPms, setConnectedPms] = useState<Pms | null>(null);
   const [liveUpdates, setLiveUpdates] = useState(false);
   const [googleConnected, setGoogleConnected] = useState(false);
   const [creatingWorkspace, setCreatingWorkspace] = useState(false);
@@ -1847,7 +2071,7 @@ export default function App() {
   const [returningAs, setReturningAs] = useState<string | null>(null);
 
   // Where "back" goes, as a stack rather than a table of predecessors: the
-  // flow is not linear. handleBuildiumSkip jumps buildium → channels, so a
+  // flow is not linear. handlePmsSkip jumps pms → channels, so a
   // table would send someone back to `live`, a step they were never shown.
   //
   // ⚠ Nothing pushes on the identify → buildium transition. The account and
@@ -1934,7 +2158,7 @@ export default function App() {
         setAwaitingLink(false);
         complete("identify");
         setWorkspace((prev) => ({ ...prev, id: companyId }));
-        setStep((prev) => (prev === "identify" ? "buildium" : prev));
+        setStep((prev) => (prev === "identify" ? "pms" : prev));
       } catch (e: any) {
         alert(e.message || "Failed to restore your workspace session");
       } finally {
@@ -2051,23 +2275,26 @@ export default function App() {
       setAwaitingLink(false);
       complete("identify");
       setWorkspace((prev) => ({ ...prev, id: companyId }));
-      setStep("buildium");
+      setStep("pms");
     } finally {
       setCreatingWorkspace(false);
     }
   };
 
-  const handleBuildium = (count: number | null) => {
-    setBuildiumCount(count);
-    setBuildiumConnected(true);
-    complete("buildium");
-    go("live");
+  const handlePmsConnected = (pms: Pms) => {
+    setConnectedPms(pms);
+    complete("pms");
+    const next = stepAfterConnect(pms);
+    // A skipped step still reads as done in the sidebar, the way skipping the
+    // whole PMS step already marks live updates done.
+    if (next !== "live") complete("live");
+    go(next);
   };
 
-  // Skipping Buildium also bypasses live updates (webhooks are meaningless
+  // Skipping the PMS also bypasses live updates (webhooks are meaningless
   // without credentials); Gmail & Calendar still stand on their own.
-  const handleBuildiumSkip = () => {
-    complete("buildium");
+  const handlePmsSkip = () => {
+    complete("pms");
     complete("live");
     go("channels");
   };
@@ -2159,16 +2386,20 @@ export default function App() {
               </div>
             </div>
           )}
-          {step === "buildium" && (
-            <StepBuildium userEmail={userEmail} workspaceName={workspace.name} onNext={handleBuildium} onSkip={handleBuildiumSkip} />
+          {step === "pms" && (
+            <StepPms
+              userEmail={userEmail}
+              workspaceName={workspace.name}
+              onConnected={handlePmsConnected}
+              onSkip={handlePmsSkip}
+            />
           )}
           {step === "live" && <StepLive onNext={handleLive} />}
           {step === "channels" && <StepChannels onNext={handleChannels} />}
           {step === "finish" && (
             <StepFinish
               workspace={workspace}
-              buildiumCount={buildiumCount}
-              buildiumConnected={buildiumConnected}
+              connectedPms={connectedPms}
               liveUpdates={liveUpdates}
               googleConnected={googleConnected}
             />
