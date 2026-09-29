@@ -477,6 +477,9 @@ export default function Features() {
             When something happens in Buildium, Occupella looks up the history around it and
             drafts the reply or the next task. The examples below follow one work order.
           </Head>
+          <a className="lp-textlink" href="/solutions/maintenance" style={{ display: "inline-block", marginTop: 16 }}>
+            Maintenance, in detail
+          </a>
           <Loop />
         </div>
       </section>

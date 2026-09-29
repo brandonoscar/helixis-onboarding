@@ -67,6 +67,17 @@ export const MARKETING_ROUTES: readonly MarketingRoute[] = [
     priority: 0.9,
   },
   {
+    path: "/solutions/maintenance",
+    name: "solutions_maintenance",
+    title: "Maintenance coordination for Buildium users | Occupella",
+    description:
+      "Occupella reads each Buildium maintenance request, pulls the unit's history and drafts the resident reply and the work order for you to edit and send.",
+    inSitemap: true,
+    source: "src/solutions/Maintenance.tsx",
+    changefreq: "monthly",
+    priority: 0.7,
+  },
+  {
     path: "/solutions/leasing",
     name: "solutions_leasing",
     // ⚠ Not the planned "Leasing follow-up by text and email": texting waits
