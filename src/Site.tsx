@@ -802,7 +802,17 @@ function FooterCol({ title, links }: { title: string; links: MenuItem[] }) {
 }
 
 /** Every link the footer carries, for nav.test.tsx. */
-export const FOOTER_EXTRA: string[] = ["/", "/features", "/pricing", "/terms", "/privacy", "/sms"];
+export const FOOTER_EXTRA: string[] = [
+  "/",
+  "/features",
+  "/pricing",
+  "/terms",
+  "/privacy",
+  "/sms",
+  "/contact",
+  "/security",
+  "/security#subprocessors",
+];
 
 export function SiteFooter() {
   return (
@@ -833,9 +843,15 @@ export function SiteFooter() {
           />
           <FooterCol title="Solutions" links={MENU.find((g) => g.key === "solutions")!.items} />
           <FooterCol title="Resources" links={MENU.find((g) => g.key === "resources")!.items} />
-          {/* TODO(brandon): Contact, Security and Changelog pages join this
-              column when they are built (PR 3 follow-up). */}
-          <FooterCol title="Company" links={[{ href: "mailto:team@occupella.com", label: "team@occupella.com" }]} />
+          {/* TODO(brandon): Changelog joins this column when it is built. */}
+          <FooterCol
+            title="Company"
+            links={[
+              { href: "/contact", label: "Contact" },
+              { href: "/security", label: "Security" },
+              { href: "mailto:team@occupella.com", label: "team@occupella.com" },
+            ]}
+          />
 
           <div>
             <div className="lp-footer-h">Legal</div>
@@ -843,6 +859,7 @@ export function SiteFooter() {
               <a href="/terms">Terms</a>
               <a href="/privacy">Privacy</a>
               <a href="/sms">SMS program</a>
+              <a href="/security#subprocessors">Subprocessors</a>
               <TrackingOptOut />
             </div>
           </div>

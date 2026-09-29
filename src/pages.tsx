@@ -8,6 +8,8 @@ import Leasing from "./solutions/Leasing";
 import Maintenance from "./solutions/Maintenance";
 import Delinquency from "./solutions/Delinquency";
 import Screenshots from "./Screenshots";
+import Security from "./Security";
+import Contact from "./Contact";
 import OwnerReporting from "./solutions/OwnerReporting";
 import StateLawPage from "./stateLaws/StateLawPage";
 import StateLawsIndex from "./stateLaws/StateLawsIndex";
@@ -28,6 +30,8 @@ export const PAGES: Record<string, () => ReactElement> = {
   "/features": () => <Features />,
   "/pricing": () => <Pricing />,
   "/screenshots": () => <Screenshots />,
+  "/security": () => <Security />,
+  "/contact": () => <Contact />,
   "/solutions/owner-reporting": () => <OwnerReporting />,
   "/solutions/delinquency": () => <Delinquency />,
   "/solutions/maintenance": () => <Maintenance />,

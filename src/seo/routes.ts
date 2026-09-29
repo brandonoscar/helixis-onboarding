@@ -126,6 +126,27 @@ const STATIC_ROUTES: MarketingRoute[] = [
     priority: 0.7,
   },
   {
+    path: "/security",
+    name: "security",
+    title: "Security | Occupella",
+    description:
+      "How Occupella protects your data: per-company isolation, encrypted credentials, role checks on money, and the list of service providers that process data.",
+    inSitemap: true,
+    source: "src/Security.tsx",
+    changefreq: "monthly",
+    priority: 0.5,
+  },
+  {
+    path: "/contact",
+    name: "contact",
+    title: "Contact | Occupella",
+    description: "Email team@occupella.com for setup help, account and billing questions, security and data requests. Support replies within one business day.",
+    inSitemap: true,
+    source: "src/Contact.tsx",
+    changefreq: "monthly",
+    priority: 0.4,
+  },
+  {
     path: "/sms",
     name: "sms",
     title: "SMS program | Occupella",
