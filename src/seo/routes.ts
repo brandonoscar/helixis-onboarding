@@ -185,6 +185,17 @@ const STATIC_ROUTES: MarketingRoute[] = [
     priority: 0.7,
   },
   {
+    path: "/tools/notice-period",
+    name: "tool_notice_period",
+    title: "Notice period calculator: pay-or-quit and month-to-month | Occupella",
+    description:
+      "The last day of a notice to pay rent or leave, and the earliest a month-to-month tenancy can end, for all 50 states and DC, with the statute.",
+    inSitemap: true,
+    source: "src/tools/NoticePeriodTool.tsx",
+    changefreq: "monthly",
+    priority: 0.7,
+  },
+  {
     path: "/security",
     name: "security",
     title: "Security | Occupella",

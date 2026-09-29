@@ -16,7 +16,7 @@ import { NEEDS_FORWARDING, depositDeadline } from "./depositDeadline";
 // reads, since the calculator itself only exists after a click.
 // ─────────────────────────────────────────────────────────────────────
 
-const css = `
+export const toolCss = `
   .dd-box {
     margin-top: 40px; max-width: 860px; padding: 28px; border: 1px solid var(--line);
     border-radius: 10px; background: var(--canvas);
@@ -54,7 +54,7 @@ const css = `
 
 /** "2026-10-14" → "Wednesday, October 14, 2026", in UTC so no time zone
  *  moves it a day. */
-function longDay(iso: string): string {
+export function longDay(iso: string): string {
   const [y, m, d] = iso.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString("en-US", {
     timeZone: "UTC",
@@ -162,7 +162,7 @@ export default function DepositDeadlineTool() {
           statute. {NOT_ADVICE}
         </>
       }
-      css={css}
+      css={toolCss}
       close={{
         title: "The same date, from your Buildium leases",
         body: "Ask Occupella when a deposit is due back and it works out the date from the move-out on the lease, with the statute named. 14 days free, no card.",

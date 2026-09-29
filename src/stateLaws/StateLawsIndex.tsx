@@ -41,7 +41,8 @@ export default function StateLawsIndex() {
         <div className="lp-wrap">
           <p className="si-meta">
             Data version: <b>{DATA_VERSION}</b> ·{" "}
-            <a href="/tools/deposit-deadline">Deposit return deadline calculator</a>
+            <a href="/tools/deposit-deadline">Deposit return deadline calculator</a> ·{" "}
+            <a href="/tools/notice-period">Notice period calculator</a>
           </p>
           <p className="si-hint">Scroll the table sideways to see every column.</p>
           <Reveal>
