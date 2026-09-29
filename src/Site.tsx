@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import "@fontsource-variable/fraunces/opsz.css";
 import "@fontsource-variable/ibm-plex-sans";
 import { TrackingOptOut } from "./ConsentBar";
-import { APP_URL } from "./lib/api";
+import { APP_URL } from "./lib/urls";
 
 // ─────────────────────────────────────────────────────────────────────
 // SITE CHROME — the nav, the footer, and everything more than one page

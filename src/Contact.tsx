@@ -1,5 +1,5 @@
 import { SitePageShell } from "./Site";
-import { APP_URL } from "./lib/api";
+import { APP_URL } from "./lib/urls";
 
 // ─────────────────────────────────────────────────────────────────────
 // /contact

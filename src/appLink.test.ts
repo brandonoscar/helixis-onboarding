@@ -24,7 +24,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import apiSource from './lib/api.ts?raw';
+import apiSource from './lib/urls.ts?raw';
 import siteSource from './Site.tsx?raw';
 
 /** The literal on the right of `VITE_HELIXIS_APP_URL || …`. */

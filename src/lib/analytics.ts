@@ -49,8 +49,8 @@
  * local `npm run dev` and a preview deploy send nothing.
  */
 
+import type { PostHog } from 'posthog-js'
 import { routeFor } from '../seo/routes'
-import posthog from 'posthog-js'
 
 const KEY = import.meta.env.VITE_PUBLIC_POSTHOG_KEY as string | undefined
 const HOST =
@@ -95,24 +95,47 @@ function optedOut(): boolean {
  * true and a route-change hook is required; a test pins the absence so that
  * day is loud.
  */
-export function initAnalytics(): void {
-  if (!KEY) return
+export function initAnalytics(): Promise<void> {
+  if (!KEY) return Promise.resolve()
+  const key = KEY
 
-  posthog.init(KEY, {
-    api_host: HOST,
-    persistence: 'localStorage',
-    opt_out_capturing_by_default: optedOut(),
-    // See the privacy posture above — each of these three is a deliberate
-    // divergence from the app's config, not a copy that drifted.
-    disable_session_recording: true,
-    autocapture: false,
-    respect_dnt: true,
-    // We emit the pageview ourselves below so it carries `page`, which is the
-    // field every funnel question here is grouped by.
-    capture_pageview: false,
+  return client().then((posthog) => {
+    posthog.init(key, {
+      api_host: HOST,
+      persistence: 'localStorage',
+      opt_out_capturing_by_default: optedOut(),
+      // See the privacy posture above — each of these three is a deliberate
+      // divergence from the app's config, not a copy that drifted.
+      disable_session_recording: true,
+      autocapture: false,
+      respect_dnt: true,
+      // We emit the pageview ourselves below so it carries `page`, which is the
+      // field every funnel question here is grouped by.
+      capture_pageview: false,
+    })
+
+    posthog.capture('marketing_page_viewed', { page: pageName() })
   })
+}
 
-  posthog.capture('marketing_page_viewed', { page: pageName() })
+/**
+ * PostHog, loaded on first use rather than with the page.
+ *
+ * ⚠ IT WAS PART OF EVERY PAGE'S BUNDLE, about 300 KB of source that a
+ * visitor downloaded before the home page could run, to send one pageview.
+ * Now the page renders first and PostHog follows. `loaded` is set the moment
+ * it arrives, so a click after that captures synchronously, inside the click
+ * handler, before the navigation it starts (see watchStartClicks).
+ */
+let pending: Promise<PostHog> | null = null
+let loaded: PostHog | null = null
+
+function client(): Promise<PostHog> {
+  pending ??= import('posthog-js').then((m) => {
+    loaded = m.default
+    return m.default
+  })
+  return pending
 }
 
 /**
@@ -149,6 +172,7 @@ export function pageName(pathname: string = window.location.pathname): string {
  */
 export function watchStartClicks(): void {
   if (!KEY) return
+  void client()
 
   document.addEventListener(
     'click',
@@ -159,7 +183,13 @@ export function watchStartClicks(): void {
       // anchor and the click usually lands on the text node inside it.
       const link = target.closest('a[href^="/start"]')
       if (!link) return
-      posthog.capture('marketing_start_clicked', { page: pageName() })
+      const props = { page: pageName() }
+      // Loaded: capture now, inside the handler, before the page leaves.
+      // Not loaded yet (a click in the first moment): send it when it lands,
+      // which may lose the race against the navigation; that is the price
+      // of not making every visitor download PostHog up front.
+      if (loaded) loaded.capture('marketing_start_clicked', props)
+      else void client().then((posthog) => posthog.capture('marketing_start_clicked', props))
     },
     true,
   )

@@ -56,6 +56,14 @@ async function loadWithKey(key: string | undefined) {
   return import('./analytics')
 }
 
+/** PostHog is imported on first use (lib/analytics `client`), so every
+ *  assertion waits for that import and what it schedules. Without this, a
+ *  "nothing was sent" check passes before anything could have been. */
+async function settle() {
+  await vi.dynamicImportSettled()
+  await new Promise((r) => setTimeout(r, 0))
+}
+
 beforeEach(() => {
   posthogMock.init.mockClear()
   posthogMock.capture.mockClear()
@@ -67,7 +75,7 @@ beforeEach(() => {
 describe('what a visitor to a public page is subjected to', () => {
   it('never records their session, never autocaptures, and honours Do Not Track', async () => {
     const { initAnalytics } = await loadWithKey('phc_test')
-    initAnalytics()
+    await initAnalytics()
 
     expect(posthogMock.init).toHaveBeenCalledTimes(1)
     const config = posthogMock.init.mock.calls[0][1]
@@ -85,8 +93,9 @@ describe('what a visitor to a public page is subjected to', () => {
       await loadWithKey(undefined)
 
     expect(analyticsConfigured).toBe(false)
-    initAnalytics()
+    await initAnalytics()
     watchStartClicks()
+    await settle()
 
     // A preview deploy and a local `npm run dev` must not reach the same
     // PostHog project the real numbers live in — otherwise every funnel
@@ -99,7 +108,7 @@ describe('what a visitor to a public page is subjected to', () => {
     localStorage.setItem('occupella_analytics_opt_out', '1')
     try {
       const { initAnalytics } = await loadWithKey('phc_test')
-      initAnalytics()
+      await initAnalytics()
       // Read BEFORE the first capture, not after — the app's own reasoning:
       // opting out afterwards has already sent the load of the page the
       // person opted out on.
@@ -117,7 +126,7 @@ describe('what a visitor to a public page is subjected to', () => {
 describe('the page load', () => {
   it('emits one named pageview carrying the page', async () => {
     const { initAnalytics } = await loadWithKey('phc_test')
-    initAnalytics()
+    await initAnalytics()
 
     expect(posthogMock.capture).toHaveBeenCalledWith('marketing_page_viewed', {
       page: expect.any(String),
@@ -126,7 +135,7 @@ describe('the page load', () => {
 
   it('does not ALSO let PostHog send its own pageview', async () => {
     const { initAnalytics } = await loadWithKey('phc_test')
-    initAnalytics()
+    await initAnalytics()
 
     // Both firing double-counts every visit, and the automatic one carries no
     // `page` — so a breakdown would show half the traffic under a raw URL and
@@ -250,6 +259,7 @@ describe('the primary call to action', () => {
       '<a href="/start"><span>Start setup</span></a>'
     const inner = document.querySelector('span')!
     inner.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await settle()
 
     // The click lands on the text inside the styled anchor, never on the
     // anchor itself — a listener reading `event.target` directly measures
@@ -260,6 +270,22 @@ describe('the primary call to action', () => {
       'marketing_start_clicked',
       { page: expect.any(String) },
     )
+  })
+
+  it('captures inside the click handler once PostHog has loaded', async () => {
+    const { initAnalytics, watchStartClicks } = await loadWithKey('phc_test')
+    await initAnalytics()
+    watchStartClicks()
+    posthogMock.capture.mockClear()
+
+    document.body.innerHTML = '<a href="/start">Start</a>'
+    document.querySelector('a')!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+
+    // No await: the navigation the click starts does not wait either. A
+    // capture deferred to a later tick is the one that loses the race.
+    expect(posthogMock.capture).toHaveBeenCalledWith('marketing_start_clicked', {
+      page: expect.any(String),
+    })
   })
 
   it('ignores clicks that are not the call to action', async () => {
@@ -274,6 +300,7 @@ describe('the primary call to action', () => {
     document.querySelector('button')!.dispatchEvent(
       new MouseEvent('click', { bubbles: true }),
     )
+    await settle()
 
     // The other direction: a listener that fired on every click would pass
     // the test above and make the conversion figure meaningless.
