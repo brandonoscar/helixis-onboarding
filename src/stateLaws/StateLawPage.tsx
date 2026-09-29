@@ -168,6 +168,9 @@ export default function StateLawPage({ state }: { state: StateEntry }) {
               citation={s.deposit.citation}
               verify={s.deposit.verify_flag}
             >
+              <p className="sl-src">
+                <a href="/tools/deposit-deadline">Work out the return date for a move-out</a>
+              </p>
               {s.deposit.pending_change ? (
                 <p className="sl-verify" data-pending>
                   Scheduled change: {pendingChange(s.deposit.pending_change)}

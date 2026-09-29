@@ -15,6 +15,7 @@ import Integrations from "./integrations/Integrations";
 import BuildiumIntegration from "./integrations/Buildium";
 import BuildiumApiSetup from "./docs/BuildiumApiSetup";
 import Changelog from "./changelog/Changelog";
+import DepositDeadlineTool from "./tools/DepositDeadlineTool";
 import StateLawPage from "./stateLaws/StateLawPage";
 import StateLawsIndex from "./stateLaws/StateLawsIndex";
 import { STATES } from "./stateLaws/data";
@@ -40,6 +41,7 @@ export const PAGES: Record<string, () => ReactElement> = {
   "/integrations/buildium": () => <BuildiumIntegration />,
   "/docs/buildium-api-setup": () => <BuildiumApiSetup />,
   "/changelog": () => <Changelog />,
+  "/tools/deposit-deadline": () => <DepositDeadlineTool />,
   "/solutions/owner-reporting": () => <OwnerReporting />,
   "/solutions/delinquency": () => <Delinquency />,
   "/solutions/maintenance": () => <Maintenance />,

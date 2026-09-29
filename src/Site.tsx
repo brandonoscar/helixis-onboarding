@@ -547,6 +547,7 @@ export const MENU: MenuGroup[] = [
       { href: "/integrations", label: "Integrations", note: "What Occupella connects to" },
       { href: "/docs/buildium-api-setup", label: "Buildium setup guide", note: "Create the API key in two minutes" },
       { href: "/state-laws", label: "Landlord rules by state", note: "Deposits, late fees and notices" },
+      { href: "/tools/deposit-deadline", label: "Deposit deadline calculator", note: "The day a deposit is due back" },
       { href: "/screenshots", label: "Screenshots", note: "What the app looks like" },
       { href: "/changelog", label: "Changelog", note: "What changed, newest first" },
     ],
