@@ -101,7 +101,16 @@ describe('static files a crawler asks for reach the filesystem', () => {
     for (const path of ['/start', '/start/step-2', '/oauth/callback']) {
       expect(rewritten(path), `${path} must reach the app shell`).toBe(true);
     }
-    for (const r of rewrites()) expect(r.destination).toBe('/app-shell.html');
+    for (const r of rewrites()) expect(r.destination).toBe('/app-shell');
+  });
+
+  it('rewrites to the clean URL, never to a .html path', () => {
+    // MEASURED in production 2026-09-29: with cleanUrls on, Vercel serves
+    // dist/app-shell.html only at /app-shell, and a rewrite to
+    // "/app-shell.html" matched nothing. /start, the signup page, returned
+    // the 404 page. The local test server had not modelled rewrite targets,
+    // so every check passed.
+    for (const r of rewrites()) expect(r.destination).not.toMatch(/\.html$/);
   });
 
   it('rewrites no marketing page, which is served as its own prerendered file', () => {

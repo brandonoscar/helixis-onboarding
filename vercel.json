@@ -4,15 +4,15 @@
   "rewrites": [
     {
       "source": "/start",
-      "destination": "/app-shell.html"
+      "destination": "/app-shell"
     },
     {
       "source": "/start/:path*",
-      "destination": "/app-shell.html"
+      "destination": "/app-shell"
     },
     {
       "source": "/oauth/:path*",
-      "destination": "/app-shell.html"
+      "destination": "/app-shell"
     }
   ],
   "headers": [
