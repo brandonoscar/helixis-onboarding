@@ -38,9 +38,24 @@ import { describe, expect, it } from 'vitest';
 import html from '../index.html?raw';
 import vercelRaw from '../vercel.json?raw';
 import robots from '../public/robots.txt?raw';
-import sitemap from '../public/sitemap.xml?raw';
 import manifestRaw from '../public/manifest.webmanifest?raw';
-import mainTsx from './main.tsx?raw';
+import { PAGES } from './pages';
+import {
+  CLIENT_ONLY_PREFIXES,
+  MARKETING_ROUTES,
+  SITE_ORIGIN,
+  canonicalFor,
+} from './seo/routes';
+import {
+  HEAD_END,
+  HEAD_START,
+  ORGANIZATION_JSONLD,
+  WEBSITE_JSONLD,
+  appShellHead,
+  headTags,
+  notFoundHead,
+  sitemapXml,
+} from './seo/head';
 
 /** Every file sitting at the root of public/, by name. Keys only — the
  *  importers are never invoked, so the binaries are never read. */
@@ -48,15 +63,23 @@ const PUBLIC_FILES = Object.keys(import.meta.glob('../public/*')).map(
   (p) => p.split('/').pop() as string,
 );
 
-/** The catch-all that turns any unmatched path into the app shell. */
-function spaRewrite(): RegExp {
+/**
+ * The rewrites, as regexes. Re-pointed 2026-09 from "the SPA catch-all": every
+ * marketing page is now a prerendered file, and only the client-only paths
+ * (the wizard and the OAuth popup) are rewritten to the app shell.
+ */
+function rewrites(): { source: RegExp; destination: string }[] {
   const config = JSON.parse(vercelRaw) as {
+    cleanUrls?: boolean;
     rewrites: { source: string; destination: string }[];
   };
-  const spa = config.rewrites.find((r) => r.destination === '/index.html');
-  expect(spa, 'vercel.json no longer has an /index.html catch-all').toBeTruthy();
-  return new RegExp(`^${spa!.source}$`);
+  expect(config.cleanUrls, 'cleanUrls serves /features from features.html').toBe(true);
+  return config.rewrites.map((r) => ({
+    destination: r.destination,
+    source: new RegExp(`^${r.source.replace('/:path*', '(?:/.*)?')}$`),
+  }));
 }
+const rewritten = (path: string) => rewrites().some((r) => r.source.test(path));
 
 describe('static files a crawler asks for reach the filesystem', () => {
   it('found some files to judge', () => {
@@ -65,33 +88,35 @@ describe('static files a crawler asks for reach the filesystem', () => {
     // empty set.
     expect(PUBLIC_FILES.length).toBeGreaterThan(2);
     expect(PUBLIC_FILES).toContain('robots.txt');
-    expect(PUBLIC_FILES).toContain('sitemap.xml');
   });
 
-  it('excludes EVERY file in public/, not just the ones somebody remembered', () => {
-    const rewrite = spaRewrite();
-    const swallowed = PUBLIC_FILES.filter((name) => rewrite.test(`/${name}`));
-    expect(
-      swallowed,
-      'these files would be served as index.html instead of themselves — ' +
-        'add them to the exclusion list in vercel.json',
-    ).toEqual([]);
+  it('rewrites no file in public/, not just the ones somebody remembered', () => {
+    const swallowed = PUBLIC_FILES.filter((name) => rewritten(`/${name}`));
+    expect(swallowed, 'these files would be served as the app shell').toEqual([]);
   });
 
-  it('still sends real marketing routes to the shell', () => {
-    // The other direction, and the one a careless widening breaks: a pattern
-    // that excludes everything passes the test above perfectly while serving
-    // a 404 for every page of the site.
-    const rewrite = spaRewrite();
-    for (const path of ['/', '/features', '/pricing', '/start', '/terms', '/privacy', '/sms']) {
-      expect(rewrite.test(path), `${path} must still render the site`).toBe(true);
+  it('sends the wizard and the OAuth popup to the app shell', () => {
+    // The direction a careless narrowing breaks: the wizard is the signup
+    // path, and a rewrite that misses it serves the 404 page to every trial.
+    for (const path of ['/start', '/start/step-2', '/oauth/callback']) {
+      expect(rewritten(path), `${path} must reach the app shell`).toBe(true);
     }
+    for (const r of rewrites()) expect(r.destination).toBe('/app-shell.html');
+  });
+
+  it('rewrites no marketing page, which is served as its own prerendered file', () => {
+    // The old catch-all sent these to index.html, which carried the
+    // homepage's canonical, which is why /features was never indexed.
+    for (const route of MARKETING_ROUTES) {
+      expect(rewritten(route.path), `${route.path} would lose its own HTML`).toBe(false);
+    }
+    // An unknown path is not rewritten either: it gets the static 404 page.
+    expect(rewritten('/this-page-does-not-exist')).toBe(false);
   });
 
   it('leaves the pre-built assets and the demo media alone', () => {
-    const rewrite = spaRewrite();
     for (const path of ['/assets/index-abc123.js', '/demo/inbox.mp4', '/shots/features-1.png']) {
-      expect(rewrite.test(path), `${path} must not become index.html`).toBe(false);
+      expect(rewritten(path), `${path} must not become the app shell`).toBe(false);
     }
   });
 });
@@ -105,54 +130,116 @@ describe('robots.txt', () => {
     expect(robots).not.toMatch(/^Disallow:\s*\/\s*$/m);
   });
 
-  it('points at a sitemap that exists', () => {
-    const declared = robots.match(/^Sitemap:\s*(\S+)$/m)?.[1];
-    expect(declared, 'robots.txt names no sitemap').toBeTruthy();
-    // Both sides (the file it names, and the file we ship): a sitemap
+  it('points at the sitemap the build generates', () => {
+    // Re-pointed 2026-09: the sitemap is no longer a file in public/ but
+    // written by scripts/prerender.mjs from src/seo/routes.ts. A sitemap
     // directive pointing at a 404 is worse than none, because a crawler
     // retries it instead of concluding there is nothing to fetch.
-    expect(PUBLIC_FILES).toContain(declared!.split('/').pop());
+    const declared = robots.match(/^Sitemap:\s*(\S+)$/m)?.[1];
+    expect(declared).toBe(`${SITE_ORIGIN}/sitemap.xml`);
+    expect(sitemapXml(() => undefined)).toContain('<urlset');
+  });
+
+  it('keeps the OAuth popup out', () => {
+    expect(robots).toMatch(/^Disallow:\s*\/oauth\/\s*$/m);
   });
 });
 
 describe('sitemap.xml', () => {
-  const locs = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
+  const xml = sitemapXml(() => undefined);
+  const locs = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
+  const paths = locs.map((l) => new URL(l).pathname);
 
-  /**
-   * The paths `main.tsx::route()` actually answers.
-   *
-   * ⚠ Read from the ROUTER, not from a list in this file. The sitemap's own
-   * header comment says "Adding a route to main.tsx means adding it here.
-   * Nothing enforces that; a missing entry costs nothing visible, which is
-   * exactly why it gets missed." This is that enforcement — a second
-   * hand-typed list here would restate the problem instead of closing it.
-   */
-  const routed = [...mainTsx.matchAll(/p\.startsWith\(['"`](\/[^'"`]*)['"`]\)/g)]
-    .map((m) => m[1])
-    // A popup return target that closes itself, disallowed in robots.txt.
-    .filter((p) => !p.startsWith('/oauth'));
-
-  it('reads a router that still looks like a router', () => {
-    // If `route()` is refactored into a table, the regex above finds nothing
-    // and both assertions below pass against the empty set.
-    expect(routed.length).toBeGreaterThan(3);
+  it('found routes to judge', () => {
+    // Re-pointed 2026-09 from a regex over main.tsx's prefix router, which no
+    // longer exists: the routes are a table now, so the table is read.
+    expect(MARKETING_ROUTES.length).toBeGreaterThan(3);
+    expect(locs.length).toBeGreaterThan(3);
   });
 
-  it('names the apex, not the host the site is moving off', () => {
+  it('names the apex, not the host the site moved off', () => {
     expect(locs).toContain('https://occupella.com/');
-    expect(locs.join(' ')).not.toMatch(/setup\.occupella\.com/);
+    expect(xml).not.toMatch(/setup\.occupella\.com/);
   });
 
-  it('lists every routed page, and lists nothing that is not routed', () => {
-    const paths = locs.map((l) => new URL(l).pathname);
+  it('lists every page marked for it, and nothing else', () => {
     // A page that exists and is not listed is invisible; a page listed and
     // not routed is a soft 404 the crawler trusts the whole file less for.
-    for (const r of routed) {
-      expect(paths, `main.tsx routes ${r} and the sitemap does not list it`).toContain(r);
-    }
+    expect(paths.sort()).toEqual(
+      MARKETING_ROUTES.filter((r) => r.inSitemap).map((r) => r.path).sort(),
+    );
+  });
+
+  it('leaves out a page marked out of it', () => {
+    // No route is out of the sitemap today; /compare/leadsimple will be,
+    // until it is approved, and this is the line that keeps it out.
+    const held = { ...MARKETING_ROUTES[1], path: '/held-back', inSitemap: false };
+    expect(sitemapXml(() => undefined, [...MARKETING_ROUTES, held])).not.toContain('/held-back');
+  });
+
+  it('never lists the wizard or the OAuth popup', () => {
     for (const p of paths) {
-      if (p === '/') continue; // the landing page is routed by equality, not prefix
-      expect(routed, `the sitemap lists ${p} and main.tsx routes nothing there`).toContain(p);
+      for (const prefix of CLIENT_ONLY_PREFIXES) expect(p.startsWith(prefix), p).toBe(false);
+    }
+  });
+
+  it('writes lastmod only when the build knows it', () => {
+    expect(xml).not.toContain('<lastmod>');
+    expect(sitemapXml(() => '2026-09-29')).toContain('<lastmod>2026-09-29</lastmod>');
+  });
+});
+
+describe('every marketing route has its own head', () => {
+  it('is rendered by exactly the pages the route table lists', () => {
+    // Both directions: a page with no route ships with no title; a route
+    // with no page prerenders the 404 under a real title.
+    expect(Object.keys(PAGES).sort()).toEqual(MARKETING_ROUTES.map((r) => r.path).sort());
+  });
+
+  it('has a unique title and description, short enough to show whole', () => {
+    const titles = MARKETING_ROUTES.map((r) => r.title);
+    const descriptions = MARKETING_ROUTES.map((r) => r.description);
+    expect(new Set(titles).size).toBe(titles.length);
+    expect(new Set(descriptions).size).toBe(descriptions.length);
+    for (const r of MARKETING_ROUTES) {
+      expect(r.description.length, `${r.path} description`).toBeLessThanOrEqual(155);
+      expect(r.title, r.path).not.toMatch(/—/);
+      expect(r.description, r.path).not.toMatch(/—/);
+    }
+  });
+
+  it('points its canonical and og:url at itself, once', () => {
+    for (const r of MARKETING_ROUTES) {
+      const head = headTags(r);
+      const canonicals = [...head.matchAll(/rel="canonical" href="([^"]+)"/g)].map((m) => m[1]);
+      expect(canonicals, r.path).toEqual([canonicalFor(r)]);
+      expect(head).toContain(`<meta property="og:url" content="${canonicalFor(r)}" />`);
+      expect(head.startsWith(HEAD_START) && head.endsWith(HEAD_END)).toBe(true);
+    }
+    expect(canonicalFor(MARKETING_ROUTES.find((r) => r.path === '/features')!)).toBe(
+      'https://occupella.com/features',
+    );
+  });
+
+  it('carries only Organization and WebSite structured data', () => {
+    const head = headTags(MARKETING_ROUTES[0]);
+    const types = [...head.matchAll(/"@type":"([^"]+)"/g)].map((m) => m[1]);
+    expect(types).toEqual(['Organization', 'WebSite']);
+    // sameAs lists only profiles that exist; an empty list is left out.
+    expect('sameAs' in ORGANIZATION_JSONLD).toBe(false);
+    expect(WEBSITE_JSONLD.url).toBe(`${SITE_ORIGIN}/`);
+  });
+
+  it('keeps the 404 page and the app shell out of the index', () => {
+    for (const head of [notFoundHead(), appShellHead()]) {
+      expect(head).toContain('<meta name="robots" content="noindex" />');
+      expect(head).not.toContain('rel="canonical"');
+    }
+  });
+
+  it('never routes the wizard or the OAuth popup as a marketing page', () => {
+    for (const r of MARKETING_ROUTES) {
+      for (const prefix of CLIENT_ONLY_PREFIXES) expect(r.path.startsWith(prefix)).toBe(false);
     }
   });
 });
@@ -229,15 +316,25 @@ describe('the brand mark reaches a browser and a crawler', () => {
 });
 
 describe('index.html', () => {
-  it('declares a canonical on the apex', () => {
-    const canonical = html.match(/<link rel="canonical" href="([^"]+)"/)?.[1];
-    expect(canonical, 'no canonical — /features and / compete as duplicates').toBeTruthy();
-    expect(canonical).toBe('https://occupella.com/');
+  it('holds the per-page tags only between the markers the build replaces', () => {
+    // Re-pointed 2026-09 from "declares a canonical on the apex": that single
+    // canonical, served on every route, is what hid /features from Google.
+    // The template now carries no canonical at all; each page gets its own.
+    expect(html).toContain(HEAD_START);
+    expect(html).toContain(HEAD_END);
+    const outside = html.replace(
+      new RegExp(`${HEAD_START}[\\s\\S]*?${HEAD_END}`),
+      '',
+    );
+    expect(outside).not.toMatch(/rel="canonical"|property="og:|name="twitter:|<title>|name="description"/);
+    expect(html).toContain('<div id="root"></div>');
   });
 
-  it('carries no reference to the host the site is moving off', () => {
-    // og:url and twitter:image are absolute and are what a shared link
-    // renders from, so a stale host here survives the DNS change silently.
+  it('paints the browser chrome white, not the retired dark theme', () => {
+    expect(html).toContain('<meta name="theme-color" content="#FFFFFF" />');
+  });
+
+  it('carries no reference to the host the site moved off', () => {
     expect(html).not.toMatch(/setup\.occupella\.com/);
   });
 });

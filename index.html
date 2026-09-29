@@ -3,11 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Occupella — AI operations for property management</title>
-    <meta
-      name="description"
-      content="Occupella helps Buildium users turn maintenance chaos into completed work orders — faster fixes, cleaner owner updates, fewer resident follow-ups — without hiring another coordinator."
-    />
+    <!-- page-head:start -->
+    <!-- Replaced at build time by each page's own title, description,
+         canonical, link-preview tags and structured data, all from
+         src/seo/routes.ts (scripts/prerender.mjs). What is here only shows
+         under `vite dev`. -->
+    <title>Occupella | AI assistant for Buildium property managers</title>
+    <!-- page-head:end -->
     <!-- THE BRAND MARK. These files are BYTE COPIES of the ones the app ships
          at app.occupella.com — the same relationship social-preview.png has
          always had. One product, one mark, on both hosts.
@@ -46,36 +48,9 @@
          substitutes a generated letter tile — somebody else's icon on the
          customer's phone. -->
     <link rel="manifest" href="/manifest.webmanifest" />
-    <!-- The browser chrome colour, NOT the icon's. It matches this site's dark
-         canvas; the icon carries its own white plate and the two are unrelated
-         (the app sets #FFFFFF here for the same reason and is not in conflict). -->
-    <meta name="theme-color" content="#0a0910" />
-    <link rel="canonical" href="https://occupella.com/" />
-
-    <!-- Link previews. This is the site people actually share — a pricing page
-         pasted into Slack, a features link in an email — and without these it
-         renders as a bare grey URL, which reads as an unfinished site. The
-         image is a real product screenshot, not a mockup. -->
-    <meta property="og:type" content="website" />
-    <meta property="og:site_name" content="Occupella" />
-    <meta property="og:title" content="Occupella — AI operations for property management" />
-    <meta
-      property="og:description"
-      content="Turn maintenance chaos into completed work orders — faster fixes, cleaner owner updates, fewer resident follow-ups. Built for Buildium."
-    />
-    <meta property="og:url" content="https://occupella.com/" />
-    <meta property="og:image" content="https://occupella.com/social-preview.png" />
-    <meta
-      property="og:image:alt"
-      content="The Occupella chat surface answering a question about a property."
-    />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Occupella — AI operations for property management" />
-    <meta
-      name="twitter:description"
-      content="Turn maintenance chaos into completed work orders. Built for Buildium."
-    />
-    <meta name="twitter:image" content="https://occupella.com/social-preview.png" />
+    <!-- The browser chrome colour, NOT the icon's. White, matching this site's
+         canvas and the app's (it was #0a0910 from the retired dark theme). -->
+    <meta name="theme-color" content="#FFFFFF" />
   </head>
   <body>
     <div id="root"></div>

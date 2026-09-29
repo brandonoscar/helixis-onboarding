@@ -49,6 +49,7 @@
  * local `npm run dev` and a preview deploy send nothing.
  */
 
+import { routeFor } from '../seo/routes'
 import posthog from 'posthog-js'
 
 const KEY = import.meta.env.VITE_PUBLIC_POSTHOG_KEY as string | undefined
@@ -126,13 +127,10 @@ export function initAnalytics(): void {
  */
 export function pageName(pathname: string = window.location.pathname): string {
   if (pathname.startsWith('/start')) return 'start'
-  if (pathname.startsWith('/features')) return 'features'
-  if (pathname.startsWith('/pricing')) return 'pricing'
-  if (pathname.startsWith('/privacy')) return 'privacy'
-  if (pathname.startsWith('/terms')) return 'terms'
-  if (pathname.startsWith('/sms')) return 'sms'
-  if (pathname === '/' || pathname === '') return 'landing'
-  return 'not_found'
+  // Resolved exactly as the router resolves it (src/pages.tsx), so the label
+  // and the page on screen cannot disagree: `/pricing/anything` renders the
+  // 404 page and is counted as one.
+  return routeFor(pathname)?.name ?? 'not_found'
 }
 
 /**
