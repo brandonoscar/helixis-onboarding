@@ -8,6 +8,7 @@ import Leasing from "./solutions/Leasing";
 import Maintenance from "./solutions/Maintenance";
 import Delinquency from "./solutions/Delinquency";
 import Screenshots from "./Screenshots";
+import OwnerReporting from "./solutions/OwnerReporting";
 import { normalizePath } from "./seo/routes";
 
 /**
@@ -24,6 +25,7 @@ export const PAGES: Record<string, () => ReactElement> = {
   "/features": () => <Features />,
   "/pricing": () => <Pricing />,
   "/screenshots": () => <Screenshots />,
+  "/solutions/owner-reporting": () => <OwnerReporting />,
   "/solutions/delinquency": () => <Delinquency />,
   "/solutions/maintenance": () => <Maintenance />,
   "/solutions/leasing": () => <Leasing />,

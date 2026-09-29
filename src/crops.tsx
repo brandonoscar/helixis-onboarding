@@ -197,6 +197,16 @@ export const cropCss = `
   .cr-mail-f span:first-child { width: 64px; color: var(--ink-muted); flex: none; }
   .cr-mail .cr-tabs { margin: 0 0 12px; }
   .cr-mail-body { margin-top: 12px; font-size: 15px; line-height: 1.55; white-space: pre-line; }
+  /* property snapshot (property_snapshot tool / PropertyCockpit) */
+  .cr-snap { padding: 18px 20px; }
+  .cr-snap-h { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .cr-snap-h b { font-size: 18px; }
+  .cr-kv { margin-top: 14px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--app-line); border: 1px solid var(--app-line); border-radius: 8px; overflow: hidden; }
+  @media (min-width: 560px) { .cr-kv { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  .cr-kv > div { background: #fff; padding: 10px 12px; }
+  .cr-kv span { display: block; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-muted); }
+  .cr-kv b { display: block; margin-top: 2px; font-size: 16px; font-variant-numeric: tabular-nums; }
+  .cr-asof { margin-top: 12px; font-size: 13px; color: var(--ink-muted); }
 `;
 
 /** A crop is a picture of the app. Screen readers get its label, not its rows. */
@@ -434,7 +444,7 @@ const BOARD: { stage: string; leads: Lead[] }[] = [
       { i: "RB", n: "Renee Bishop", u: "Owner · 6 doors", note: "Intro and rates one-pager sent." },
     ],
   },
-  { stage: "Scheduled", leads: [{ i: "PN", n: "Priya Nair", u: "Riverside 2A", note: "Tour booked for Saturday, 2:00 PM." }] },
+  { stage: "Scheduled", leads: [{ i: "TN", n: "Tara Nguyen", u: "Riverside 2A", note: "Tour booked for Saturday, 2:00 PM." }] },
   { stage: "Applied", leads: [{ i: "SO", n: "Sam Okafor", u: "Riverside 3A", note: "Application received.", bld: true }] },
   { stage: "Leased", leads: [{ i: "LF", n: "Leo Franklin", u: "Riverside 3C", note: "Lease signed.", bld: true, moved: "moved 9:14a" }] },
 ];
@@ -538,6 +548,88 @@ export function EmailDraftCrop() {
       <div className="cr-mail-f"><span>Subject</span><span>October rent for 128 Lexington Ave #4B</span></div>
       <div className="cr-mail-body">
         {"Hi Maria,\n\nA quick note that we haven't seen October's rent come through yet. The balance on the lease is $1,240. If it's already on the way, thank you and please ignore this.\n\nThe AC technician is booked, and we'll confirm the window shortly."}
+      </div>
+    </Crop>
+  );
+}
+
+/**
+ * One property (mirror_tools.py property_snapshot): occupancy, rent roll
+ * scheduled vs collected this month, open work orders, delinquency and the
+ * next lease expiration. The $3,080 owed is the two 128 Lexington leases in
+ * DelinquencyCrop ($1,240 + $1,840), so the pages agree with each other.
+ */
+export function PropertySnapshotCrop() {
+  return (
+    <Crop label="A property snapshot for Lexington Court: 11 of 12 units occupied, $19,800 rent scheduled and $16,720 collected this month, 4 open work orders, $3,080 delinquent across 2 leases, next lease ending in 41 days." className="cr-snap">
+      <div className="cr-snap-h">
+        <b>Lexington Court</b>
+        <span className="cr-muted" style={{ fontSize: 14 }}>128 Lexington Ave</span>
+      </div>
+      <div className="cr-kv">
+        <div><span>Occupancy</span><b>11 / 12</b></div>
+        <div><span>Rent scheduled</span><b>$19,800</b></div>
+        <div><span>Collected</span><b>$16,720</b></div>
+        <div><span>Open work orders</span><b>4</b></div>
+        <div><span>Delinquent</span><b>$3,080 · 2 leases</b></div>
+        <div><span>Next lease ends</span><b>in 41 days</b></div>
+      </div>
+      <div className="cr-asof">From your Buildium data, synced 6 minutes ago.</div>
+    </Crop>
+  );
+}
+
+/**
+ * Billed vendor spend by GL category (mirror_tools.py spending_report).
+ * Amounts are billed, not paid. The category totals match the demo
+ * vendors' 12-month billing.
+ */
+export function SpendCrop() {
+  const rows: [string, string][] = [
+    ["Roofing", "$21,150"],
+    ["Plumbing", "$18,240"],
+    ["HVAC", "$12,960"],
+    ["Landscaping", "$8,640"],
+    ["Electrical", "$4,310"],
+  ];
+  return (
+    <Crop label="Billed vendor spend over the last 365 days by category: roofing $21,150, plumbing $18,240, HVAC $12,960, landscaping $8,640, electrical $4,310, total $65,300.">
+      <div className="cr-table-h">Billed spend by category, last 365 days</div>
+      <div className="cr-table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Category</th>
+              <th className="num">Billed</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(([c, v]) => (
+              <tr key={c}>
+                <td>{c}</td>
+                <td className="num">{v}</td>
+              </tr>
+            ))}
+            <tr>
+              <td><b>Total</b></td>
+              <td className="num"><b>$65,300</b></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </Crop>
+  );
+}
+
+/** An owner update in the email draft card, built from the snapshot above.
+ *  The letter is example data. */
+export function OwnerEmailCrop() {
+  return (
+    <Crop label="A drafted owner update to Priya Nair about Lexington Court: occupancy, rent collected, the open AC work order and the two leases behind." className="cr-mail">
+      <div className="cr-mail-f"><span>To</span><span>priya.nair@example.com</span></div>
+      <div className="cr-mail-f"><span>Subject</span><span>Lexington Court, this month</span></div>
+      <div className="cr-mail-body">
+        {"Hi Priya,\n\nLexington Court is 11 of 12 units occupied. We've collected $16,720 of the $19,800 scheduled this month, and two leases owe a combined $3,080. We're following up with both.\n\nThere are 4 open work orders, including the AC in unit 4B, which is the third HVAC call there in 90 days. A technician is being scheduled."}
       </div>
     </Crop>
   );

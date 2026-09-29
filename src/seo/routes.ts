@@ -78,6 +78,17 @@ export const MARKETING_ROUTES: readonly MarketingRoute[] = [
     priority: 0.6,
   },
   {
+    path: "/solutions/owner-reporting",
+    name: "solutions_owner_reporting",
+    title: "Owner reporting from your Buildium data | Occupella",
+    description:
+      "Ask how a property is doing: occupancy, rent collected, open work orders, what's owed and spent, from your Buildium data. Then send the owner update.",
+    inSitemap: true,
+    source: "src/solutions/OwnerReporting.tsx",
+    changefreq: "monthly",
+    priority: 0.7,
+  },
+  {
     path: "/solutions/delinquency",
     name: "solutions_delinquency",
     title: "Late rent follow-up for Buildium users | Occupella",
