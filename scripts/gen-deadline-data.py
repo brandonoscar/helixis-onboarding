@@ -6,10 +6,13 @@ which skips US federal + state holidays using the `holidays` package. The
 browser has no such package, so this script writes:
 
   src/data/holidays.json          the holiday dates per state for YEARS
-  src/tools/deadline-cases.json   due and finish-by dates computed BY THE
-                                  BACKEND'S OWN FUNCTIONS, which
+  src/tools/deadline-cases.json   deposit due and finish-by dates computed
+                                  BY THE BACKEND'S OWN FUNCTIONS, which
                                   depositDeadline.test.ts checks the site
                                   against, date for date
+  src/tools/notice-cases.json     the same for the pay-or-quit and
+                                  month-to-month notice periods, as
+                                  mirror_tools passes their units
 
 Run it by hand when the rules data or the year range changes:
 
@@ -97,4 +100,21 @@ for st in states:
         cases.append([st, t.isoformat(), c.due_date.isoformat(), done.isoformat()])
 
 (root / "src/tools/deadline-cases.json").write_text(json.dumps(cases) + "\n")
-print(f"{len(federal)} federal dates, {len(extra)} states with extra dates, {len(cases)} cases")
+
+notice_cases = []
+for st in states:
+    n = rules["states"][st]["notice"]
+    for kind, days, unit in (
+        ("nonpay", n["nonpay_days"], n.get("nonpay_unit")),
+        ("mtm", n["mtm_termination_days"], "calendar"),
+    ):
+        if not isinstance(days, int):
+            continue
+        for t in sorted(triggers):
+            c = deadline_math.compute_deadline(t, days, unit, state=st)
+            if c.due_date.year > YEARS[-1]:
+                continue
+            notice_cases.append([st, kind, t.isoformat(), c.due_date.isoformat(), c.unit_used])
+
+(root / "src/tools/notice-cases.json").write_text(json.dumps(notice_cases) + "\n")
+print(f"{len(federal)} federal dates, {len(extra)} states with extra dates, {len(cases)} deposit cases, {len(notice_cases)} notice cases")

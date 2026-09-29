@@ -199,7 +199,11 @@ export default function StateLawPage({ state }: { state: StateEntry }) {
               ]}
               citation={s.notice.citation}
               verify={s.notice.verify_flag}
-            />
+            >
+              <p className="sl-src">
+                <a href="/tools/notice-period">Work out the last day of a notice</a>
+              </p>
+            </Section>
 
             <Section
               title="Screening"

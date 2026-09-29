@@ -56,6 +56,57 @@ function isBusinessDay(t: number, holidays: Set<string>): boolean {
   return !holidays.has(isoDay(t));
 }
 
+/** The flags the backend attaches, in the words this site uses. */
+export const COURT_NOTE = "Court days can also skip court closures that aren't state holidays. Check with the court.";
+export const UNKNOWN_UNIT_NOTE =
+  "Our data doesn't say whether these are calendar or business days, so this uses the later of the two.";
+
+export interface Computed {
+  due: number;
+  unit: "calendar" | "business" | "court";
+  notes: string[];
+}
+
+/**
+ * Port of deadline_math.compute_deadline: `days` counted from the day after
+ * `trigger`. "calendar" is a straight count; "business" skips weekends and
+ * the state's holidays; "court" and "judicial" are business days plus a
+ * note; anything else computes both and keeps the LATER date, with a note.
+ */
+export function computeDeadline(trigger: number, days: number, unit: string | null | undefined, code: string): Computed {
+  const n = Math.max(0, Math.trunc(days));
+  const u = (unit ?? "").trim().toLowerCase();
+  const holidays = holidaySet(code);
+  const business = () => {
+    let d = trigger;
+    let left = n;
+    while (left > 0) {
+      d += DAY;
+      if (isBusinessDay(d, holidays)) left -= 1;
+    }
+    return d;
+  };
+  if (u === "calendar") return { due: trigger + n * DAY, unit: "calendar", notes: [] };
+  if (u === "business") return { due: business(), unit: "business", notes: [] };
+  if (u === "court" || u === "judicial") return { due: business(), unit: "court", notes: [COURT_NOTE] };
+  const cal = trigger + n * DAY;
+  const bus = business();
+  return bus > cal
+    ? { due: bus, unit: "business", notes: [UNKNOWN_UNIT_NOTE] }
+    : { due: cal, unit: "calendar", notes: [UNKNOWN_UNIT_NOTE] };
+}
+
+/** Port of deadline_math.compliance_completion_date. */
+export function lastBusinessDayBefore(due: number, code: string): number {
+  const holidays = holidaySet(code);
+  let d = due - DAY;
+  for (let i = 0; i < 30 && !isBusinessDay(d, holidays); i++) d -= DAY;
+  return d;
+}
+
+/** True when every date the answer rests on is inside the holiday table. */
+export const holidaysCover = (...ts: number[]) => ts.every(inRange);
+
 export interface DepositDeadline {
   /** The day the clock started: the move-out, or in Texas the later of the
    *  move-out and the day the forwarding address arrived. */
@@ -97,26 +148,15 @@ export function depositDeadline(
     trigger = Math.max(out, fwd);
   }
 
-  const unit = dep.return_deadline_unit === "business" ? "business" : "calendar";
-  const holidays = holidaySet(state.code);
-  const notes: string[] = [];
-
-  let due = trigger;
-  if (unit === "calendar") {
-    due = trigger + days * DAY;
-  } else {
-    let left = days;
-    while (left > 0) {
-      due += DAY;
-      if (isBusinessDay(due, holidays)) left -= 1;
-    }
-  }
-
-  let finishBy = due - DAY;
-  for (let i = 0; i < 30 && !isBusinessDay(finishBy, holidays); i++) finishBy -= DAY;
-
-  const covered = inRange(due) && inRange(finishBy) && (unit === "calendar" || inRange(trigger));
-  if (!covered) notes.push(OUTSIDE_HOLIDAYS_NOTE);
+  // mirror_tools passes `return_deadline_unit or "calendar"`.
+  const c = computeDeadline(trigger, days, dep.return_deadline_unit ?? "calendar", state.code);
+  const unit = c.unit === "business" ? "business" : "calendar";
+  const due = c.due;
+  const finishBy = lastBusinessDayBefore(due, state.code);
+  const notes = [...c.notes];
+  // A calendar count never reads the holiday table; the finish-by date does.
+  const read = c.unit === "calendar" ? [due, finishBy] : [due, finishBy, trigger];
+  if (!holidaysCover(...read)) notes.push(OUTSIDE_HOLIDAYS_NOTE);
 
   return { trigger: isoDay(trigger), due: isoDay(due), finishBy: isoDay(finishBy), unit, days, notes };
 }
