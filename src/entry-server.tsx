@@ -13,7 +13,7 @@ import { pageFor } from "./pages";
 import { tokensCss } from "./theme";
 
 export { MARKETING_ROUTES, CLIENT_ONLY_PREFIXES } from "./seo/routes";
-export { appShellHead, headTags, notFoundHead, sitemapXml, HEAD_START, HEAD_END } from "./seo/head";
+export { appShellHead, headTags, llmsTxt, notFoundHead, sitemapXml, HEAD_START, HEAD_END } from "./seo/head";
 export { pageFile, routingProblems } from "./seo/vercelRouting";
 
 /** The marker the 404 page renders from; no real path matches it. */

@@ -8,6 +8,7 @@
  *   dist/app-shell.html                       the empty shell /start and
  *                                             /oauth are rewritten to
  *   dist/sitemap.xml                          from src/seo/routes.ts
+ *   dist/llms.txt                             the same routes, for AI assistants
  *
  * Then it runs vercel.json against what it wrote (src/seo/vercelRouting.ts)
  * and checks /start, /oauth/callback and every page get the right file.
@@ -94,6 +95,7 @@ function lastCommitDate(source) {
   }
 }
 writeFileSync(join(dist, "sitemap.xml"), ssr.sitemapXml((r) => lastCommitDate(r.source)));
+writeFileSync(join(dist, "llms.txt"), ssr.llmsTxt() + "\n");
 
 // What Vercel will actually serve, from vercel.json and the files just
 // written: /start and /oauth/callback must reach the shell, every marketing
@@ -121,5 +123,5 @@ if (problems.length) {
   process.exit(1);
 }
 const written = ssr.MARKETING_ROUTES.length;
-console.log(`prerender: ${written} pages, 404.html, app-shell.html and sitemap.xml written to dist/`);
+console.log(`prerender: ${written} pages, 404.html, app-shell.html, sitemap.xml and llms.txt written to dist/`);
 if (!existsSync(join(dist, "robots.txt"))) console.warn("prerender: dist/robots.txt is missing");

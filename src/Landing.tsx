@@ -178,6 +178,15 @@ const css = `
   .lp-band { display: grid; gap: clamp(28px, 4vw, 56px); align-items: center; margin-top: 36px; }
   @media (min-width: 900px) { .lp-band { grid-template-columns: 0.85fr 1.15fr; } .lp-band[data-flip="true"] > *:first-child { order: 2; } }
   .lp-crop-cap { margin-top: 12px; font-size: 14px; color: var(--ink-muted); }
+  /* Free tools: plain links in a row of three, one line each. They are the
+     site's most linkable pages, and a link from the home page is what tells a
+     crawler they matter. */
+  .lp-tools { margin-top: 32px; display: grid; gap: 0 32px; border-top: 1px solid var(--line); }
+  @media (min-width: 820px) { .lp-tools { grid-template-columns: repeat(3, 1fr); border-top: 0; } }
+  .lp .lp-tool { display: block; padding: 18px 0; border-bottom: 1px solid var(--line); text-decoration: none; }
+  @media (min-width: 820px) { .lp .lp-tool { border-bottom: 0; border-top: 1px solid var(--line); } }
+  .lp-tool-t { display: block; font-size: 17px; font-weight: 600; color: var(--iris); }
+  .lp-tool-b { display: block; margin-top: 6px; font-size: 15px; line-height: 1.55; color: var(--ink-muted); }
 
   @media (prefers-reduced-motion: reduce) {
     /* The word still TYPES — letters appearing where they will stay move
@@ -365,6 +374,24 @@ const DAY: { at: string; text: string; row: { title: string; sub?: string } }[] 
 // with "Nothing auto-sends. Every draft waits for a person." and "Every
 // write to Buildium or Gmail passes a confirmation card you can edit before
 // approving." Both come back then.
+
+const TOOLS = [
+  {
+    href: "/tools/deposit-deadline",
+    t: "Deposit return deadline calculator",
+    b: "Pick a state and a move-out date to get the day the deposit is due back, with the statute.",
+  },
+  {
+    href: "/tools/notice-period",
+    t: "Notice period calculator",
+    b: "The last day of a pay-or-quit notice, and the earliest a month-to-month tenancy can end.",
+  },
+  {
+    href: "/state-laws",
+    t: "Landlord rules by state",
+    b: "Deposit caps, late fees, notice periods and screening rules for all 50 states and DC.",
+  },
+];
 
 export default function Landing() {
   const start = useStartLabel();
@@ -569,6 +596,27 @@ export default function Landing() {
               <ApprovalCrop />
               <p className="lp-crop-cap">The approval card for a new work order, with example data.</p>
             </Reveal>
+          </div>
+        </div>
+      </section>
+
+      <section className="lp-section" id="free-tools">
+        <div className="lp-wrap">
+          <Reveal>
+            <div className="lp-section-head">
+              <h2 className="lp-h2">Free tools for property managers</h2>
+              <p className="lp-body">
+                Built from the same state rules Occupella applies to your properties. No sign-up.
+              </p>
+            </div>
+          </Reveal>
+          <div className="lp-tools">
+            {TOOLS.map((t) => (
+              <a className="lp-tool" href={t.href} key={t.href}>
+                <span className="lp-tool-t">{t.t}</span>
+                <span className="lp-tool-b">{t.b}</span>
+              </a>
+            ))}
           </div>
         </div>
       </section>

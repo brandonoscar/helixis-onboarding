@@ -19,6 +19,15 @@ occupella.com and describing the company the same way.
 - After each production deploy, `.github/workflows/indexnow.yml` tells Bing
   every URL in the sitemap. Bing's index also feeds DuckDuckGo, Yahoo and
   Copilot.
+- The home and pricing pages carry SoftwareApplication structured data with
+  the pricing page's own prices, so a search engine reads "Occupella" as
+  software, not an a cappella group. No rating or review is claimed; Google's rich-result
+  test will call it ineligible for stars, which is expected.
+- `/llms.txt` summarises the site for AI assistants (ChatGPT, Perplexity,
+  Copilot), built from the same route list as the sitemap.
+- Two free calculators (`/tools/deposit-deadline`, `/tools/notice-period`)
+  and the state-law pages are the pages other sites have a reason to link
+  to. The home page links all three.
 
 ## What only you can do, in order of payoff
 

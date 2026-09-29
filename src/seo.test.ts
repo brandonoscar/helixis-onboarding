@@ -39,6 +39,7 @@ import html from '../index.html?raw';
 import vercelRaw from '../vercel.json?raw';
 import robots from '../public/robots.txt?raw';
 import manifestRaw from '../public/manifest.webmanifest?raw';
+import { render } from './entry-server';
 import { PAGES } from './pages';
 import {
   CLIENT_ONLY_PREFIXES,
@@ -55,6 +56,8 @@ import {
   appShellHead,
   breadcrumbJsonLd,
   headTags,
+  llmsTxt,
+  softwareJsonLd,
   notFoundHead,
   sitemapXml,
 } from './seo/head';
@@ -264,8 +267,10 @@ describe('every marketing route has its own head', () => {
     );
   });
 
-  it('carries only Organization and WebSite structured data on a top-level page', () => {
-    const head = headTags(MARKETING_ROUTES[0]);
+  it('carries only Organization and WebSite structured data on a page that is not about the product as a whole', () => {
+    // Re-pointed 2026-09-29 from the home page, which now also carries
+    // SoftwareApplication (next test).
+    const head = headTags(MARKETING_ROUTES.find((r) => r.path === '/features')!);
     const types = [...head.matchAll(/"@type":"([^"]+)"/g)].map((m) => m[1]);
     expect(types).toEqual(['Organization', 'WebSite']);
     // sameAs lists only profiles that exist; an empty list is left out.
@@ -292,6 +297,47 @@ describe('every marketing route has its own head', () => {
     for (const p of ['/', '/features', '/solutions/leasing', '/docs/buildium-api-setup']) {
       expect(breadcrumbJsonLd(MARKETING_ROUTES.find((r) => r.path === p)!), p).toBeNull();
     }
+  });
+
+  it('preloads each page\'s largest image, and only an image the page shows', () => {
+    const withImage = MARKETING_ROUTES.filter((r) => r.lcpImage);
+    expect(withImage.map((r) => r.path)).toEqual(['/', '/features']);
+    for (const r of withImage) {
+      expect(headTags(r)).toContain(`<link rel="preload" as="image" href="${r.lcpImage}" fetchpriority="high" />`);
+      // A preload for an image the page doesn't render is a wasted download
+      // on the most important request of the visit.
+      expect(render(r.path), r.path).toContain(`poster="${r.lcpImage}"`);
+    }
+    expect(headTags(MARKETING_ROUTES.find((r) => r.path === '/pricing')!)).not.toContain('rel="preload"');
+  });
+
+  it('describes the product with the pricing page\'s own prices', () => {
+    const ld = softwareJsonLd() as { offers: { name: string; price: string; priceCurrency: string }[] };
+    // The same three prices the pricing route's description states, so the
+    // structured data and the page cannot disagree.
+    const pricing = MARKETING_ROUTES.find((r) => r.path === '/pricing')!;
+    for (const price of ['50', '199', '500']) {
+      expect(ld.offers.map((o) => o.price)).toContain(price);
+      expect(pricing.description).toContain(`$${price}`);
+    }
+    expect(ld.offers.find((o) => o.name === 'Trial')!.price).toBe('0');
+    expect(ld.offers.every((o) => o.priceCurrency === 'USD')).toBe(true);
+    expect(JSON.stringify(ld)).not.toMatch(/aggregateRating|review/i);
+    for (const r of MARKETING_ROUTES) {
+      const has = headTags(r).includes('"@type":"SoftwareApplication"');
+      expect(has, r.path).toBe(r.path === '/' || r.path === '/pricing');
+    }
+  });
+
+  it('writes llms.txt from the routes, with the state pages as one entry', () => {
+    const txt = llmsTxt();
+    expect(txt.startsWith('# Occupella\n')).toBe(true);
+    for (const r of MARKETING_ROUTES) {
+      if (r.name === 'state_law') expect(txt, r.path).not.toContain(`${canonicalFor(r)})`);
+      else expect(txt, r.path).toContain(`(${canonicalFor(r)})`);
+    }
+    expect(txt).toContain('not affiliated with Buildium');
+    expect(txt).not.toMatch(/rentvine|partner|helixis/i);
   });
 
   it('keeps the 404 page and the app shell out of the index', () => {

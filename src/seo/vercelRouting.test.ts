@@ -19,6 +19,7 @@ const BUILT = new Set([
   'app-shell.html',
   'robots.txt',
   'sitemap.xml',
+  'llms.txt',
   'favicon.svg',
 ]);
 
@@ -53,7 +54,7 @@ describe('the served site', () => {
 
   it('catches a rewrite that swallows a marketing page', () => {
     const greedy: VercelConfig = { ...config, rewrites: [{ source: '/:path*', destination: '/app-shell' }] };
-    const noPages = new Set(['404.html', 'app-shell.html', 'robots.txt', 'sitemap.xml']);
+    const noPages = new Set(['404.html', 'app-shell.html', 'robots.txt', 'sitemap.xml', 'llms.txt']);
     expect(routingProblems(greedy, noPages, paths, CLIENT_ONLY_PREFIXES)).toContain(
       '/features is served 200 app-shell.html, expected 200 features.html',
     );
