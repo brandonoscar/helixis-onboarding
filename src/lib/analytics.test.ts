@@ -38,6 +38,8 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { MARKETING_ROUTES } from '../seo/routes'
+
 const posthogMock = vi.hoisted(() => ({
   init: vi.fn(),
   capture: vi.fn(),
@@ -144,10 +146,15 @@ const ROUTER_SOURCE = Object.values(
   }),
 )[0] as string
 
-/** Every `p.startsWith('/x')` prefix `main.tsx` actually routes on. */
+/**
+ * Every path the site routes: the marketing pages (the route table the
+ * router and the prerender both read) plus the `p.startsWith('/x')` prefixes
+ * `main.tsx` still handles itself (the wizard and the OAuth popup).
+ * Re-pointed 2026-09 when the marketing pages moved into a table.
+ */
 function routerPrefixes(): string[] {
   const found = [...ROUTER_SOURCE.matchAll(/p\.startsWith\(['"](\/[a-z/]*)['"]\)/g)]
-  return found.map((m) => m[1])
+  return [...MARKETING_ROUTES.map((r) => r.path).filter((p) => p !== '/'), ...found.map((m) => m[1])]
 }
 
 describe('the page label and the page rendered cannot disagree', () => {
@@ -182,7 +189,10 @@ describe('the page label and the page rendered cannot disagree', () => {
     // question "does pricing lose people" needs a regex at read time.
     expect(pageName('/pricing')).toBe('pricing')
     expect(pageName('/pricing/')).toBe('pricing')
-    expect(pageName('/pricing/anything')).toBe('pricing')
+    // Re-pointed 2026-09: this path used to render the pricing page (the
+    // router matched prefixes). On the static host it is the 404 page, so it
+    // is counted as one, which is the rule this block exists for.
+    expect(pageName('/pricing/anything')).toBe('not_found')
   })
 
   it('still calls an unrouted path not_found rather than inventing a page', async () => {

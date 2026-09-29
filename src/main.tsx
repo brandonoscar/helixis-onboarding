@@ -7,44 +7,24 @@ import { ConsentBar } from './ConsentBar'
 import { initAnalytics, watchStartClicks } from './lib/analytics'
 import { rescueAuthLanding } from './lib/authRescue'
 import { maybeLoadVisitorTracker } from './lib/visitorTracking'
-import Landing from './Landing'
-import Features from './Features'
-import Pricing from './Pricing'
-import NotFound from './NotFound'
-import { Privacy, Sms, Terms } from './Legal'
+import { pageFor } from './pages'
 import { tokensCss } from './theme'
 
-// Tiny pathname router — no dependency. vercel.json rewrites every path to
-// index.html so deep links work:
-//   /               → landing page (the front door)
-//   /features       → what the product does
-//   /pricing        → the plans, compared, plus the FAQ
-//   /start          → the setup wizard (previously lived at /)
-//   /privacy        → privacy policy
-//   /terms          → terms of service
-//   /sms            → SMS program & consent (the A2P campaign's public CTA URL)
-//   /oauth/callback → Composio OAuth popup return — auto-closes (below)
-//   anything else  → 404
+// The router. Marketing pages are PRERENDERED to static HTML at build time
+// (scripts/prerender.mjs), each with its own title, description and canonical
+// from src/seo/routes.ts, and this renders the same page over it in the
+// browser. vercel.json sends only the client-only paths to the app shell:
+//   /start          → the setup wizard (App.tsx), never prerendered
+//   /oauth/callback → Composio OAuth popup return, auto-closes (below)
+//   anything else   → its prerendered page, or the static 404 page
 //
-// ⚠ ORDER MATTERS AND `/start` MUST STAY FIRST. These are prefix matches, so
-// a future route that is a prefix of another shadows it. Nothing here is
-// currently ambiguous; the rule is written down so the next addition is
-// checked rather than appended.
+// Marketing paths live in src/pages.tsx, matched exactly. Before 2026-09 every
+// URL got index.html and the homepage's canonical, which is why /features was
+// never indexed; see src/seo/routes.ts.
 function route() {
   const p = window.location.pathname
   if (p.startsWith('/start')) return <App />
-  if (p.startsWith('/features')) return <Features />
-  if (p.startsWith('/pricing')) return <Pricing />
-  if (p.startsWith('/privacy')) return <Privacy />
-  if (p.startsWith('/terms')) return <Terms />
-  if (p.startsWith('/sms')) return <Sms />
-  // The root is the landing page; ANYTHING ELSE is a wrong turn and says so.
-  // Falling through to <Landing /> served the front door at 200 for every
-  // mistyped URL — a soft 404, which tells the visitor nothing and shows a
-  // crawler unlimited duplicates of one page. See NotFound.tsx for why the
-  // STATUS code is still 200 and what it would take to change that.
-  if (p === '/' || p === '') return <Landing />
-  return <NotFound />
+  return pageFor(p)
 }
 
 // ⚠ FIRST BRANCH, ABOVE EVERYTHING, AND THAT ORDER IS LOAD-BEARING TWICE.
