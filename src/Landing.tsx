@@ -348,7 +348,7 @@ const DAY: { at: string; text: string; row: { title: string; sub?: string } }[] 
   {
     at: "2:05 PM",
     text: "A move-out last month means a deposit is due back. The date is counted from the state's deadline.",
-    row: { title: "Deposit return due 2026-10-14 — 14 Garden Row #3" },
+    row: { title: "Deposit return due 2026-10-14 — 14 Garden Row #6" },
   },
   {
     at: "4:40 PM",

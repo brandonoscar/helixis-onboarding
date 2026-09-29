@@ -67,6 +67,17 @@ export const MARKETING_ROUTES: readonly MarketingRoute[] = [
     priority: 0.9,
   },
   {
+    path: "/solutions/delinquency",
+    name: "solutions_delinquency",
+    title: "Late rent follow-up for Buildium users | Occupella",
+    description:
+      "See every lease with a balance and how late it is, get a reminder when rent hasn't posted by the 10th, and send a drafted late-rent email from your Gmail.",
+    inSitemap: true,
+    source: "src/solutions/Delinquency.tsx",
+    changefreq: "monthly",
+    priority: 0.7,
+  },
+  {
     path: "/solutions/maintenance",
     name: "solutions_maintenance",
     title: "Maintenance coordination for Buildium users | Occupella",

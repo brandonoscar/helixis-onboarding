@@ -189,6 +189,14 @@ export const cropCss = `
   .cr-cold-h { padding: 12px 16px; font-weight: 600; border-bottom: 1px solid var(--app-line); background: var(--app-raised); }
   .cr-cold-row { display: flex; justify-content: space-between; gap: 12px; padding: 11px 16px; border-bottom: 1px solid var(--app-line); font-size: 14px; }
   .cr-cold-row:last-child { border-bottom: 0; }
+
+  /* the email draft card (show_email_draft): To, Subject, body, and the
+     numbered approaches the user slides through */
+  .cr-mail { padding: 18px 20px; }
+  .cr-mail-f { display: flex; gap: 10px; font-size: 14px; padding: 6px 0; border-bottom: 1px solid var(--app-line); }
+  .cr-mail-f span:first-child { width: 64px; color: var(--ink-muted); flex: none; }
+  .cr-mail .cr-tabs { margin: 0 0 12px; }
+  .cr-mail-body { margin-top: 12px; font-size: 15px; line-height: 1.55; white-space: pre-line; }
 `;
 
 /** A crop is a picture of the app. Screen readers get its label, not its rows. */
@@ -345,7 +353,7 @@ export function DelinquencyCrop() {
             <tr>
               <td>James Chen</td>
               <td>14 Garden Row #3</td>
-              <td className="num">$2,180.00</td>
+              <td className="num">$940.00</td>
               <td><span className="cr-pill" data-k="late">61–90</span></td>
               <td className="num">2</td>
             </tr>
@@ -508,6 +516,28 @@ export function ColdLeadsCrop() {
       <div className="cr-cold-row">
         <span><b>Elena Duarte</b> <span className="cr-muted">· Maple Court 4B</span></span>
         <span className="cr-muted">3 days quiet</span>
+      </div>
+    </Crop>
+  );
+}
+
+/**
+ * The email draft card (visual_tools.py show_email_draft): 2 to 4 approaches
+ * the model names itself, To / Subject / body, sent through Gmail behind the
+ * approval card. The labels and the letter are example data.
+ */
+export function EmailDraftCrop() {
+  return (
+    <Crop label="A drafted late-rent email to Maria Alvarez with three approaches: a friendly reminder, a firmer reminder and an offer of a payment plan. The friendly reminder is open." className="cr-mail">
+      <div className="cr-tabs">
+        <span className="cr-tab" data-on="true">1 Friendly reminder</span>
+        <span className="cr-tab">2 Firmer reminder</span>
+        <span className="cr-tab">3 Offer a payment plan</span>
+      </div>
+      <div className="cr-mail-f"><span>To</span><span>maria.alvarez@example.com</span></div>
+      <div className="cr-mail-f"><span>Subject</span><span>October rent for 128 Lexington Ave #4B</span></div>
+      <div className="cr-mail-body">
+        {"Hi Maria,\n\nA quick note that we haven't seen October's rent come through yet. The balance on the lease is $1,240. If it's already on the way, thank you and please ignore this.\n\nThe AC technician is booked, and we'll confirm the window shortly."}
       </div>
     </Crop>
   );

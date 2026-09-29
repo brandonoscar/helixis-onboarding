@@ -6,6 +6,7 @@ import NotFound from "./NotFound";
 import { Privacy, Sms, Terms } from "./Legal";
 import Leasing from "./solutions/Leasing";
 import Maintenance from "./solutions/Maintenance";
+import Delinquency from "./solutions/Delinquency";
 import { normalizePath } from "./seo/routes";
 
 /**
@@ -21,6 +22,7 @@ export const PAGES: Record<string, () => ReactElement> = {
   "/": () => <Landing />,
   "/features": () => <Features />,
   "/pricing": () => <Pricing />,
+  "/solutions/delinquency": () => <Delinquency />,
   "/solutions/maintenance": () => <Maintenance />,
   "/solutions/leasing": () => <Leasing />,
   "/sms": () => <Sms />,

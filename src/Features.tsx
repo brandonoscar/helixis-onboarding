@@ -493,6 +493,9 @@ export default function Features() {
                 account, so it doesn&rsquo;t crawl the API record by record, and it comes back
                 as a table you can sort.
               </Head>
+              <a className="lp-textlink" href="/solutions/delinquency" style={{ display: "inline-block", marginTop: 16 }}>
+                Late rent, in detail
+              </a>
               <div className="ft-qa" style={{ marginTop: 32 }}>
                 {ASKS.map((r) => (
                   <div className="ft-qa-row" key={r.q}>
