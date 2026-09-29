@@ -11,6 +11,10 @@ import Screenshots from "./Screenshots";
 import Security from "./Security";
 import Contact from "./Contact";
 import OwnerReporting from "./solutions/OwnerReporting";
+import Integrations from "./integrations/Integrations";
+import BuildiumIntegration from "./integrations/Buildium";
+import BuildiumApiSetup from "./docs/BuildiumApiSetup";
+import Changelog from "./changelog/Changelog";
 import StateLawPage from "./stateLaws/StateLawPage";
 import StateLawsIndex from "./stateLaws/StateLawsIndex";
 import { STATES } from "./stateLaws/data";
@@ -32,6 +36,10 @@ export const PAGES: Record<string, () => ReactElement> = {
   "/screenshots": () => <Screenshots />,
   "/security": () => <Security />,
   "/contact": () => <Contact />,
+  "/integrations": () => <Integrations />,
+  "/integrations/buildium": () => <BuildiumIntegration />,
+  "/docs/buildium-api-setup": () => <BuildiumApiSetup />,
+  "/changelog": () => <Changelog />,
   "/solutions/owner-reporting": () => <OwnerReporting />,
   "/solutions/delinquency": () => <Delinquency />,
   "/solutions/maintenance": () => <Maintenance />,

@@ -211,7 +211,7 @@ const ASKS = [
 
 /** ⚠ Live, registered, confirm-gated write tools only. See the file header
  *  for the ones deliberately missing. */
-const WRITES = [
+export const WRITES = [
   "Create a to-do task",
   "Create a work order and assign a vendor",
   "Reassign a work order to a different vendor",
@@ -341,7 +341,7 @@ const SAFEGUARDS: Block[] = [
   },
 ];
 
-const CONNECTS: Block[] = [
+export const CONNECTS: Block[] = [
   {
     // TODO(brandon): confirm autonomous notes flag is off; this line ended
     // "and writes back only with your approval" until then.
@@ -656,6 +656,9 @@ export default function Features() {
         <div className="lp-wrap">
           <Head title="Works with" />
           <Blocks items={CONNECTS} />
+          <a className="lp-textlink" href="/integrations" style={{ display: "inline-block", marginTop: 24 }}>
+            Every integration and its status
+          </a>
         </div>
       </section>
 

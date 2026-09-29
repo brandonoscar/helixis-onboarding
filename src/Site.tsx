@@ -509,9 +509,8 @@ type MenuGroup = { key: string; label: string; page: SitePage; items: MenuItem[]
  * ⚠ EVERY HREF HERE MUST RESOLVE. nav.test.tsx checks each one against
  * MARKETING_ROUTES, and each #anchor against an id the page renders, so a
  * renamed section or a page that is not built yet fails the build instead
- * of sending a visitor to the 404 page. Pages that are planned and not built
- * (integrations, security, contact, changelog, the Buildium setup guide) are
- * left out until they exist.
+ * of sending a visitor to the 404 page. A page that is planned and not built
+ * is left out until it exists.
  *
  * ⚠ The Product anchors are the /features section ids. The labels are those
  * sections' headings, so a click lands where the menu said it would.
@@ -545,8 +544,11 @@ export const MENU: MenuGroup[] = [
     label: "Resources",
     page: "resources",
     items: [
+      { href: "/integrations", label: "Integrations", note: "What Occupella connects to" },
+      { href: "/docs/buildium-api-setup", label: "Buildium setup guide", note: "Create the API key in two minutes" },
       { href: "/state-laws", label: "Landlord rules by state", note: "Deposits, late fees and notices" },
       { href: "/screenshots", label: "Screenshots", note: "What the app looks like" },
+      { href: "/changelog", label: "Changelog", note: "What changed, newest first" },
     ],
   },
 ];
@@ -812,6 +814,7 @@ export const FOOTER_EXTRA: string[] = [
   "/contact",
   "/security",
   "/security#subprocessors",
+  "/integrations/buildium",
 ];
 
 export function SiteFooter() {
@@ -837,13 +840,13 @@ export function SiteFooter() {
               { href: "/", label: "Home" },
               { href: "/features", label: "Features" },
               { href: "/pricing", label: "Pricing" },
+              { href: "/integrations/buildium", label: "Occupella for Buildium" },
               { href: "/start", label: "Start free trial" },
               { href: APP_URL, label: "Sign in" },
             ]}
           />
           <FooterCol title="Solutions" links={MENU.find((g) => g.key === "solutions")!.items} />
           <FooterCol title="Resources" links={MENU.find((g) => g.key === "resources")!.items} />
-          {/* TODO(brandon): Changelog joins this column when it is built. */}
           <FooterCol
             title="Company"
             links={[
