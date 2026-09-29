@@ -359,11 +359,16 @@ export default function Landing() {
               by founder instruction (2026-09-08) because it looked bad, not
               because it was broken. The shots are still in public/demo/ if it
               is ever wanted back. */}
+          {/* walkthrough-web.mp4 is the served copy: the recording with its
+              Mac title bar cropped off, re-encoded to H.264 at 30fps (9.5 MB
+              to 1.2 MB). walkthrough.mp4 is the original, kept so the web copy
+              can be re-cut from it. */}
           <DemoPanel
-            src="/demo/walkthrough.mp4"
+            src="/demo/walkthrough-web.mp4"
+            poster="/demo/walkthrough-poster.jpg"
             caption="A minute of Occupella working a real Buildium account."
-            width={1850}
-            height={1080}
+            width={1656}
+            height={1016}
             // ⚠ This one is NARRATED (AAC stereo on the file). It autoplays
             // muted like everything else, so controls are the only route to
             // the audio — without them the narration can never be heard.

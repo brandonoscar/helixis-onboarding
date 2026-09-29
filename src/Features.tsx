@@ -1,4 +1,14 @@
-import { CHECK, DemoPanel, Icon, LOCK, Reveal, SHIELD, BELL, MINUS, SitePageShell } from "./Site";
+import { useEffect, useRef, useState } from "react";
+import { CHECK, DemoPanel, Icon, MINUS, Reveal, SitePageShell } from "./Site";
+import {
+  ApprovalCrop,
+  DelinquencyCrop,
+  DraftCrop,
+  HistoryCrop,
+  NoticedCrop,
+  WorkOrderCard,
+  cropCss,
+} from "./crops";
 
 // ─────────────────────────────────────────────────────────────────────
 // /features — what Occupella actually does, in detail.
@@ -46,93 +56,132 @@ import { CHECK, DemoPanel, Icon, LOCK, Reveal, SHIELD, BELL, MINUS, SitePageShel
 //     an application. All three implemented, all three deliberately
 //     unregistered.
 //   · Reopening a work order — Buildium latches it Completed; no API can.
+//
+// ⚠ NO FULL-APP SCREENSHOTS BELOW THE VIDEO. The visuals are crops rebuilt
+// in HTML (src/crops.tsx) at a readable size. Of the old images: inbox.png
+// showed Leasing rows in its Today strip while this page says Leasing is in
+// carrier review; report.png says "Demo mode" and shows a chart card no real
+// question has produced; cockpit.png offers "Draft renewal", which is dark.
+// Do not bring them back.
+//
+// ⚠ The section ids (the-loop, ask-it-anything, writing-back, fair-housing)
+// are link targets for the site menu. Renaming one breaks the menu.
 // ─────────────────────────────────────────────────────────────────────
 
 const css = `
-  /* Feature cards — same 1px-gap grid as the trust list and the pricing
-     cards, so a visitor moving between pages sees one system rather than
-     three designs. */
-  .ft-cards { margin-top: 36px; }
-  @media (min-width: 720px) { .ft-cards { grid-template-columns: 1fr 1fr; } }
-  @media (min-width: 1020px) { .ft-cards[data-cols="3"] { grid-template-columns: repeat(3, 1fr); } }
-  .ft-card { padding: 24px 22px 26px; display: flex; flex-direction: column; gap: 9px; }
-  .ft-card-t { font-size: 15.5px; font-weight: 600; letter-spacing: -0.012em; color: var(--ink); }
-  .ft-card-b { font-size: 14px; line-height: 1.55; color: var(--ink-muted); }
+  .ft-anchor { scroll-margin-top: 88px; }
 
-  /* A plain list of verbs. Used for the Buildium write surface, where the
-     honest presentation is an enumeration rather than prose — a manager
-     wants to scan for the one they care about. */
-  .ft-list { margin-top: 28px; display: grid; gap: 10px 28px; }
-  @media (min-width: 720px) { .ft-list { grid-template-columns: 1fr 1fr; } }
-  .ft-list-item { display: flex; gap: 10px; align-items: flex-start; font-size: 14.5px; line-height: 1.5; color: var(--ink-secondary, var(--ink-muted)); }
-  .ft-list-item svg { flex: none; margin-top: 3px; color: var(--iris); }
+  /* ── two columns at desktop, stacked below 1024px. data-flip puts the
+     visual on the left, so the page alternates rather than repeating one
+     shape section after section. */
+  .ft-split { display: grid; gap: 40px; margin-top: 48px; }
+  @media (min-width: 1024px) {
+    .ft-split { grid-template-columns: 5fr 6fr; gap: 72px; align-items: start; }
+    .ft-split[data-flip="true"] { grid-template-columns: 6fr 5fr; }
+    .ft-split[data-flip="true"] > :first-child { order: 2; }
+  }
 
-  /* The status chip on a section that is real code and not yet reachable.
-     ⚠ Monochrome on purpose — the ONE chromatic accent on this site is
-     --iris, and spending it on "not ready yet" would make the unfinished
-     thing the loudest element on the page. */
+  /* ── the loop: text blocks on the left, a sticky crop on the right that
+     follows the block in view. Below 1024px each block carries its own
+     crop inline instead, and the sticky column is not rendered. */
+  .ft-steps { display: flex; flex-direction: column; }
+  .ft-step { border-top: 1px solid var(--line); padding: 24px 0 40px; }
+  @media (min-width: 1024px) { .ft-step { min-height: 44vh; } .ft-step:last-child { min-height: 0; } }
+  .ft-step-t { font-size: 20px; font-weight: 600; line-height: 1.35; color: var(--ink); }
+  .ft-step-b { margin-top: 10px; font-size: 17px; line-height: 1.6; color: var(--ink-muted); max-width: 52ch; }
+  .ft-step-crop { margin-top: 24px; }
+  @media (min-width: 1024px) { .ft-step-crop { display: none; } }
+
+  .ft-sticky { display: none; }
+  @media (min-width: 1024px) {
+    .ft-sticky { display: grid; position: sticky; top: 112px; }
+    .ft-sticky > * {
+      grid-area: 1 / 1; align-self: start;
+      opacity: 0; transform: translateY(8px);
+      transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out);
+      pointer-events: none;
+    }
+    .ft-sticky > [data-on="true"] { opacity: 1; transform: none; }
+  }
+
+  /* ── plain text blocks under a thin rule. No box around them. ── */
+  .ft-blocks { display: grid; gap: 36px 56px; margin-top: 48px; }
+  @media (min-width: 760px) { .ft-blocks { grid-template-columns: 1fr 1fr; } }
+  @media (min-width: 1024px) { .ft-blocks[data-cols="3"] { grid-template-columns: repeat(3, 1fr); } }
+  .ft-block { border-top: 1px solid var(--line); padding-top: 20px; }
+  .ft-block-t { font-size: 18px; font-weight: 600; line-height: 1.4; color: var(--ink); }
+  .ft-block-b { margin-top: 8px; font-size: 16px; line-height: 1.6; color: var(--ink-muted); }
+
+  /* The questions list: question over answer, a rule between rows. */
+  .ft-qa { display: flex; flex-direction: column; }
+  .ft-qa-row { border-top: 1px solid rgba(14, 22, 32, 0.12); padding: 18px 0; }
+  .ft-qa-q { font-size: 17px; font-weight: 600; color: var(--ink); }
+  .ft-qa-a { margin-top: 6px; font-size: 16px; line-height: 1.6; color: var(--ink-muted); }
+
+  /* A plain list of verbs, for the Buildium write actions and the fair
+     housing rules: a manager scans for the one they care about. */
+  .ft-list { display: flex; flex-direction: column; margin-top: 8px; }
+  .ft-list-item {
+    display: flex; gap: 12px; align-items: flex-start;
+    padding: 12px 0; border-top: 1px solid var(--line);
+    font-size: 17px; line-height: 1.5; color: var(--ink);
+  }
+  .ft-list-item svg { flex: none; margin-top: 4px; color: var(--ink-muted); }
+
+  /* The page's one pale-blue band. */
+  .ft-band { margin-top: clamp(80px, 10vw, 128px); padding: clamp(64px, 8vw, 104px) 0; background: var(--band); }
+  .ft-band .ft-qa-row { border-top-color: rgba(14, 22, 32, 0.12); }
+
+  @media (min-width: 1024px) { .ft-sticky-crop { position: sticky; top: 112px; } }
+  .ft-caption { margin-top: 12px; font-size: 14px; color: var(--ink-muted); }
+
+  /* The status on a section that is real code and not yet reachable.
+     ⚠ Monochrome on purpose: spending the one colour on "not ready yet"
+     would make the unfinished thing the loudest element on the page. */
   .ft-status {
-    /* ⚠ align-self, not just inline-flex. This sits inside .lp-section-head,
-       which is a COLUMN flex container, so its children stretch to the full
-       width by default — inline-flex does not stop that and the chip renders
-       as a 1000px pill. Measured, not guessed. */
     align-self: flex-start;
     display: inline-flex; align-items: center; gap: 7px;
-    padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px;
-    font-family: var(--font-mono); font-size: 11px; font-weight: 500;
-    letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-subtle);
-    background: var(--canvas-1);
+    padding: 4px 12px; border: 1px solid var(--line-strong); border-radius: 999px;
+    font-size: 14px; font-weight: 500; color: var(--ink-muted); background: var(--canvas);
   }
-  .ft-status svg { color: var(--ink-subtle); }
-
-  /* A two-column "what you ask" / "what comes back" table. This is the
-     nitty-gritty section and a card grid would flatten it back into
-     marketing — the value is in the exact fields on the exact row. */
-  .ft-qa { margin-top: 32px; display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; }
-  .ft-qa-row { background: var(--canvas); padding: 20px 22px; display: grid; gap: 8px; }
-  @media (min-width: 820px) { .ft-qa-row { grid-template-columns: 22ch 1fr; gap: 24px; align-items: baseline; } }
-  .ft-qa-q { font-size: 14.5px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
-  .ft-qa-a { font-size: 14px; line-height: 1.55; color: var(--ink-muted); }
-
-  .ft-shot {
-    margin-top: 36px;
-    border-radius: var(--r-lg); border: 1px solid var(--card-edge); overflow: hidden;
-    background: var(--canvas); box-shadow: 0 18px 44px -30px rgba(14,22,32,0.35);
-  }
-  .ft-shot img { display: block; width: 100%; height: auto; }
-  .ft-caption { margin-top: 14px; font-size: 13px; color: var(--ink-subtle); }
 `;
 
-/** Cards, not prose, where the content is genuinely a set of parallel things. */
-const READS = [
+type Block = { t: string; b: string };
+
+/** The loop, one block per step, each with the crop it shows. */
+const READS: (Block & { crop: () => React.ReactElement })[] = [
   {
-    t: "The card lands before the AI runs.",
-    b: "A signed Buildium webhook arrives, is verified against your account and queued. Within seconds you have a readable row — title, address and unit, who reported it, who it is assigned to — built from the record itself. The written summary catches up a moment later.",
+    t: "The card appears before the AI runs",
+    b: "A signed Buildium webhook arrives, is verified against your account and queued. Within seconds you have a readable row built from the record itself: title, address and unit, who reported it and who it is assigned to. The written summary follows a moment later.",
+    crop: () => <WorkOrderCard />,
   },
   {
-    t: "It pulls the history first.",
-    b: "The full task, its unit, its property by name, the active lease and its tenants, and ninety days of prior tickets at that address — fetched in parallel. A sub-fetch that fails costs one field, not the card.",
+    t: "It pulls the history first",
+    b: "The full task, its unit, its property by name, the active lease and its tenants, and ninety days of prior tickets at that address, fetched in parallel. If one lookup fails, the card loses that one field, not the whole card.",
+    crop: () => <HistoryCrop />,
   },
   {
-    t: "What it noticed, and it has to be checkable.",
-    b: "The lease owes $1,240. No rent has posted this month. The lease ends in 41 days. Three other tasks are overdue at this property. A numeric claim the model writes is checked against the record before it is shown, and dropped if it does not hold.",
+    t: "What it noticed, checked against the record",
+    b: "The lease owes $1,240. No rent has posted this month. The lease ends in 41 days. Three other tasks are overdue at this property. Any number the model writes is checked against the record before it is shown, and dropped if it doesn't match.",
+    crop: () => <NoticedCrop />,
   },
   {
-    t: "A drafted next step you edit.",
-    b: "The tenant reply, the follow-up task, the note — written out, with the reason it was suggested and the fact it was based on. You send your words; the draft is a starting point, not an outbox.",
+    t: "A drafted next step you can edit",
+    b: "The tenant reply, the follow-up task or the note, written out with why it was suggested and the fact it was based on. You can change every word before it goes.",
+    crop: () => <DraftCrop />,
   },
 ];
 
 /**
  * ⚠ Every row here is a real registered tool with production call volume
- * behind it. Do NOT add a row for something that merely exists — the whole
- * point of this section is that the second column is specific enough to be
+ * behind it. Do NOT add a row for something that merely exists: the whole
+ * point of this section is that the answer is specific enough to be
  * falsified in one question.
  */
 const ASKS = [
   {
     q: "Who is behind on rent?",
-    a: "Every lease with a balance: tenant, property and unit, the amount, 31–60 / 61–90 / 90+ aging, and the count of open maintenance at that address on the same row — so “check whether they have open work before I send a late notice” is the same question, not the next one.",
+    a: "Every lease with a balance: tenant, property and unit, the amount, 31–60 / 61–90 / 90+ aging, and the count of open maintenance at that address on the same row. “Check whether they have open work before I send a late notice” is answered by the same question.",
   },
   {
     q: "What do we owe vendors?",
@@ -144,19 +193,19 @@ const ASKS = [
   },
   {
     q: "What is overdue?",
-    a: "Open tasks — new, in progress and deferred — with title, priority, property, assignee and due date, overdue first.",
+    a: "Open tasks (new, in progress and deferred) with title, priority, property, assignee and due date, overdue first.",
   },
   {
-    q: "Brief me on everything.",
+    q: "Brief me on everything",
     a: "Occupancy and vacancies, delinquency, unpaid bills, open work orders and tasks, and expiring leases. One request, all five run at once.",
   },
   {
     q: "Who is Marcus Whitfield?",
-    a: "Resolved across tenants, owners and vendors, with the property and whether the tenancy is current. A lease that has ended is marked FORMER on the row rather than left for you to infer.",
+    a: "Resolved across tenants, owners and vendors, with the property and whether the tenancy is current. A lease that has ended is marked FORMER on the row, so you don't have to work it out.",
   },
   {
     q: "Which vendor cost us the most this year?",
-    a: "No fixed report covers this, so Occupella writes the query. It runs inside a read-only Postgres transaction against views scoped to your company, and anything that is not a single clean SELECT is refused before it executes.",
+    a: "No fixed report covers this, so Occupella writes the query. It runs inside a read-only Postgres transaction against views scoped to your company, and anything that is not a single clean SELECT is refused before it runs.",
   },
 ];
 
@@ -171,332 +220,382 @@ const WRITES = [
   "Add a note to a task, a work order or a vendor",
   "Post a charge to a lease ledger",
   "Record a payment against a lease",
-  "Record a move-out — and undo it",
+  "Record a move-out, and undo it",
   "Share a file with a tenant or an owner",
-];
-
-const HONESTY = [
-  {
-    t: "A truncated list is never evidence of absence.",
-    b: "When a list is cut short, the answer says how many it showed, out of how many, and what it searched — and it is forbidden from concluding that the thing you asked about does not exist.",
-  },
-  {
-    t: "A failed lookup reads as a failed lookup.",
-    b: "If Buildium refuses the connection, the answer says the connection is broken. It does not say you have no work orders. The same rule covers a document search that timed out and a specialist that ran out of turns.",
-  },
-  {
-    t: "Every answer carries an as-of line.",
-    b: "Answers come from a synced copy of your account, so each one says when that copy was last refreshed. A core table more than 26 hours stale gets a named warning in the answer itself.",
-  },
-  {
-    t: "It says when it ran out of time.",
-    b: "A question that runs long stops at a soft deadline and writes up what it had already gathered, labelled as partial and naming what it did not get to. A blank screen is the failure this exists to avoid.",
-  },
 ];
 
 /**
  * ⚠ The Fair Housing section is its own thing on this page rather than a
- * bullet in the trust list (founder direction, 2026-09-04). It is the one
+ * bullet in the safeguards (founder direction, 2026-09-04). It is the one
  * guardrail a property manager already loses sleep over, and the
- * decline-then-offer-a-proxy rule below is genuinely uncommon — most products
- * refuse the direct question and then hand over school ratings.
+ * no-proxy-after-declining rule is uncommon.
  */
 const FAIR_HOUSING = [
-  "It will not research or report who lives in an area — race, religion, national origin, familial status, disability, or any proxy for them.",
-  "It will not help write a screening rule that turns on a protected class, including source of income where that is protected.",
-  "It will not make or draft a decision on a housing application. That tool exists in the codebase and is deliberately switched off.",
-  "After it declines, it will not offer school ratings or crime statistics as a substitute — the workaround most systems fall into, and steering either way.",
-  "Every outbound message drafted for a resident is screened against the same rules before it reaches the approval card.",
+  "It won't research or report who lives in an area by race, religion, national origin, familial status, disability, or any proxy for them.",
+  "It won't help write a screening rule that turns on a protected class, including source of income where that is protected.",
+  "Occupella doesn't make or draft decisions on housing applications.",
+  "After it declines, it won't offer school ratings or crime statistics as a substitute. Those are the common workaround, and they steer just the same.",
+  "Every message drafted for a resident is screened against the same rules before you see it.",
 ];
 
-const PLACE = [
+const PLACE: Block[] = [
   {
     t: "Is this address in a flood zone?",
-    b: "Answered off FEMA's National Flood Hazard Layer at the property's own coordinates — the zone letter, whether it sits in a Special Flood Hazard Area, and what that means for insurance. Not a guess from the ZIP code.",
+    b: "Answered from FEMA's National Flood Hazard Layer at the property's own coordinates: the zone letter, whether it sits in a Special Flood Hazard Area, and what that means for insurance. It doesn't guess from the ZIP code.",
   },
   {
     t: "How does this rent compare with HUD's?",
-    b: "HUD publishes a fair market rent per area per bedroom count. Occupella pulls the figure for the property's ZIP and puts your rent next to it, by unit mix, so the comparison is to the right column.",
+    b: "HUD publishes a fair market rent per area per bedroom count. Occupella pulls the figure for the property's ZIP and puts your rent next to it, by unit mix, so you compare against the right column.",
   },
   {
     t: "Which of my properties are within 150 miles of here?",
-    b: "A real radius search over your portfolio, with each distance. The kind of question a list of addresses cannot answer and a map you have to read yourself answers slowly.",
+    b: "A radius search over your portfolio, with the distance to each property.",
   },
   {
-    t: "Every property is placed, once.",
-    b: "Addresses are geocoded against the US Census geocoder and kept, so the location questions above do not re-look-up anything. Maps are rendered from OpenStreetMap tiles.",
+    t: "Every property is placed once",
+    b: "Addresses are geocoded against the US Census geocoder and stored, so the questions above don't look anything up again. Maps are drawn from OpenStreetMap tiles.",
   },
 ];
 
-const LAW = [
+const LAW: Block[] = [
   {
-    t: "Deposit deadlines and caps.",
-    b: "Ask when a deposit has to go back after a move-out and it answers with the deadline for that property's state and the cap on what may be withheld — with the statute named.",
+    t: "Deposit deadlines and caps",
+    b: "Ask when a deposit has to go back after a move-out and it answers with the deadline for that property's state and the cap on what may be withheld, with the statute named.",
   },
   {
-    t: "The date, computed.",
-    b: "Not “within 30 days.” The actual calendar date, counted from the move-out on the lease in front of it.",
+    t: "The date, computed",
+    b: "It gives the actual calendar date, counted from the move-out on the lease, instead of “within 30 days.”",
   },
   {
-    t: "Notice periods and late-fee rules.",
+    t: "Notice periods and late-fee rules",
     b: "The same treatment for the other state-level numbers a manager has to get right, cited the same way.",
   },
   {
-    t: "It shows its source.",
-    b: "When the answer comes from the public web rather than your books, it carries a link back to what it read. Your lawyer is still your lawyer, and every one of these says so.",
+    t: "It shows its source",
+    b: "When the answer comes from the public web rather than your books, it links to what it read. Every one of these answers also tells you to check with your lawyer.",
   },
 ];
 
-const CONTEXT = [
+const HONESTY: Block[] = [
   {
-    t: "Tell it something once.",
-    b: "“Sarah Chen prefers email only.” “We use Redbud for anything electrical.” It holds that per company and brings it back on a later question, and identifiers are stripped before anything is stored.",
+    t: "A cut-off list is never evidence of absence",
+    b: "When a list is cut short, the answer says how many it showed, out of how many, and what it searched. It is not allowed to conclude that the thing you asked about doesn't exist.",
   },
   {
-    t: "It builds on what it already flagged.",
-    b: "Before it looks anything up it checks what it has noticed about your portfolio — a payment a tenant promised in an email, the reminders it raised about missed rent and expiring leases. “Where do we stand on 4B” continues last week rather than starting over.",
+    t: "A failed lookup reads as a failed lookup",
+    b: "If Buildium refuses the connection, the answer says the connection is broken. It does not say you have no work orders. The same rule covers a document search that timed out and a specialist that ran out of turns.",
   },
   {
-    t: "Ask a follow-up on the card itself.",
-    b: "“Has this unit done this before?” “Who did we use last time?” Typed into the card, answered in the card, with that event's property, unit and task already in context.",
+    t: "Every answer has an as-of line",
+    b: "Answers come from a synced copy of your account, so each one says when that copy was last refreshed. A core table more than 26 hours stale gets a named warning in the answer itself.",
   },
   {
-    t: "Anything from outside is data, not instruction.",
-    b: "A resident's typed work-order description, an email body, a file from Drive, a web snippet — all fenced before the model sees them, so text written by somebody else cannot tell Occupella what to do.",
-  },
-];
-
-const TRUST = [
-  {
-    icon: BELL,
-    text: "Nothing auto-sends. Every message and every write to Buildium stops at a card showing the exact outbound payload — not a summary of it — which you can edit before approving.",
-  },
-  {
-    icon: CHECK,
-    text: "A payment, a charge and closing a work order additionally require a manager or an admin, and refuse outright if the role cannot be verified. Buildium cannot undo any of the three.",
-  },
-  {
-    icon: CHECK,
-    text: "Each approved action claims a lock before the Buildium call, so a double-click, a retry or a restart cannot fire the same charge twice. A write that might have half-landed is flagged for review and never retried automatically.",
-  },
-  {
-    icon: SHIELD,
-    text: "One company's data never reaches another's. Every query is scoped to your company, and a test reads every query in the codebase to keep it that way.",
-  },
-  {
-    icon: LOCK,
-    text: "Your Buildium keys are encrypted at rest, entered once and never shown again. Disconnect and the copy of your data is deleted — there is no keep-my-data mode.",
-  },
-  {
-    icon: LOCK,
-    text: "Buildium record numbers, tenant emails and phone numbers are stripped out of the reply as it is written, so an identifier never reaches the screen even briefly.",
+    t: "It says when it ran out of time",
+    b: "A long question stops at a soft deadline and writes up what it had already gathered, labelled as partial and naming what it didn't get to.",
   },
 ];
 
-const CONNECTS = [
+const CONTEXT: Block[] = [
   {
+    t: "Tell it something once",
+    b: "“Sarah Chen prefers email only.” “We use Redbud for anything electrical.” It keeps that per company and brings it back on a later question, and identifiers are stripped before anything is stored.",
+  },
+  {
+    t: "It builds on what it already flagged",
+    b: "Before it looks anything up, it checks what it has already noticed about your portfolio: a payment a tenant promised in an email, the reminders it raised about missed rent and expiring leases. “Where do we stand on 4B” picks up from last week.",
+  },
+  {
+    t: "Ask a follow-up on the card itself",
+    b: "“Has this unit done this before?” “Who did we use last time?” Typed into the card and answered in the card, with that event's property, unit and task already in context.",
+  },
+  {
+    t: "Outside text is treated as data",
+    b: "A resident's work-order description, an email body, a file from Drive, a web snippet: each is fenced off before the model sees it, so text written by someone else can't give Occupella instructions.",
+  },
+];
+
+// TODO(brandon): confirm autonomous notes flag is off. The first safeguard
+// used to read "Nothing auto-sends. Every message and every write to
+// Buildium stops at a card showing the exact outbound payload, which you can
+// edit before approving." It comes back when the flag is confirmed off.
+const SAFEGUARDS: Block[] = [
+  {
+    t: "Role checks on money and closures",
+    b: "A payment, a charge and closing a work order also require a manager or an admin, and are refused outright if the role can't be verified. Buildium can't undo any of the three.",
+  },
+  {
+    t: "No double charges",
+    b: "Each approved action takes a lock before the Buildium call, so a double-click, a retry or a restart can't fire the same charge twice. A write that might have half-landed is flagged for review and never retried automatically.",
+  },
+  {
+    t: "Your data stays in your company",
+    b: "Every query is scoped to your company, and a test reads every query in the codebase to keep it that way.",
+  },
+  {
+    t: "Encrypted keys, deleted on disconnect",
+    b: "Your Buildium keys are encrypted at rest, entered once and never shown again. Disconnect and the copy of your data is deleted. There is no option to keep it.",
+  },
+  {
+    t: "Identifiers kept off the screen",
+    b: "Buildium record numbers, tenant emails and phone numbers are stripped from the reply as it is written, so an identifier never reaches the screen, even briefly.",
+  },
+];
+
+const CONNECTS: Block[] = [
+  {
+    // TODO(brandon): confirm autonomous notes flag is off; this line ended
+    // "and writes back only with your approval" until then.
     t: "Buildium",
-    b: "The system of record. One API key, entered once. Occupella mirrors your account so it can answer without waiting on the API, and writes back only with your approval.",
+    b: "The system of record. One API key, entered once. Occupella keeps a synced copy of your account so it can answer without waiting on the API.",
   },
   {
     t: "Gmail",
-    b: "Read a thread for context and send an approved reply from your own address.",
+    b: "Reads a thread for context and sends an approved reply from your own address.",
   },
   {
     t: "Google Calendar",
-    b: "Check availability and put approved appointments on the calendar.",
+    b: "Checks availability and puts approved appointments on the calendar.",
   },
   {
     t: "Google Drive",
-    b: "Find and read the documents your company already keeps — SOPs, templates, vendor agreements. Docs and Sheets included.",
+    b: "Finds and reads the documents your company already keeps, such as SOPs, templates and vendor agreements. Docs and Sheets included.",
   },
 ];
+
+function Blocks({ items, cols }: { items: Block[]; cols?: 3 }) {
+  return (
+    <div className="ft-blocks" data-cols={cols}>
+      {items.map((c) => (
+        <div className="ft-block" key={c.t}>
+          <h3 className="ft-block-t">{c.t}</h3>
+          <p className="ft-block-b">{c.b}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Head({ title, children }: { title: string; children?: React.ReactNode }) {
+  return (
+    <Reveal>
+      <div className="lp-section-head">
+        <h2 className="lp-h2">{title}</h2>
+        {children ? <p className="lp-body">{children}</p> : null}
+      </div>
+    </Reveal>
+  );
+}
+
+/**
+ * The loop: which step is in view decides which crop the sticky column
+ * shows. The band is the middle of the viewport, so a step takes over when
+ * it reaches the reader's eye line, not when its first pixel appears.
+ * Starts on step one, which is also what the prerendered HTML shows.
+ */
+function Loop() {
+  const [on, setOn] = useState(0);
+  const steps = useRef<(HTMLDivElement | null)[]>([]);
+  useEffect(() => {
+    if (typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) setOn(Number((e.target as HTMLElement).dataset.i));
+        }
+      },
+      { rootMargin: "-45% 0px -45% 0px" },
+    );
+    for (const el of steps.current) if (el) io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  return (
+    <div className="ft-split">
+      <div className="ft-steps">
+        {READS.map((c, i) => (
+          <div
+            className="ft-step"
+            key={c.t}
+            data-i={i}
+            ref={(el) => {
+              steps.current[i] = el;
+            }}
+          >
+            <h3 className="ft-step-t">{c.t}</h3>
+            <p className="ft-step-b">{c.b}</p>
+            <div className="ft-step-crop">{c.crop()}</div>
+          </div>
+        ))}
+      </div>
+      <div className="ft-sticky" aria-hidden="true">
+        {READS.map((c, i) => (
+          <div key={c.t} data-on={i === on}>
+            {c.crop()}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function Features() {
   return (
     <SitePageShell
       active="features"
-      title="Agentic AI for leasing and operations."
+      title="What Occupella does, in detail"
       lede={
         <>
-          Buildium records what happened. Occupella reads every event as it arrives, gathers the
-          history around it, drafts what comes next, and waits for you to approve it. Below is
-          what it does, in detail, with the limits named where they exist.
+          {/* TODO(brandon): confirm autonomous notes flag is off. This lede
+              ended "and waits for you to approve it"; restore it then. */}
+          Occupella reads your Buildium events as they arrive, gathers the history around each
+          one and drafts what comes next. This page lists what it does, with the limits named
+          where they exist.
         </>
       }
-      css={css}
+      css={css + cropCss}
       close={{
-        title: "See it on your own portfolio.",
-        body: "Connect Buildium and watch it triage a real work order from your account. Fourteen days, no card.",
+        title: "See it on your own portfolio",
+        body: "Connect Buildium and watch it handle a real work order from your account. 14 days, no card.",
       }}
     >
-      {/* The tour before the detail. Somebody who lands on /features from the
-          nav has not seen the product at all, and eleven sections of prose is
-          the wrong first thing to hand them. */}
-      <section className="lp-section">
+      {/* The page's one full-width visual. Somebody who lands on /features
+          from the nav has not seen the product at all.
+          TODO(brandon): the tour shows the Leasing board, and Leasing is in
+          carrier review. Re-cut it without Leasing, or confirm it can stay. */}
+      <section className="lp-section" style={{ paddingTop: 56 }}>
         <div className="lp-wrap">
           <DemoPanel
             src="/demo/product-tour.mp4"
-            caption="Inbox, Operations and Leasing — the three surfaces, in under twenty seconds."
+            poster="/demo/product-tour-poster.jpg"
+            caption="The Inbox and Operations pages, in under twenty seconds."
             width={1440}
             height={900}
           />
         </div>
       </section>
 
-      <section className="lp-section">
+      <section className="lp-section ft-anchor" id="the-loop">
         <div className="lp-wrap">
-          <Reveal>
-            <div className="lp-section-head">
-              <div className="lp-eyebrow">The loop</div>
-              <h2 className="lp-h2">Every event, read and answered.</h2>
-              <p className="lp-body">
-                This is the part of the day Buildium leaves to you: something happens, you go and
-                find out what else is true about it, and then you write to somebody.
-              </p>
-            </div>
-          </Reveal>
-          <Reveal delay={60}>
-            <div className="lp-grid ft-cards">
-              {READS.map((c) => (
-                <div className="ft-card" key={c.t}>
-                  <div className="ft-card-t">{c.t}</div>
-                  <div className="ft-card-b">{c.b}</div>
-                </div>
-              ))}
-            </div>
-          </Reveal>
-          {/* ⚠ NEEDS A RE-SHOOT, and it cannot be fixed by cropping.
-              The card itself is accurate — the AC work order, the three
-              noticed bullets, the drafted reply, the approval button are all
-              shipped. But the Today strip down the left carries "3 leads going
-              cold" and "Jordan Reyes is going cold", which are LEASING rows,
-              and Leasing is closed for every company on the deployment. This
-              page marks Leasing "in carrier review" three sections down, so
-              the screenshot quietly contradicts the disclosure.
-              Those two rows sit BETWEEN real ones (payment promises, $4,020
-              owed, 4 work orders stalled), so no crop removes them without
-              removing the rail. The fix is a fresh capture with the lead
-              producers absent from the strip. Left in place deliberately
-              rather than deleted: the rest of the image is the single best
-              artifact on the site, and a missing hero is a worse page than a
-              slightly overstated rail. Re-shoot, then delete this note. */}
-          <Reveal delay={120}>
-            <div className="ft-shot">
-              <img
-                src="/shots/inbox.png"
-                alt="An AC work order in Occupella's inbox: what it noticed across the unit's history, and a drafted tenant reply waiting for approval"
-                loading="lazy"
-              />
-            </div>
-          </Reveal>
-          <div className="ft-caption">
-            A work order — context gathered, reply drafted, waiting on approval.
-          </div>
+          <Head title="How an event is handled">
+            When something happens in Buildium, Occupella looks up the history around it and
+            drafts the reply or the next task. The examples below follow one work order.
+          </Head>
+          <Loop />
         </div>
       </section>
 
-      <section className="lp-section">
+      <section className="ft-band ft-anchor" id="ask-it-anything">
         <div className="lp-wrap">
-          <Reveal>
-            <div className="lp-section-head">
-              <div className="lp-eyebrow">Ask it anything</div>
-              <h2 className="lp-h2">The morning questions, answered in one go.</h2>
-              <p className="lp-body">
+          <div className="ft-split" data-flip="true" style={{ marginTop: 0 }}>
+            <div>
+              <Head title="Reports from your Buildium data">
                 Ask in plain English. The answer comes from a synced copy of your Buildium
-                account, so it arrives without crawling the API record by record — and it comes
-                back as a table you can sort, not a paragraph with figures pasted into it.
-              </p>
+                account, so it doesn&rsquo;t crawl the API record by record, and it comes back
+                as a table you can sort.
+              </Head>
+              <div className="ft-qa" style={{ marginTop: 32 }}>
+                {ASKS.map((r) => (
+                  <div className="ft-qa-row" key={r.q}>
+                    <h3 className="ft-qa-q">{r.q}</h3>
+                    <p className="ft-qa-a">{r.a}</p>
+                  </div>
+                ))}
+              </div>
             </div>
-          </Reveal>
-          <Reveal delay={60}>
-            <div className="ft-qa">
-              {ASKS.map((r) => (
-                <div className="ft-qa-row" key={r.q}>
-                  <div className="ft-qa-q">{r.q}</div>
-                  <div className="ft-qa-a">{r.a}</div>
-                </div>
-              ))}
+            <div className="ft-sticky-crop">
+              <DelinquencyCrop />
+              <p className="ft-caption">The answer to &ldquo;who is behind on rent?&rdquo;, with example data.</p>
             </div>
-          </Reveal>
-          {/* ⚠ NOT report.png. THREE reasons, and the first one is fatal on a
-              page whose own header promises everything ships today:
-                1. The image contains the readable words "Demo mode — no email
-                   sent." A screenshot that says demo mode, on a page claiming
-                   to show the product, is the claim contradicting itself.
-                2. It shows a CHART card. Those are built, wired and have never
-                   once been produced by a real question in production.
-                3. Its headline figure is NOI, which is implemented nowhere.
-              property.png is cropped from the real Properties page and every
-              figure in it — occupancy, rent roll, open work orders, delinquent
-              balance, and the two work orders with their priority and status —
-              is mirror-backed and shipped. The crop ENDS above the Renewals
-              card on purpose: that card offers "Draft renewal", and lease
-              renewal is deliberately dark (no clean undo). Do not restore the
-              uncropped cockpit.png. */}
-          <Reveal delay={160}>
-            <div className="ft-shot">
-              <img
-                src="/shots/property.png"
-                alt="A property in Occupella: occupancy, rent roll, open work order count and delinquent balance, above the list of open work orders with their priority and status"
-                loading="lazy"
-              />
-            </div>
-          </Reveal>
-          <div className="ft-caption">
-            One property, from the synced copy of your account — with the open work at the bottom.
           </div>
         </div>
       </section>
 
-      <section className="lp-section">
+      <section className="lp-section ft-anchor" id="writing-back">
         <div className="lp-wrap">
-          <Reveal>
-            <div className="lp-section-head">
-              <div className="lp-eyebrow">Writing back</div>
-              <h2 className="lp-h2">It changes Buildium. It asks first, every time.</h2>
-              <p className="lp-body">
-                Reading is half the job. Occupella writes to your Buildium account as well, behind
-                a card that shows the exact record and the exact change before anything leaves.
-              </p>
+          <div className="ft-split" style={{ marginTop: 0 }}>
+            <div>
+              {/* TODO(brandon): confirm autonomous notes flag is off. This
+                  paragraph said every change goes "behind a card that shows
+                  the exact record and the exact change before anything
+                  leaves"; restore it then. */}
+              <Head title="Changes it can make in Buildium">
+                Occupella can also write to your Buildium account. These are the changes it can
+                make.
+              </Head>
+              <div className="ft-list" style={{ marginTop: 28 }}>
+                {WRITES.map((w) => (
+                  <div className="ft-list-item" key={w}>
+                    <Icon d={CHECK} size={15} />
+                    <span>{w}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          </Reveal>
-          <Reveal delay={60}>
-            <div className="ft-list">
-              {WRITES.map((w) => (
-                <div className="ft-list-item" key={w}>
-                  <Icon d={CHECK} size={14} />
-                  <span>{w}</span>
-                </div>
-              ))}
+            <div className="ft-sticky-crop">
+              <div className="cr-stack">
+                <WorkOrderCard />
+                <ApprovalCrop />
+              </div>
+              <p className="ft-caption">The approval card for a new work order, with example data.</p>
             </div>
-          </Reveal>
+          </div>
         </div>
       </section>
 
-      <section className="lp-section">
+      <section className="lp-section ft-anchor" id="fair-housing">
         <div className="lp-wrap">
-          <Reveal>
-            <div className="lp-section-head">
-              <div className="lp-eyebrow">The fair housing layer</div>
-              <h2 className="lp-h2">The questions it refuses, and the answer it refuses next.</h2>
-              <p className="lp-body">
-                An assistant that answers everything is a liability in this industry. Occupella
-                declines a defined set of questions outright, and the rule that matters most is
-                the second one — what it says after it declines.
-              </p>
-            </div>
-          </Reveal>
-          <Reveal delay={60}>
+          <div className="ft-split" style={{ marginTop: 0 }}>
+            <Head title="Fair housing guardrails">
+              Occupella declines a defined set of questions outright, and it doesn&rsquo;t offer
+              a workaround after it declines.
+            </Head>
             <div className="ft-list">
               {FAIR_HOUSING.map((f) => (
                 <div className="ft-list-item" key={f}>
-                  <Icon d={SHIELD} size={14} />
+                  <Icon d={MINUS} size={15} />
                   <span>{f}</span>
                 </div>
               ))}
             </div>
-          </Reveal>
+          </div>
+        </div>
+      </section>
+
+      <section className="lp-section">
+        <div className="lp-wrap">
+          <Head title="Where your properties are">
+            Buildium stores an address as text. Occupella turns it into a point on the map, which
+            lets it answer flood exposure, how a rent compares with the federal benchmark, and
+            which properties are near which.
+          </Head>
+          <Blocks items={PLACE} />
+        </div>
+      </section>
+
+      <section className="lp-section">
+        <div className="lp-wrap">
+          <Head title="State rules for deposits and fees">
+            A deposit deadline in Colorado is not a deposit deadline in Texas, and the one that
+            applies is where the property sits. Occupella looks it up for that property and does
+            the arithmetic.
+          </Head>
+          <Blocks items={LAW} />
+        </div>
+      </section>
+
+      <section className="lp-section">
+        <div className="lp-wrap">
+          <Head title="When it doesn't know">
+            The costly failure is a confident &ldquo;nothing found&rdquo; when the lookup broke,
+            or a list of five when there were forty. Occupella says so in both cases.
+          </Head>
+          <Blocks items={HONESTY} />
+        </div>
+      </section>
+
+      <section className="lp-section">
+        <div className="lp-wrap">
+          <Head title="What it remembers" />
+          <Blocks items={CONTEXT} />
         </div>
       </section>
 
@@ -504,209 +603,60 @@ export default function Features() {
         <div className="lp-wrap">
           <Reveal>
             <div className="lp-section-head">
-              <div className="lp-eyebrow">Place and hazard</div>
-              <h2 className="lp-h2">It knows where your properties actually are.</h2>
-              <p className="lp-body">
-                Buildium stores an address as text. Occupella turns it into a point on the
-                ground, which is what lets it answer questions your books cannot: flood
-                exposure, how a rent sits against the federal benchmark, and which properties
-                are near which.
-              </p>
-            </div>
-          </Reveal>
-          <Reveal delay={60}>
-            <div className="lp-grid ft-cards">
-              {PLACE.map((c) => (
-                <div className="ft-card" key={c.t}>
-                  <div className="ft-card-t">{c.t}</div>
-                  <div className="ft-card-b">{c.b}</div>
-                </div>
-              ))}
-            </div>
-          </Reveal>
-        </div>
-      </section>
-
-      <section className="lp-section">
-        <div className="lp-wrap">
-          <Reveal>
-            <div className="lp-section-head">
-              <div className="lp-eyebrow">Local rules</div>
-              <h2 className="lp-h2">The numbers that change at the state line.</h2>
-              <p className="lp-body">
-                A deposit deadline in Colorado is not a deposit deadline in Texas, and the one
-                that applies is the one where the property sits. Occupella looks it up for that
-                property and does the arithmetic.
-              </p>
-            </div>
-          </Reveal>
-          <Reveal delay={60}>
-            <div className="lp-grid ft-cards">
-              {LAW.map((c) => (
-                <div className="ft-card" key={c.t}>
-                  <div className="ft-card-t">{c.t}</div>
-                  <div className="ft-card-b">{c.b}</div>
-                </div>
-              ))}
-            </div>
-          </Reveal>
-        </div>
-      </section>
-
-      <section className="lp-section">
-        <div className="lp-wrap">
-          <Reveal>
-            <div className="lp-section-head">
-              <div className="lp-eyebrow">Honesty</div>
-              <h2 className="lp-h2">What it says when it does not know.</h2>
-              <p className="lp-body">
-                The failure that costs you money is not a wrong number. It is a confident
-                &ldquo;nothing found&rdquo; when the lookup broke, or a list of five when there
-                were forty. Occupella is built to make both of those say so.
-              </p>
-            </div>
-          </Reveal>
-          <Reveal delay={60}>
-            <div className="lp-grid ft-cards">
-              {HONESTY.map((c) => (
-                <div className="ft-card" key={c.t}>
-                  <div className="ft-card-t">{c.t}</div>
-                  <div className="ft-card-b">{c.b}</div>
-                </div>
-              ))}
-            </div>
-          </Reveal>
-        </div>
-      </section>
-
-      <section className="lp-section">
-        <div className="lp-wrap">
-          <Reveal>
-            <div className="lp-section-head">
-              <div className="lp-eyebrow">Memory and context</div>
-              <h2 className="lp-h2">It remembers, so you are not the memory.</h2>
-            </div>
-          </Reveal>
-          <Reveal delay={60}>
-            <div className="lp-grid ft-cards">
-              {CONTEXT.map((c) => (
-                <div className="ft-card" key={c.t}>
-                  <div className="ft-card-t">{c.t}</div>
-                  <div className="ft-card-b">{c.b}</div>
-                </div>
-              ))}
-            </div>
-          </Reveal>
-        </div>
-      </section>
-
-      <section className="lp-section">
-        <div className="lp-wrap">
-          <Reveal>
-            <div className="lp-section-head">
-              <div className="lp-eyebrow">Leasing</div>
               <span className="ft-status">
                 <Icon d={MINUS} size={12} />
                 In carrier review
               </span>
-              <h2 className="lp-h2">Leads on your own number, once the carriers clear it.</h2>
+              <h2 className="lp-h2">Leasing, once carriers approve you</h2>
               {/* ⚠ THE STATUS SENTENCE LEADS. Leasing is code-complete and
                   reachable by nobody: no company on the deployment has a
                   provisioned number, and no A2P registration has completed.
                   Describing the pipeline first and disclosing at the bottom
-                  would be selling a section a new customer cannot open. If a
-                  future edit moves the disclosure below the fold, it has
-                  turned this page into the thing its own header forbids. */}
+                  would be selling a section a new customer cannot open.
+                  TODO(brandon): the two "Working today" blocks also need
+                  HELIXIS_CRM__ENABLED on in Render. Confirm it, or say
+                  they open later too. */}
               <p className="lp-body">
-                US carriers vet every business that sends application-to-person texts, and that
-                review runs about ten to fifteen days. Nobody on any plan can text a lead before
-                it clears, so this section is honest about which half is working today.
+                US carriers vet every business that sends application-to-person texts, and the
+                review takes about ten to fifteen days. Nobody on any plan can text a lead before
+                it clears. Here is what works today and what opens at approval.
               </p>
             </div>
           </Reveal>
-          <Reveal delay={60}>
-            <div className="lp-grid ft-cards" data-cols="3">
-              <div className="ft-card">
-                <div className="ft-card-t">Working today: the paperwork.</div>
-                <div className="ft-card-b">
-                  You fill in your legal business name, whether you have an EIN, your address, an
-                  authorised contact, and one consent checkbox. Occupella writes the campaign
-                  description, the opt-in language, the sample messages and the public privacy and
-                  terms pages the carrier fetches — the four things registrations get rejected
-                  over.
-                </div>
-              </div>
-              <div className="ft-card">
-                <div className="ft-card-t">Working today: the compliance rails.</div>
-                <div className="ft-card-b">
-                  A consent ledger you manage yourself, with revocations recorded rather than
-                  deleted. STOP honoured across every number you own. Quiet hours computed from
-                  the recipient&rsquo;s own state, including the four that are stricter than
-                  federal.
-                </div>
-              </div>
-              <div className="ft-card">
-                <div className="ft-card-t">At approval: the pipeline opens.</div>
-                <div className="ft-card-b">
-                  A number belonging to your company — not a shared one — bought and wired
-                  automatically the day carriers clear you. Leads arrive by text into a stage
-                  board with a drafted first reply, quiet leads flagged, and click-to-call from
-                  the browser.
-                </div>
-              </div>
-            </div>
-          </Reveal>
+          <Blocks
+            cols={3}
+            items={[
+              {
+                t: "Working today: the paperwork",
+                b: "You fill in your legal business name, whether you have an EIN, your address, an authorised contact and one consent checkbox. Occupella writes the campaign description, the opt-in language, the sample messages and the public privacy and terms pages the carrier checks. Those four are what registrations get rejected over.",
+              },
+              {
+                t: "Working today: the compliance rails",
+                b: "A consent ledger you manage yourself, with revocations recorded rather than deleted. STOP honoured across every number you own. Quiet hours computed from the recipient's own state, including the four that are stricter than federal.",
+              },
+              {
+                t: "At approval: the pipeline opens",
+                b: "A number that belongs to your company, not a shared one, bought and set up the day carriers clear you. Leads arrive by text into a stage board with a drafted first reply, quiet leads flagged, and click-to-call from the browser.",
+              },
+            ]}
+          />
         </div>
       </section>
 
       <section className="lp-section">
         <div className="lp-wrap">
-          <Reveal>
-            <div className="lp-section-head">
-              <div className="lp-eyebrow">Connects to</div>
-              <h2 className="lp-h2">The accounts you already use.</h2>
-            </div>
-          </Reveal>
-          <Reveal delay={60}>
-            {/* ⚠ Two columns, not three: there are FOUR of these, and a
-                three-column grid leaves a dead cell that shows the divider
-                colour and reads as a missing card. Add a fifth integration
-                and this wants data-cols="3" again — count them before you
-                pick. */}
-            <div className="lp-grid ft-cards">
-              {CONNECTS.map((c) => (
-                <div className="ft-card" key={c.t}>
-                  <div className="ft-card-t">{c.t}</div>
-                  <div className="ft-card-b">{c.b}</div>
-                </div>
-              ))}
-            </div>
-          </Reveal>
+          <Head title="Works with" />
+          <Blocks items={CONNECTS} />
         </div>
       </section>
 
       <section className="lp-section">
         <div className="lp-wrap">
-          <Reveal>
-            <div className="lp-section-head">
-              <div className="lp-eyebrow">Control</div>
-              <h2 className="lp-h2">It asks before it acts.</h2>
-              <p className="lp-body">
-                Occupella changes records in your Buildium account and sends email from your
-                address. So the default everywhere is that it stops and shows you first.
-              </p>
-            </div>
-          </Reveal>
-          <Reveal delay={60}>
-            <div className="lp-grid lp-trust">
-              {TRUST.map((t) => (
-                <div className="lp-trust-item" key={t.text}>
-                  <Icon d={t.icon} />
-                  <span>{t.text}</span>
-                </div>
-              ))}
-            </div>
-          </Reveal>
+          <Head title="Safeguards on changes and data">
+            Occupella changes records in your Buildium account and sends email from your address.
+            These are the controls around that.
+          </Head>
+          <Blocks items={SAFEGUARDS} />
         </div>
       </section>
     </SitePageShell>
