@@ -160,6 +160,35 @@ export const cropCss = `
   .cr-today { padding: 12px 16px; }
   .cr-today-t { font-weight: 600; font-size: 15px; }
   .cr-today-s { font-size: 14px; color: var(--ink-muted); }
+  /* the Leasing board (CrmPage): five stage columns of lead cards */
+  .cr-board-scroll { overflow-x: auto; }
+  .cr-board { display: grid; grid-template-columns: repeat(5, minmax(170px, 1fr)); gap: 12px; padding: 16px; min-width: 900px; background: var(--app-raised); }
+  .cr-col-h { display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; color: var(--ink-muted); padding: 0 2px 8px; }
+  .cr-col { display: flex; flex-direction: column; gap: 8px; }
+  .cr-lead { background: #fff; border: 1px solid var(--app-line); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+  .cr-lead-top { display: flex; align-items: center; gap: 8px; }
+  .cr-av { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 600; background: var(--app-blue-soft); color: var(--app-blue); flex: none; }
+  .cr-lead-n { font-size: 14px; font-weight: 600; }
+  .cr-lead-u { font-size: 13px; color: var(--ink-muted); }
+  .cr-lead-note { font-size: 13px; line-height: 1.4; color: var(--ink-subtle); }
+  .cr-chips-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 2px; }
+  .cr-chip { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; padding: 2px 6px; border-radius: 4px; background: rgba(14, 22, 32, 0.05); color: var(--ink-subtle); }
+  .cr-chip[data-k="you"] { background: var(--app-blue-soft); color: var(--app-blue); }
+  .cr-moved { font-size: 12px; color: var(--ink-faint); }
+
+  /* a lead's drawer: what it noticed, then the drafted reply */
+  .cr-drawer { padding: 20px 22px; }
+  .cr-drawer-h { display: flex; align-items: center; gap: 4px 10px; flex-wrap: wrap; }
+  .cr-drawer-h > .cr-muted { flex-basis: 100%; }
+  @media (min-width: 641px) { .cr-drawer-h > .cr-muted { flex-basis: auto; } }
+  .cr-drawer-h b { font-size: 18px; }
+  .cr-drawer .cr-noticed { padding: 16px 0 0; }
+  .cr-drawer .cr-text { background: #fff; }
+
+  /* the "going cold" list */
+  .cr-cold-h { padding: 12px 16px; font-weight: 600; border-bottom: 1px solid var(--app-line); background: var(--app-raised); }
+  .cr-cold-row { display: flex; justify-content: space-between; gap: 12px; padding: 11px 16px; border-bottom: 1px solid var(--app-line); font-size: 14px; }
+  .cr-cold-row:last-child { border-bottom: 0; }
 `;
 
 /** A crop is a picture of the app. Screen readers get its label, not its rows. */
@@ -374,6 +403,112 @@ export function TodayRow({ title, sub, label }: { title: string; sub?: string; l
     <Crop label={label} className="cr-today">
       <div className="cr-today-t">{title}</div>
       {sub ? <div className="cr-today-s">{sub}</div> : null}
+    </Crop>
+  );
+}
+
+type Lead = { i: string; n: string; u: string; note?: string; you?: boolean; bld?: boolean; moved?: string };
+
+/**
+ * The Leasing board, with the demo account's leads (AgenticHelixis
+ * frontend/src/services/demoData.ts demoCrmBoard). Only the moves the code
+ * makes are shown: a sent reply moves a lead to Contacted
+ * (POST /crm/leads/{id}/reply), and a Buildium applicant moves to Applied or
+ * Leased (webhooks/handlers/applicants.py). The demo's calendar-booked tour
+ * move is left out: it is not confirmed in the backend.
+ */
+const BOARD: { stage: string; leads: Lead[] }[] = [
+  { stage: "New", leads: [{ i: "JR", n: "Jordan Reyes", u: "Maple Court 4B", note: "Asked if 4B is still available. Could tour this weekend.", you: true }] },
+  {
+    stage: "Contacted",
+    leads: [
+      { i: "ED", n: "Elena Duarte", u: "Maple Court 4B", note: "Pet policy and parking answered. Awaiting her reply." },
+      { i: "RB", n: "Renee Bishop", u: "Owner · 6 doors", note: "Intro and rates one-pager sent." },
+    ],
+  },
+  { stage: "Scheduled", leads: [{ i: "PN", n: "Priya Nair", u: "Riverside 2A", note: "Tour booked for Saturday, 2:00 PM." }] },
+  { stage: "Applied", leads: [{ i: "SO", n: "Sam Okafor", u: "Riverside 3A", note: "Application received.", bld: true }] },
+  { stage: "Leased", leads: [{ i: "LF", n: "Leo Franklin", u: "Riverside 3C", note: "Lease signed.", bld: true, moved: "moved 9:14a" }] },
+];
+
+export function LeadBoardCrop() {
+  return (
+    <Crop label="The Leasing board: leads in five stages, New, Contacted, Scheduled, Applied and Leased, each card with the lead's name, unit and latest note.">
+      <div className="cr-board-scroll">
+        <div className="cr-board">
+          {BOARD.map((c) => (
+            <div key={c.stage}>
+              <div className="cr-col-h">
+                <span>{c.stage}</span>
+                <span>{c.leads.length}</span>
+              </div>
+              <div className="cr-col">
+                {c.leads.map((l) => (
+                  <div className="cr-lead" key={l.n}>
+                    <div className="cr-lead-top">
+                      <span className="cr-av">{l.i}</span>
+                      <span className="cr-lead-n">{l.n}</span>
+                    </div>
+                    <span className="cr-lead-u">{l.u}</span>
+                    {l.note ? <span className="cr-lead-note">{l.note}</span> : null}
+                    {l.you || l.bld || l.moved ? (
+                      <div className="cr-chips-row">
+                        {l.you ? <span className="cr-chip" data-k="you">Needs you</span> : null}
+                        {l.bld ? <span className="cr-chip">In Buildium</span> : null}
+                        {l.moved ? <span className="cr-moved">{l.moved}</span> : null}
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Crop>
+  );
+}
+
+/** A lead's drawer: the draft route's signals and drafted reply, from the
+ *  demo account's Jordan Reyes. */
+export function LeadDraftCrop() {
+  return (
+    <Crop label="A lead's drawer: what Occupella noticed about Jordan Reyes, and a drafted reply offering two tour times, with a Send button." className="cr-drawer">
+      <div className="cr-drawer-h">
+        <span className="cr-av">JR</span>
+        <b>Jordan Reyes</b>
+        <span className="cr-muted" style={{ fontSize: 14 }}>Maple Court 4B · New</span>
+      </div>
+      <div className="cr-noticed">
+        <div className="cr-cap">What Occupella noticed</div>
+        <ul>
+          <li>Asking if Maple Court 4B is still available</li>
+          <li>Wants to tour this weekend</li>
+        </ul>
+      </div>
+      <div className="cr-text" style={{ marginTop: 16 }}>
+        Hi Jordan! Yes, 4B is still available — I&rsquo;d be happy to show it to you this weekend.
+        I have Saturday at 2pm or Sunday at 11am open. Which works better for you?
+      </div>
+      <span className="cr-btn" data-k="primary" style={{ marginTop: 12 }}>Send</span>
+    </Crop>
+  );
+}
+
+/** The cold-leads list: active leads quiet for 3+ days, coldest first
+ *  (GET /crm/leads/cold). */
+export function ColdLeadsCrop() {
+  return (
+    <Crop label="Two leads going cold: Jordan Reyes, quiet for 4 days, and Elena Duarte, quiet for 3 days.">
+      <div className="cr-cold-h">2 leads are going cold</div>
+      <div className="cr-cold-row">
+        <span><b>Jordan Reyes</b> <span className="cr-muted">· Maple Court 4B</span></span>
+        <span className="cr-muted">4 days quiet</span>
+      </div>
+      <div className="cr-cold-row">
+        <span><b>Elena Duarte</b> <span className="cr-muted">· Maple Court 4B</span></span>
+        <span className="cr-muted">3 days quiet</span>
+      </div>
     </Crop>
   );
 }

@@ -67,6 +67,19 @@ export const MARKETING_ROUTES: readonly MarketingRoute[] = [
     priority: 0.9,
   },
   {
+    path: "/solutions/leasing",
+    name: "solutions_leasing",
+    // ⚠ Not the planned "Leasing follow-up by text and email": texting waits
+    // on carrier approval, and the title must not say it works today.
+    title: "Leasing pipeline and lead follow-up | Occupella",
+    description:
+      "One board for every lead, a drafted reply for each, and a flag when one goes quiet. Replies send from your Gmail today, and by text after carrier approval.",
+    inSitemap: true,
+    source: "src/solutions/Leasing.tsx",
+    changefreq: "monthly",
+    priority: 0.7,
+  },
+  {
     path: "/sms",
     name: "sms",
     title: "SMS program | Occupella",

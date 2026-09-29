@@ -618,6 +618,9 @@ export default function Features() {
                 review takes about ten to fifteen days. Nobody on any plan can text a lead before
                 it clears. Here is what works today and what opens at approval.
               </p>
+              <a className="lp-textlink" href="/solutions/leasing">
+                How Leasing works, in detail
+              </a>
             </div>
           </Reveal>
           <Blocks
