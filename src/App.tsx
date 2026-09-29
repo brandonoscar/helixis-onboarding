@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { supabase } from "./lib/supabase";
+import { releaseSessionForHandOff, supabase } from "./lib/supabase";
 import { apiFetch, apiJson, APP_URL, BUILDIUM_WEBHOOK_URL } from "./lib/api";
 import { clearWizard, loadWizard, saveWizard } from "./lib/persist";
 import { firstUnmet, meetsRequirements, requirements, strength } from "./lib/passwordStrength";
@@ -1845,7 +1845,10 @@ function StepFinish({
         url = `${APP_URL}/#${frag.toString()}`;
       }
       setAppHref(url);
-      t = window.setTimeout(() => window.location.assign(url), 6000);
+      t = window.setTimeout(() => {
+        releaseSessionForHandOff();
+        window.location.assign(url);
+      }, 6000);
     });
     return () => {
       cancelled = true;
@@ -1940,14 +1943,14 @@ function StepFinish({
         <div className="hint" style={{ textAlign: "center", marginBottom: 4 }}>{statusLine}</div>
       )}
 
-      <a className="btn btn-primary wide" href={appHref} style={{ marginTop: 4 }}>
+      <a className="btn btn-primary wide" href={appHref} style={{ marginTop: 4 }} onClick={() => releaseSessionForHandOff()}>
         Open Occupella → review your Inbox
       </a>
       <div className="hint" style={{ textAlign: "center", marginTop: 8 }}>
         Taking you to Occupella automatically…
       </div>
       <div className="btn-row" style={{ marginTop: 8 }}>
-        <a className="btn btn-ghost" href={appHref} style={{ flex: 1, textAlign: "center" }}>
+        <a className="btn btn-ghost" href={appHref} style={{ flex: 1, textAlign: "center" }} onClick={() => releaseSessionForHandOff()}>
           Invite my team (in-app)
         </a>
         <a
