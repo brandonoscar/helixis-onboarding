@@ -160,6 +160,53 @@ export const cropCss = `
   .cr-today { padding: 12px 16px; }
   .cr-today-t { font-weight: 600; font-size: 15px; }
   .cr-today-s { font-size: 14px; color: var(--ink-muted); }
+  /* the Leasing board (CrmPage): five stage columns of lead cards */
+  .cr-board-scroll { overflow-x: auto; }
+  .cr-board { display: grid; grid-template-columns: repeat(5, minmax(170px, 1fr)); gap: 12px; padding: 16px; min-width: 900px; background: var(--app-raised); }
+  .cr-col-h { display: flex; justify-content: space-between; font-size: 13px; font-weight: 600; color: var(--ink-muted); padding: 0 2px 8px; }
+  .cr-col { display: flex; flex-direction: column; gap: 8px; }
+  .cr-lead { background: #fff; border: 1px solid var(--app-line); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+  .cr-lead-top { display: flex; align-items: center; gap: 8px; }
+  .cr-av { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 600; background: var(--app-blue-soft); color: var(--app-blue); flex: none; }
+  .cr-lead-n { font-size: 14px; font-weight: 600; }
+  .cr-lead-u { font-size: 13px; color: var(--ink-muted); }
+  .cr-lead-note { font-size: 13px; line-height: 1.4; color: var(--ink-subtle); }
+  .cr-chips-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 2px; }
+  .cr-chip { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; padding: 2px 6px; border-radius: 4px; background: rgba(14, 22, 32, 0.05); color: var(--ink-subtle); }
+  .cr-chip[data-k="you"] { background: var(--app-blue-soft); color: var(--app-blue); }
+  .cr-moved { font-size: 12px; color: var(--ink-faint); }
+
+  /* a lead's drawer: what it noticed, then the drafted reply */
+  .cr-drawer { padding: 20px 22px; }
+  .cr-drawer-h { display: flex; align-items: center; gap: 4px 10px; flex-wrap: wrap; }
+  .cr-drawer-h > .cr-muted { flex-basis: 100%; }
+  @media (min-width: 641px) { .cr-drawer-h > .cr-muted { flex-basis: auto; } }
+  .cr-drawer-h b { font-size: 18px; }
+  .cr-drawer .cr-noticed { padding: 16px 0 0; }
+  .cr-drawer .cr-text { background: #fff; }
+
+  /* the "going cold" list */
+  .cr-cold-h { padding: 12px 16px; font-weight: 600; border-bottom: 1px solid var(--app-line); background: var(--app-raised); }
+  .cr-cold-row { display: flex; justify-content: space-between; gap: 12px; padding: 11px 16px; border-bottom: 1px solid var(--app-line); font-size: 14px; }
+  .cr-cold-row:last-child { border-bottom: 0; }
+
+  /* the email draft card (show_email_draft): To, Subject, body, and the
+     numbered approaches the user slides through */
+  .cr-mail { padding: 18px 20px; }
+  .cr-mail-f { display: flex; gap: 10px; font-size: 14px; padding: 6px 0; border-bottom: 1px solid var(--app-line); }
+  .cr-mail-f span:first-child { width: 64px; color: var(--ink-muted); flex: none; }
+  .cr-mail .cr-tabs { margin: 0 0 12px; }
+  .cr-mail-body { margin-top: 12px; font-size: 15px; line-height: 1.55; white-space: pre-line; }
+  /* property snapshot (property_snapshot tool / PropertyCockpit) */
+  .cr-snap { padding: 18px 20px; }
+  .cr-snap-h { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .cr-snap-h b { font-size: 18px; }
+  .cr-kv { margin-top: 14px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--app-line); border: 1px solid var(--app-line); border-radius: 8px; overflow: hidden; }
+  @media (min-width: 560px) { .cr-kv { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  .cr-kv > div { background: #fff; padding: 10px 12px; }
+  .cr-kv span { display: block; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-muted); }
+  .cr-kv b { display: block; margin-top: 2px; font-size: 16px; font-variant-numeric: tabular-nums; }
+  .cr-asof { margin-top: 12px; font-size: 13px; color: var(--ink-muted); }
 `;
 
 /** A crop is a picture of the app. Screen readers get its label, not its rows. */
@@ -316,7 +363,7 @@ export function DelinquencyCrop() {
             <tr>
               <td>James Chen</td>
               <td>14 Garden Row #3</td>
-              <td className="num">$2,180.00</td>
+              <td className="num">$940.00</td>
               <td><span className="cr-pill" data-k="late">61–90</span></td>
               <td className="num">2</td>
             </tr>
@@ -374,6 +421,216 @@ export function TodayRow({ title, sub, label }: { title: string; sub?: string; l
     <Crop label={label} className="cr-today">
       <div className="cr-today-t">{title}</div>
       {sub ? <div className="cr-today-s">{sub}</div> : null}
+    </Crop>
+  );
+}
+
+type Lead = { i: string; n: string; u: string; note?: string; you?: boolean; bld?: boolean; moved?: string };
+
+/**
+ * The Leasing board, with the demo account's leads (AgenticHelixis
+ * frontend/src/services/demoData.ts demoCrmBoard). Only the moves the code
+ * makes are shown: a sent reply moves a lead to Contacted
+ * (POST /crm/leads/{id}/reply), and a Buildium applicant moves to Applied or
+ * Leased (webhooks/handlers/applicants.py). The demo's calendar-booked tour
+ * move is left out: it is not confirmed in the backend.
+ */
+const BOARD: { stage: string; leads: Lead[] }[] = [
+  { stage: "New", leads: [{ i: "JR", n: "Jordan Reyes", u: "Maple Court 4B", note: "Asked if 4B is still available. Could tour this weekend.", you: true }] },
+  {
+    stage: "Contacted",
+    leads: [
+      { i: "ED", n: "Elena Duarte", u: "Maple Court 4B", note: "Pet policy and parking answered. Awaiting her reply." },
+      { i: "RB", n: "Renee Bishop", u: "Owner · 6 doors", note: "Intro and rates one-pager sent." },
+    ],
+  },
+  { stage: "Scheduled", leads: [{ i: "TN", n: "Tara Nguyen", u: "Riverside 2A", note: "Tour booked for Saturday, 2:00 PM." }] },
+  { stage: "Applied", leads: [{ i: "SO", n: "Sam Okafor", u: "Riverside 3A", note: "Application received.", bld: true }] },
+  { stage: "Leased", leads: [{ i: "LF", n: "Leo Franklin", u: "Riverside 3C", note: "Lease signed.", bld: true, moved: "moved 9:14a" }] },
+];
+
+export function LeadBoardCrop() {
+  return (
+    <Crop label="The Leasing board: leads in five stages, New, Contacted, Scheduled, Applied and Leased, each card with the lead's name, unit and latest note.">
+      <div className="cr-board-scroll">
+        <div className="cr-board">
+          {BOARD.map((c) => (
+            <div key={c.stage}>
+              <div className="cr-col-h">
+                <span>{c.stage}</span>
+                <span>{c.leads.length}</span>
+              </div>
+              <div className="cr-col">
+                {c.leads.map((l) => (
+                  <div className="cr-lead" key={l.n}>
+                    <div className="cr-lead-top">
+                      <span className="cr-av">{l.i}</span>
+                      <span className="cr-lead-n">{l.n}</span>
+                    </div>
+                    <span className="cr-lead-u">{l.u}</span>
+                    {l.note ? <span className="cr-lead-note">{l.note}</span> : null}
+                    {l.you || l.bld || l.moved ? (
+                      <div className="cr-chips-row">
+                        {l.you ? <span className="cr-chip" data-k="you">Needs you</span> : null}
+                        {l.bld ? <span className="cr-chip">In Buildium</span> : null}
+                        {l.moved ? <span className="cr-moved">{l.moved}</span> : null}
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Crop>
+  );
+}
+
+/** A lead's drawer: the draft route's signals and drafted reply, from the
+ *  demo account's Jordan Reyes. */
+export function LeadDraftCrop() {
+  return (
+    <Crop label="A lead's drawer: what Occupella noticed about Jordan Reyes, and a drafted reply offering two tour times, with a Send button." className="cr-drawer">
+      <div className="cr-drawer-h">
+        <span className="cr-av">JR</span>
+        <b>Jordan Reyes</b>
+        <span className="cr-muted" style={{ fontSize: 14 }}>Maple Court 4B · New</span>
+      </div>
+      <div className="cr-noticed">
+        <div className="cr-cap">What Occupella noticed</div>
+        <ul>
+          <li>Asking if Maple Court 4B is still available</li>
+          <li>Wants to tour this weekend</li>
+        </ul>
+      </div>
+      <div className="cr-text" style={{ marginTop: 16 }}>
+        Hi Jordan! Yes, 4B is still available — I&rsquo;d be happy to show it to you this weekend.
+        I have Saturday at 2pm or Sunday at 11am open. Which works better for you?
+      </div>
+      <span className="cr-btn" data-k="primary" style={{ marginTop: 12 }}>Send</span>
+    </Crop>
+  );
+}
+
+/** The cold-leads list: active leads quiet for 3+ days, coldest first
+ *  (GET /crm/leads/cold). */
+export function ColdLeadsCrop() {
+  return (
+    <Crop label="Two leads going cold: Jordan Reyes, quiet for 4 days, and Elena Duarte, quiet for 3 days.">
+      <div className="cr-cold-h">2 leads are going cold</div>
+      <div className="cr-cold-row">
+        <span><b>Jordan Reyes</b> <span className="cr-muted">· Maple Court 4B</span></span>
+        <span className="cr-muted">4 days quiet</span>
+      </div>
+      <div className="cr-cold-row">
+        <span><b>Elena Duarte</b> <span className="cr-muted">· Maple Court 4B</span></span>
+        <span className="cr-muted">3 days quiet</span>
+      </div>
+    </Crop>
+  );
+}
+
+/**
+ * The email draft card (visual_tools.py show_email_draft): 2 to 4 approaches
+ * the model names itself, To / Subject / body, sent through Gmail behind the
+ * approval card. The labels and the letter are example data.
+ */
+export function EmailDraftCrop() {
+  return (
+    <Crop label="A drafted late-rent email to Maria Alvarez with three approaches: a friendly reminder, a firmer reminder and an offer of a payment plan. The friendly reminder is open." className="cr-mail">
+      <div className="cr-tabs">
+        <span className="cr-tab" data-on="true">1 Friendly reminder</span>
+        <span className="cr-tab">2 Firmer reminder</span>
+        <span className="cr-tab">3 Offer a payment plan</span>
+      </div>
+      <div className="cr-mail-f"><span>To</span><span>maria.alvarez@example.com</span></div>
+      <div className="cr-mail-f"><span>Subject</span><span>October rent for 128 Lexington Ave #4B</span></div>
+      <div className="cr-mail-body">
+        {"Hi Maria,\n\nA quick note that we haven't seen October's rent come through yet. The balance on the lease is $1,240. If it's already on the way, thank you and please ignore this.\n\nThe AC technician is booked, and we'll confirm the window shortly."}
+      </div>
+    </Crop>
+  );
+}
+
+/**
+ * One property (mirror_tools.py property_snapshot): occupancy, rent roll
+ * scheduled vs collected this month, open work orders, delinquency and the
+ * next lease expiration. The $3,080 owed is the two 128 Lexington leases in
+ * DelinquencyCrop ($1,240 + $1,840), so the pages agree with each other.
+ */
+export function PropertySnapshotCrop() {
+  return (
+    <Crop label="A property snapshot for Lexington Court: 11 of 12 units occupied, $19,800 rent scheduled and $16,720 collected this month, 4 open work orders, $3,080 delinquent across 2 leases, next lease ending in 41 days." className="cr-snap">
+      <div className="cr-snap-h">
+        <b>Lexington Court</b>
+        <span className="cr-muted" style={{ fontSize: 14 }}>128 Lexington Ave</span>
+      </div>
+      <div className="cr-kv">
+        <div><span>Occupancy</span><b>11 / 12</b></div>
+        <div><span>Rent scheduled</span><b>$19,800</b></div>
+        <div><span>Collected</span><b>$16,720</b></div>
+        <div><span>Open work orders</span><b>4</b></div>
+        <div><span>Delinquent</span><b>$3,080 · 2 leases</b></div>
+        <div><span>Next lease ends</span><b>in 41 days</b></div>
+      </div>
+      <div className="cr-asof">From your Buildium data, synced 6 minutes ago.</div>
+    </Crop>
+  );
+}
+
+/**
+ * Billed vendor spend by GL category (mirror_tools.py spending_report).
+ * Amounts are billed, not paid. The category totals match the demo
+ * vendors' 12-month billing.
+ */
+export function SpendCrop() {
+  const rows: [string, string][] = [
+    ["Roofing", "$21,150"],
+    ["Plumbing", "$18,240"],
+    ["HVAC", "$12,960"],
+    ["Landscaping", "$8,640"],
+    ["Electrical", "$4,310"],
+  ];
+  return (
+    <Crop label="Billed vendor spend over the last 365 days by category: roofing $21,150, plumbing $18,240, HVAC $12,960, landscaping $8,640, electrical $4,310, total $65,300.">
+      <div className="cr-table-h">Billed spend by category, last 365 days</div>
+      <div className="cr-table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Category</th>
+              <th className="num">Billed</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(([c, v]) => (
+              <tr key={c}>
+                <td>{c}</td>
+                <td className="num">{v}</td>
+              </tr>
+            ))}
+            <tr>
+              <td><b>Total</b></td>
+              <td className="num"><b>$65,300</b></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </Crop>
+  );
+}
+
+/** An owner update in the email draft card, built from the snapshot above.
+ *  The letter is example data. */
+export function OwnerEmailCrop() {
+  return (
+    <Crop label="A drafted owner update to Priya Nair about Lexington Court: occupancy, rent collected, the open AC work order and the two leases behind." className="cr-mail">
+      <div className="cr-mail-f"><span>To</span><span>priya.nair@example.com</span></div>
+      <div className="cr-mail-f"><span>Subject</span><span>Lexington Court, this month</span></div>
+      <div className="cr-mail-body">
+        {"Hi Priya,\n\nLexington Court is 11 of 12 units occupied. We've collected $16,720 of the $19,800 scheduled this month, and two leases owe a combined $3,080. We're following up with both.\n\nThere are 4 open work orders, including the AC in unit 4B, which is the third HVAC call there in 90 days. A technician is being scheduled."}
+      </div>
     </Crop>
   );
 }

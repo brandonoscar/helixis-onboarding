@@ -211,7 +211,7 @@ const ASKS = [
 
 /** ⚠ Live, registered, confirm-gated write tools only. See the file header
  *  for the ones deliberately missing. */
-const WRITES = [
+export const WRITES = [
   "Create a to-do task",
   "Create a work order and assign a vendor",
   "Reassign a work order to a different vendor",
@@ -341,7 +341,7 @@ const SAFEGUARDS: Block[] = [
   },
 ];
 
-const CONNECTS: Block[] = [
+export const CONNECTS: Block[] = [
   {
     // TODO(brandon): confirm autonomous notes flag is off; this line ended
     // "and writes back only with your approval" until then.
@@ -477,6 +477,9 @@ export default function Features() {
             When something happens in Buildium, Occupella looks up the history around it and
             drafts the reply or the next task. The examples below follow one work order.
           </Head>
+          <a className="lp-textlink" href="/solutions/maintenance" style={{ display: "inline-block", marginTop: 16 }}>
+            Maintenance, in detail
+          </a>
           <Loop />
         </div>
       </section>
@@ -490,6 +493,9 @@ export default function Features() {
                 account, so it doesn&rsquo;t crawl the API record by record, and it comes back
                 as a table you can sort.
               </Head>
+              <a className="lp-textlink" href="/solutions/delinquency" style={{ display: "inline-block", marginTop: 16 }}>
+                Late rent, in detail
+              </a>
               <div className="ft-qa" style={{ marginTop: 32 }}>
                 {ASKS.map((r) => (
                   <div className="ft-qa-row" key={r.q}>
@@ -576,6 +582,9 @@ export default function Features() {
             applies is where the property sits. Occupella looks it up for that property and does
             the arithmetic.
           </Head>
+          <a className="lp-textlink" href="/state-laws" style={{ display: "inline-block", marginTop: 16 }}>
+            Landlord rules for every state
+          </a>
           <Blocks items={LAW} />
         </div>
       </section>
@@ -618,6 +627,9 @@ export default function Features() {
                 review takes about ten to fifteen days. Nobody on any plan can text a lead before
                 it clears. Here is what works today and what opens at approval.
               </p>
+              <a className="lp-textlink" href="/solutions/leasing">
+                How Leasing works, in detail
+              </a>
             </div>
           </Reveal>
           <Blocks
@@ -644,6 +656,9 @@ export default function Features() {
         <div className="lp-wrap">
           <Head title="Works with" />
           <Blocks items={CONNECTS} />
+          <a className="lp-textlink" href="/integrations" style={{ display: "inline-block", marginTop: 24 }}>
+            Every integration and its status
+          </a>
         </div>
       </section>
 

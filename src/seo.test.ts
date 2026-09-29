@@ -45,6 +45,7 @@ import {
   MARKETING_ROUTES,
   SITE_ORIGIN,
   canonicalFor,
+  routeFor,
 } from './seo/routes';
 import {
   HEAD_END,
@@ -52,6 +53,7 @@ import {
   ORGANIZATION_JSONLD,
   WEBSITE_JSONLD,
   appShellHead,
+  breadcrumbJsonLd,
   headTags,
   notFoundHead,
   sitemapXml,
@@ -127,6 +129,38 @@ describe('static files a crawler asks for reach the filesystem', () => {
     for (const path of ['/assets/index-abc123.js', '/demo/inbox.mp4', '/shots/features-1.png']) {
       expect(rewritten(path), `${path} must not become the app shell`).toBe(false);
     }
+  });
+});
+
+/**
+ * ⚠ ONE HOST. setup.occupella.com and helixis-onboarding.vercel.app served
+ * full copies of the site until 2026-09-29, so every page existed three
+ * times. vercel.json now sends both to occupella.com. A redirect with no host
+ * condition, or one that matches occupella.com itself, would send every
+ * visitor round in a loop; these pin the shape.
+ */
+describe('other hosts redirect to occupella.com', () => {
+  const config = JSON.parse(vercelRaw) as {
+    redirects?: { source: string; has?: { type: string; value: string }[]; destination: string; permanent?: boolean }[];
+  };
+  const canonicalHost = new URL(SITE_ORIGIN).host;
+
+  it('sends the two old hosts, and only those, permanently', () => {
+    const hosts = (config.redirects ?? []).map((r) => r.has?.find((h) => h.type === 'host')?.value);
+    expect(hosts.sort()).toEqual(['helixis-onboarding.vercel.app', 'setup.occupella.com']);
+    for (const r of config.redirects ?? []) {
+      expect(r.has?.length, r.source).toBe(1);
+      expect(r.has![0].value).not.toBe(canonicalHost);
+      expect(r.source).toBe('/:path*');
+      expect(r.destination).toBe(`${SITE_ORIGIN}/:path*`);
+      expect(r.permanent).toBe(true);
+    }
+  });
+
+  it('serves the IndexNow key file as itself', () => {
+    const keys = PUBLIC_FILES.filter((f) => /^[0-9a-f]{32}\.txt$/.test(f));
+    expect(keys).toHaveLength(1);
+    expect(rewritten(`/${keys[0]}`)).toBe(false);
   });
 });
 
@@ -230,13 +264,34 @@ describe('every marketing route has its own head', () => {
     );
   });
 
-  it('carries only Organization and WebSite structured data', () => {
+  it('carries only Organization and WebSite structured data on a top-level page', () => {
     const head = headTags(MARKETING_ROUTES[0]);
     const types = [...head.matchAll(/"@type":"([^"]+)"/g)].map((m) => m[1]);
     expect(types).toEqual(['Organization', 'WebSite']);
     // sameAs lists only profiles that exist; an empty list is left out.
     expect('sameAs' in ORGANIZATION_JSONLD).toBe(false);
     expect(WEBSITE_JSONLD.url).toBe(`${SITE_ORIGIN}/`);
+  });
+
+  it('gives a nested page a breadcrumb only when every link in it is a real page', () => {
+    const texas = MARKETING_ROUTES.find((r) => r.path === '/state-laws/texas')!;
+    const head = headTags(texas);
+    const ld = JSON.parse(head.match(/<script type="application\/ld\+json">(\{"@context":"https:\/\/schema.org","@type":"BreadcrumbList".*?)<\/script>/)![1]);
+    expect(ld.itemListElement.map((i: { name: string }) => i.name)).toEqual(['Home', 'Landlord rules by state', 'Texas']);
+    let withCrumbs = 0;
+    for (const r of MARKETING_ROUTES) {
+      const b = breadcrumbJsonLd(r) as { itemListElement: { item: string; position: number }[] } | null;
+      if (!b) continue;
+      withCrumbs += 1;
+      expect(b.itemListElement[b.itemListElement.length - 1].item).toBe(canonicalFor(r));
+      for (const i of b.itemListElement) {
+        expect(routeFor(i.item.replace(SITE_ORIGIN, '') || '/'), i.item).toBeDefined();
+      }
+    }
+    expect(withCrumbs).toBeGreaterThan(51);
+    for (const p of ['/', '/features', '/solutions/leasing', '/docs/buildium-api-setup']) {
+      expect(breadcrumbJsonLd(MARKETING_ROUTES.find((r) => r.path === p)!), p).toBeNull();
+    }
   });
 
   it('keeps the 404 page and the app shell out of the index', () => {

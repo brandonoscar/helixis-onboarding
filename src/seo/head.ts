@@ -9,6 +9,7 @@ import {
   NOT_FOUND_PAGE,
   SITE_ORIGIN,
   canonicalFor,
+  routeFor,
   type MarketingRoute,
 } from "./routes";
 
@@ -33,10 +34,20 @@ function esc(s: string): string {
  */
 const SAME_AS: string[] = [];
 
+/**
+ * ⚠ The description and legalName are here to DISAMBIGUATE. "Occupella" is
+ * also the name of a Bay Area activist a cappella group (occupella.org,
+ * active since 2011), and it owns the search results for the bare name.
+ * Telling Google plainly that this Occupella is property-management
+ * software, run by Oscar Ventures LLC, is the on-site half of fixing that;
+ * the off-site half is the profiles listed in SAME_AS.
+ */
 export const ORGANIZATION_JSONLD = {
   "@context": "https://schema.org",
   "@type": "Organization",
   name: "Occupella",
+  legalName: "Oscar Ventures LLC",
+  description: "Occupella is AI software for property managers who use Buildium.",
   url: `${SITE_ORIGIN}/`,
   logo: `${SITE_ORIGIN}/icon-512.png`,
   ...(SAME_AS.length ? { sameAs: SAME_AS } : {}),
@@ -49,6 +60,30 @@ export const WEBSITE_JSONLD = {
   url: `${SITE_ORIGIN}/`,
 };
 
+/**
+ * Home > parent > page, for a page whose parent path is itself a page
+ * (/state-laws/texas, /integrations/buildium). Null for top-level pages, and
+ * for /solutions/* and /docs/*, whose parents don't exist: a breadcrumb that
+ * links to a 404 is worse than none.
+ */
+export function breadcrumbJsonLd(route: MarketingRoute): object | null {
+  const parts = route.path.split("/").filter(Boolean);
+  if (parts.length < 2) return null;
+  const parent = routeFor("/" + parts.slice(0, -1).join("/"));
+  if (!parent) return null;
+  const home = routeFor("/")!;
+  const name = (r: MarketingRoute) => r.crumb ?? r.title.split(" | ")[0];
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { name: "Home", r: home },
+      { name: name(parent), r: parent },
+      { name: name(route), r: route },
+    ].map((c, i) => ({ "@type": "ListItem", position: i + 1, name: c.name, item: canonicalFor(c.r) })),
+  };
+}
+
 /** `<` escaped so no string inside can close the script tag. */
 function jsonLd(data: object): string {
   return `<script type="application/ld+json">${JSON.stringify(data).replace(/</g, "\\u003c")}</script>`;
@@ -58,6 +93,7 @@ export function headTags(route: MarketingRoute): string {
   const url = canonicalFor(route);
   const title = esc(route.title);
   const description = esc(route.description);
+  const crumbs = breadcrumbJsonLd(route);
   return [
     HEAD_START,
     `<title>${title}</title>`,
@@ -76,6 +112,7 @@ export function headTags(route: MarketingRoute): string {
     `<meta name="twitter:image" content="${SOCIAL_IMAGE}" />`,
     jsonLd(ORGANIZATION_JSONLD),
     jsonLd(WEBSITE_JSONLD),
+    ...(crumbs ? [jsonLd(crumbs)] : []),
     HEAD_END,
   ].join("\n    ");
 }

@@ -17,6 +17,8 @@
  * the two agree.
  */
 
+import { STATES, descriptionFor } from "../stateLaws/data";
+
 export const SITE_ORIGIN = "https://occupella.com";
 
 export interface MarketingRoute {
@@ -28,11 +30,14 @@ export interface MarketingRoute {
   description: string;
   inSitemap: boolean;
   source: string;
+  /** The page's name in a breadcrumb trail (head.ts). Defaults to the title
+   *  up to " | ". */
+  crumb?: string;
   changefreq: "weekly" | "monthly";
   priority: number;
 }
 
-export const MARKETING_ROUTES: readonly MarketingRoute[] = [
+const STATIC_ROUTES: MarketingRoute[] = [
   {
     path: "/",
     name: "landing",
@@ -67,6 +72,129 @@ export const MARKETING_ROUTES: readonly MarketingRoute[] = [
     priority: 0.9,
   },
   {
+    path: "/screenshots",
+    name: "screenshots",
+    title: "Screenshots of the Occupella Inbox, chat and Operations",
+    description:
+      "Screenshots of Occupella, the AI assistant for Buildium property managers: a work order in the Inbox, answers in chat and the Operations tables.",
+    inSitemap: true,
+    source: "src/Screenshots.tsx",
+    changefreq: "monthly",
+    priority: 0.6,
+  },
+  {
+    path: "/solutions/owner-reporting",
+    name: "solutions_owner_reporting",
+    title: "Owner reporting from your Buildium data | Occupella",
+    description:
+      "Ask how a property is doing: occupancy, rent collected, open work orders, what's owed and spent, from your Buildium data. Then send the owner update.",
+    inSitemap: true,
+    source: "src/solutions/OwnerReporting.tsx",
+    changefreq: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/solutions/delinquency",
+    name: "solutions_delinquency",
+    title: "Late rent follow-up for Buildium users | Occupella",
+    description:
+      "See every lease with a balance and how late it is, get a reminder when rent hasn't posted by the 10th, and send a drafted late-rent email from your Gmail.",
+    inSitemap: true,
+    source: "src/solutions/Delinquency.tsx",
+    changefreq: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/solutions/maintenance",
+    name: "solutions_maintenance",
+    title: "Maintenance coordination for Buildium users | Occupella",
+    description:
+      "Occupella reads each Buildium maintenance request, pulls the unit's history and drafts the resident reply and the work order for you to edit and send.",
+    inSitemap: true,
+    source: "src/solutions/Maintenance.tsx",
+    changefreq: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/solutions/leasing",
+    name: "solutions_leasing",
+    // ⚠ Not the planned "Leasing follow-up by text and email": texting waits
+    // on carrier approval, and the title must not say it works today.
+    title: "Leasing pipeline and lead follow-up | Occupella",
+    description:
+      "One board for every lead, a drafted reply for each, and a flag when one goes quiet. Replies send from your Gmail today, and by text after carrier approval.",
+    inSitemap: true,
+    source: "src/solutions/Leasing.tsx",
+    changefreq: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/integrations",
+    name: "integrations",
+    crumb: "Integrations",
+    title: "Integrations | Occupella",
+    description:
+      "Occupella works with Buildium, Gmail, Google Calendar and Google Drive today. Texting opens after carrier approval. See the status of each.",
+    inSitemap: true,
+    source: "src/integrations/Integrations.tsx",
+    changefreq: "monthly",
+    priority: 0.6,
+  },
+  {
+    path: "/integrations/buildium",
+    name: "integrations_buildium",
+    crumb: "Buildium",
+    title: "Occupella for Buildium: what it reads and changes",
+    description:
+      "What Occupella reads from your Buildium account, the changes it can make there, and the API key it needs. Revoke the key in Buildium at any time.",
+    inSitemap: true,
+    source: "src/integrations/Buildium.tsx",
+    changefreq: "monthly",
+    priority: 0.7,
+  },
+  {
+    path: "/docs/buildium-api-setup",
+    name: "docs_buildium_api_setup",
+    title: "How to create a Buildium API key | Occupella",
+    description:
+      "Create a Buildium API key under Settings, Developer Tools, API Keys, and paste the Client ID and Client Secret into Occupella. About two minutes.",
+    inSitemap: true,
+    source: "src/docs/BuildiumApiSetup.tsx",
+    changefreq: "monthly",
+    priority: 0.6,
+  },
+  {
+    path: "/changelog",
+    name: "changelog",
+    title: "Changelog | Occupella",
+    description: "What changed in Occupella, newest first: new features and fixes you can see in the app.",
+    inSitemap: true,
+    source: "src/changelog/entries.ts",
+    changefreq: "weekly",
+    priority: 0.4,
+  },
+  {
+    path: "/security",
+    name: "security",
+    title: "Security | Occupella",
+    description:
+      "How Occupella protects your data: per-company isolation, encrypted credentials, role checks on money, and the list of service providers that process data.",
+    inSitemap: true,
+    source: "src/Security.tsx",
+    changefreq: "monthly",
+    priority: 0.5,
+  },
+  {
+    path: "/contact",
+    name: "contact",
+    title: "Contact | Occupella",
+    description: "Email team@occupella.com for setup help, account and billing questions, security and data requests. Support replies within one business day.",
+    inSitemap: true,
+    source: "src/Contact.tsx",
+    changefreq: "monthly",
+    priority: 0.4,
+  },
+  {
     path: "/sms",
     name: "sms",
     title: "SMS program | Occupella",
@@ -99,6 +227,40 @@ export const MARKETING_ROUTES: readonly MarketingRoute[] = [
     priority: 0.3,
   },
 ];
+
+/**
+ * The landlord-rules pages, generated from src/data/jurisdiction_rules.json:
+ * an index and one page per state (50 states and DC).
+ */
+const STATE_LAW_ROUTES: MarketingRoute[] = [
+  {
+    path: "/state-laws",
+    name: "state_laws",
+    crumb: "Landlord rules by state",
+    title: "Landlord rules by state | Occupella",
+    description:
+      "Security deposit caps and return deadlines, late fees, notice periods and source-of-income rules for all 50 states and DC, with statute citations.",
+    inSitemap: true,
+    source: "src/data/jurisdiction_rules.json",
+    changefreq: "monthly",
+    priority: 0.7,
+  },
+  ...STATES.map(
+    (st): MarketingRoute => ({
+      path: st.path,
+      name: "state_law",
+      crumb: st.rules.name,
+      title: `${st.rules.name} security deposit, late fee and notice rules | Occupella`,
+      description: descriptionFor(st.rules),
+      inSitemap: true,
+      source: "src/data/jurisdiction_rules.json",
+      changefreq: "monthly",
+      priority: 0.5,
+    }),
+  ),
+];
+
+export const MARKETING_ROUTES: readonly MarketingRoute[] = [...STATIC_ROUTES, ...STATE_LAW_ROUTES];
 
 /** Served for any URL no route answers, with a real 404 status. */
 export const NOT_FOUND_PAGE = {

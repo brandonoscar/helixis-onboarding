@@ -1,0 +1,25 @@
+# After each successful production deploy, tell IndexNow (Bing and the
+# engines that use its index) that the site's pages may have changed.
+# Vercel reports its deploys to GitHub; this listens for the production one.
+# A workflow triggered by deployment_status runs from main's copy of this file.
+name: IndexNow
+
+on:
+  deployment_status:
+
+permissions:
+  contents: read
+
+jobs:
+  submit:
+    if: >-
+      github.event.deployment_status.state == 'success' &&
+      startsWith(github.event.deployment.environment, 'Production')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20
+      - run: node scripts/indexnow.mjs

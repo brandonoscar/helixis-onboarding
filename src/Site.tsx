@@ -150,16 +150,68 @@ export const siteCss = `
   .lp .lp-wordmark:hover { color: var(--ink); }
   .lp-nav-right { display: flex; align-items: center; gap: 4px; }
   .lp-nav-right .btn-ghost { font-size: 15px; padding: 8px 12px; }
-  .lp-nav-right .btn-ghost[aria-current="page"] { color: var(--ink); font-weight: 600; }
   .lp-nav-right .btn-primary { height: 36px; padding: 0 16px; font-size: 14px; margin-left: 8px; }
 
-  /* Below ~640px the section links go and the nav keeps the two things a
-     visitor on a phone needs: sign in, and start. /features and /pricing are
-     in the footer of every page. */
+  /* ── the menu: dropdowns at desktop ── */
+  .lp-menu { display: flex; align-items: center; gap: 2px; list-style: none; margin: 0 auto 0 32px; padding: 0; }
+  .lp-menu-item { position: relative; }
+  .lp .lp-menu-btn {
+    display: inline-flex; align-items: center; gap: 5px;
+    height: 40px; padding: 0 12px; border: 0; background: none; cursor: pointer;
+    font: inherit; font-size: 15px; font-weight: 500; color: var(--ink-muted); text-decoration: none;
+    border-radius: 6px;
+  }
+  .lp .lp-menu-btn:hover, .lp-menu-item[data-open="true"] > .lp-menu-btn { color: var(--ink); }
+  .lp .lp-menu-btn[aria-current="page"] { color: var(--ink); font-weight: 600; }
+  .lp .lp-menu-btn:focus-visible { outline: 2px solid var(--iris); outline-offset: 2px; }
+  .lp-menu-btn svg { transition: transform var(--dur-state) var(--ease-std); }
+  .lp-menu-item[data-open="true"] .lp-menu-btn svg { transform: rotate(180deg); }
+  .lp-menu-panel {
+    position: absolute; top: 100%; left: -8px; padding-top: 8px; z-index: 30;
+    visibility: hidden; opacity: 0; transform: translateY(-4px);
+    transition: opacity 120ms var(--ease-std), transform 120ms var(--ease-std), visibility 0s linear 120ms;
+  }
+  .lp-menu-item[data-open="true"] > .lp-menu-panel {
+    visibility: visible; opacity: 1; transform: none;
+    transition: opacity 120ms var(--ease-std), transform 120ms var(--ease-std);
+  }
+  .lp-menu-panel ul {
+    list-style: none; margin: 0; padding: 8px; min-width: 300px;
+    background: var(--canvas); border: 1px solid var(--line); border-radius: 8px;
+    box-shadow: 0 18px 40px -18px rgba(14, 22, 32, 0.28);
+  }
+  .lp .lp-menu-panel a { display: block; padding: 10px 12px; border-radius: 6px; text-decoration: none; }
+  .lp .lp-menu-panel a:hover, .lp .lp-menu-panel a:focus-visible { background: var(--band); outline: none; }
+  .lp-menu-l { display: block; font-size: 15px; font-weight: 600; color: var(--ink); }
+  .lp-menu-n { display: block; margin-top: 2px; font-size: 14px; color: var(--ink-muted); }
+
+  /* ── the drawer: every link, full screen, below 960px ── */
+  .lp .lp-menu-toggle {
+    display: none; height: 36px; padding: 0 12px; margin-left: 8px;
+    border: 1px solid var(--line-strong); border-radius: 6px; background: var(--canvas);
+    font: inherit; font-size: 14px; font-weight: 600; color: var(--ink); cursor: pointer;
+  }
+  .lp-drawer {
+    position: fixed; inset: 0; z-index: 50; background: var(--canvas);
+    display: none; flex-direction: column; overflow-y: auto;
+  }
+  .lp-drawer[data-open="true"] { display: flex; }
+  .lp-drawer-top { height: 64px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; border-bottom: 1px solid var(--line); }
+  .lp-drawer .lp-menu-toggle { display: inline-flex; align-items: center; }
+  .lp-drawer-body { padding: 8px 20px 32px; display: flex; flex-direction: column; }
+  .lp-drawer-group { display: flex; flex-direction: column; padding: 16px 0; border-bottom: 1px solid var(--line); }
+  .lp-drawer-h { font-size: 14px; font-weight: 600; color: var(--ink-muted); margin-bottom: 4px; }
+  .lp .lp-drawer-group a { padding: 10px 0; font-size: 18px; font-weight: 500; color: var(--ink); text-decoration: none; }
+  .lp .lp-drawer-cta { margin-top: 24px; height: 48px; font-size: 16px; }
+
+  @media (max-width: 959px) {
+    .lp-menu { display: none; }
+    .lp .lp-menu-toggle { display: inline-flex; align-items: center; }
+  }
   @media (max-width: 640px) {
     .lp-nav-inner { padding: 0 20px; }
-    .lp-nav-sec { display: none; }
-    .lp-nav-right .btn-ghost { padding: 8px 8px; }
+    .lp-nav-signin { display: none; }
+    .lp-nav-right .btn-primary { margin-left: 0; }
   }
 
   /* ── sections: more space between them than inside them ── */
@@ -227,7 +279,8 @@ export const siteCss = `
     display: grid; gap: 32px 24px;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  @media (min-width: 760px) { .lp-footer-cols { grid-template-columns: 1.4fr repeat(3, minmax(0, 1fr)); } }
+  @media (min-width: 760px) { .lp-footer-cols { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @media (min-width: 1100px) { .lp-footer-cols { grid-template-columns: 1.4fr repeat(5, minmax(0, 1fr)); } }
   .lp-footer-brand { display: flex; flex-direction: column; gap: 12px; }
   .lp-footer-blurb { font-size: 15px; line-height: 1.55; color: var(--ink-muted); max-width: 30ch; }
   .lp-footer-h { font-size: 15px; font-weight: 600; color: var(--ink); margin-bottom: 12px; }
@@ -445,42 +498,255 @@ export function Wordmark() {
   );
 }
 
-export type SitePage = "home" | "features" | "pricing";
+export type SitePage = "home" | "features" | "pricing" | "solutions" | "resources";
 
-// ⚠ Home is here as well as on the wordmark, deliberately (founder call,
-// 2026-09-04). The wordmark IS a link to "/" and always has been, but on a
-// secondary page nothing says so — a visitor two pages deep has no visible
-// way back that reads as one. The redundancy is the point: the wordmark is
-// branding that happens to be clickable, this is a labelled control.
-const NAV_LINKS: { href: string; label: string; page: SitePage }[] = [
-  { href: "/", label: "Home", page: "home" },
-  { href: "/features", label: "Features", page: "features" },
+type MenuItem = { href: string; label: string; note?: string };
+type MenuGroup = { key: string; label: string; page: SitePage; items: MenuItem[] };
+
+/**
+ * The site menu, and (with FOOTER_EXTRA) everything the footer links to.
+ *
+ * ⚠ EVERY HREF HERE MUST RESOLVE. nav.test.tsx checks each one against
+ * MARKETING_ROUTES, and each #anchor against an id the page renders, so a
+ * renamed section or a page that is not built yet fails the build instead
+ * of sending a visitor to the 404 page. A page that is planned and not built
+ * is left out until it exists.
+ *
+ * ⚠ The Product anchors are the /features section ids. The labels are those
+ * sections' headings, so a click lands where the menu said it would.
+ */
+export const MENU: MenuGroup[] = [
+  {
+    key: "product",
+    label: "Product",
+    page: "features",
+    items: [
+      { href: "/features#the-loop", label: "How an event is handled" },
+      { href: "/features#ask-it-anything", label: "Reports from your Buildium data" },
+      { href: "/features#writing-back", label: "Changes it can make in Buildium" },
+      { href: "/features#fair-housing", label: "Fair housing guardrails" },
+      { href: "/features", label: "All features" },
+    ],
+  },
+  {
+    key: "solutions",
+    label: "Solutions",
+    page: "solutions",
+    items: [
+      { href: "/solutions/maintenance", label: "Maintenance", note: "From the report to the work order" },
+      { href: "/solutions/delinquency", label: "Late rent", note: "Who owes what, and the follow-up" },
+      { href: "/solutions/owner-reporting", label: "Owner reporting", note: "The numbers an owner asks for" },
+      { href: "/solutions/leasing", label: "Leasing", note: "Every lead, from first message to lease" },
+    ],
+  },
+  {
+    key: "resources",
+    label: "Resources",
+    page: "resources",
+    items: [
+      { href: "/integrations", label: "Integrations", note: "What Occupella connects to" },
+      { href: "/docs/buildium-api-setup", label: "Buildium setup guide", note: "Create the API key in two minutes" },
+      { href: "/state-laws", label: "Landlord rules by state", note: "Deposits, late fees and notices" },
+      { href: "/screenshots", label: "Screenshots", note: "What the app looks like" },
+      { href: "/changelog", label: "Changelog", note: "What changed, newest first" },
+    ],
+  },
+];
+
+export const TOP_LINKS: { href: string; label: string; page: SitePage }[] = [
   { href: "/pricing", label: "Pricing", page: "pricing" },
 ];
 
+/**
+ * Desktop: dropdowns that open on hover and on click, close on Escape, on a
+ * click outside and when focus leaves. Below 960px: one Menu button that
+ * opens a full-screen drawer with every link.
+ *
+ * ⚠ The panels are ALWAYS in the HTML and only hidden by CSS. The prerendered
+ * page is what a crawler reads, and a menu that only exists after a click is
+ * a menu of links no search engine follows.
+ */
 export function SiteNav({ active }: { active?: SitePage }) {
   const start = useStartLabel();
+  const [open, setOpen] = useState<string | null>(null);
+  const [drawer, setDrawer] = useState(false);
+  const navRef = useRef<HTMLElement>(null);
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const menuBtnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (navRef.current && !navRef.current.contains(e.target as Node)) setOpen(null);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (drawer) {
+        setDrawer(false);
+        menuBtnRef.current?.focus();
+      } else if (open) {
+        const btn = navRef.current?.querySelector<HTMLButtonElement>(`[data-menu="${open}"]`);
+        setOpen(null);
+        btn?.focus();
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open, drawer]);
+
+  // The drawer is modal: the page behind it does not scroll, focus starts on
+  // its first link and Tab stays inside it until it closes.
+  useEffect(() => {
+    if (!drawer) return;
+    const el = drawerRef.current;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusables = () =>
+      Array.from(el?.querySelectorAll<HTMLElement>("a[href], button") ?? []);
+    focusables()[0]?.focus();
+    const onTab = (e: KeyboardEvent) => {
+      if (e.key !== "Tab") return;
+      const f = focusables();
+      if (!f.length) return;
+      const first = f[0];
+      const last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onTab);
+    return () => {
+      document.body.style.overflow = prev;
+      document.removeEventListener("keydown", onTab);
+    };
+  }, [drawer]);
+
   return (
-    <nav className="lp-nav">
+    <nav className="lp-nav" ref={navRef} aria-label="Main">
       <div className="lp-nav-inner">
         <Wordmark />
-        <div className="lp-nav-right">
-          {NAV_LINKS.map((l) => (
-            <a
-              key={l.href}
-              className="btn btn-ghost lp-nav-sec"
-              href={l.href}
-              // The page you are on, announced rather than only shaded —
-              // aria-current is what a screen reader uses to say "here".
-              aria-current={active === l.page ? "page" : undefined}
+        <ul className="lp-menu">
+          {MENU.map((g) => (
+            <li
+              key={g.key}
+              className="lp-menu-item"
+              data-open={open === g.key}
+              onMouseEnter={() => setOpen(g.key)}
+              onMouseLeave={() => setOpen((o) => (o === g.key ? null : o))}
+              onBlur={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node)) setOpen((o) => (o === g.key ? null : o));
+              }}
             >
-              {l.label}
-            </a>
+              <button
+                type="button"
+                className="lp-menu-btn"
+                data-menu={g.key}
+                aria-expanded={open === g.key}
+                aria-controls={`menu-${g.key}`}
+                aria-current={active === g.page ? "page" : undefined}
+                // A mouse click always opens: the pointer got here by hovering,
+                // which already opened the panel, and toggling would shut it
+                // under the click. Enter and Space (detail 0) toggle.
+                onClick={(e) => setOpen((o) => (e.detail === 0 && o === g.key ? null : g.key))}
+              >
+                {g.label}
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <path d="M6 9l6 6 6-6" />
+                </svg>
+              </button>
+              <div className="lp-menu-panel" id={`menu-${g.key}`}>
+                <ul>
+                  {g.items.map((it) => (
+                    <li key={it.href}>
+                      <a href={it.href} onClick={() => setOpen(null)}>
+                        <span className="lp-menu-l">{it.label}</span>
+                        {it.note ? <span className="lp-menu-n">{it.note}</span> : null}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </li>
           ))}
-          <a className="btn btn-ghost" href={APP_URL}>
+          {TOP_LINKS.map((l) => (
+            <li key={l.href} className="lp-menu-item">
+              <a className="lp-menu-btn" href={l.href} aria-current={active === l.page ? "page" : undefined}>
+                {l.label}
+              </a>
+            </li>
+          ))}
+        </ul>
+        <div className="lp-nav-right">
+          <a className="btn btn-ghost lp-nav-signin" href={APP_URL}>
             Sign in
           </a>
+          {/* TODO(brandon): "Book a demo" (secondary button) goes here once
+              there is a calendar link to point it at. */}
           <a className="btn btn-primary" href="/start">
+            {start}
+          </a>
+          <button
+            type="button"
+            className="lp-menu-toggle"
+            ref={menuBtnRef}
+            aria-expanded={drawer}
+            aria-controls="site-drawer"
+            onClick={() => setDrawer(true)}
+          >
+            Menu
+          </button>
+        </div>
+      </div>
+
+      <div
+        className="lp-drawer"
+        id="site-drawer"
+        ref={drawerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Site menu"
+        data-open={drawer}
+      >
+        <div className="lp-drawer-top">
+          <Wordmark />
+          <button
+            type="button"
+            className="lp-menu-toggle"
+            onClick={() => {
+              setDrawer(false);
+              menuBtnRef.current?.focus();
+            }}
+          >
+            Close
+          </button>
+        </div>
+        <div className="lp-drawer-body">
+          {MENU.map((g) => (
+            <div className="lp-drawer-group" key={g.key}>
+              <div className="lp-drawer-h">{g.label}</div>
+              {g.items.map((it) => (
+                <a key={it.href} href={it.href} onClick={() => setDrawer(false)}>
+                  {it.label}
+                </a>
+              ))}
+            </div>
+          ))}
+          <div className="lp-drawer-group">
+            {TOP_LINKS.map((l) => (
+              <a key={l.href} href={l.href} onClick={() => setDrawer(false)}>
+                {l.label}
+              </a>
+            ))}
+            <a href={APP_URL}>Sign in</a>
+          </div>
+          <a className="btn btn-primary lp-drawer-cta" href="/start">
             {start}
           </a>
         </div>
@@ -522,6 +788,35 @@ export function CloseBand({
   );
 }
 
+function FooterCol({ title, links }: { title: string; links: MenuItem[] }) {
+  return (
+    <div>
+      <div className="lp-footer-h">{title}</div>
+      <div className="lp-footer-col">
+        {links.map((l) => (
+          <a key={l.href} href={l.href}>
+            {l.label}
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Every link the footer carries, for nav.test.tsx. */
+export const FOOTER_EXTRA: string[] = [
+  "/",
+  "/features",
+  "/pricing",
+  "/terms",
+  "/privacy",
+  "/sms",
+  "/contact",
+  "/security",
+  "/security#subprocessors",
+  "/integrations/buildium",
+];
+
 export function SiteFooter() {
   return (
     <footer className="lp-footer">
@@ -537,19 +832,29 @@ export function SiteFooter() {
             </p>
           </div>
 
-          <div>
-            <div className="lp-footer-h">Product</div>
-            {/* ⚠ Home is repeated here because the nav's section links are
-                hidden under 640px — on a phone this column IS the navigation,
-                so dropping it would leave the wordmark as the only way back. */}
-            <div className="lp-footer-col">
-              <a href="/">Home</a>
-              <a href="/features">Features</a>
-              <a href="/pricing">Pricing</a>
-              <a href="/start">Start free trial</a>
-              <a href={APP_URL}>Sign in</a>
-            </div>
-          </div>
+          {/* ⚠ Home is here because the menu has no Home item: on a phone
+              this column and the wordmark are the way back. */}
+          <FooterCol
+            title="Product"
+            links={[
+              { href: "/", label: "Home" },
+              { href: "/features", label: "Features" },
+              { href: "/pricing", label: "Pricing" },
+              { href: "/integrations/buildium", label: "Occupella for Buildium" },
+              { href: "/start", label: "Start free trial" },
+              { href: APP_URL, label: "Sign in" },
+            ]}
+          />
+          <FooterCol title="Solutions" links={MENU.find((g) => g.key === "solutions")!.items} />
+          <FooterCol title="Resources" links={MENU.find((g) => g.key === "resources")!.items} />
+          <FooterCol
+            title="Company"
+            links={[
+              { href: "/contact", label: "Contact" },
+              { href: "/security", label: "Security" },
+              { href: "mailto:team@occupella.com", label: "team@occupella.com" },
+            ]}
+          />
 
           <div>
             <div className="lp-footer-h">Legal</div>
@@ -557,14 +862,8 @@ export function SiteFooter() {
               <a href="/terms">Terms</a>
               <a href="/privacy">Privacy</a>
               <a href="/sms">SMS program</a>
+              <a href="/security#subprocessors">Subprocessors</a>
               <TrackingOptOut />
-            </div>
-          </div>
-
-          <div>
-            <div className="lp-footer-h">Contact</div>
-            <div className="lp-footer-col">
-              <a href="mailto:team@occupella.com">team@occupella.com</a>
             </div>
           </div>
         </div>

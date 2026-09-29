@@ -1,6 +1,30 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "setup.occupella.com"
+        }
+      ],
+      "destination": "https://occupella.com/:path*",
+      "permanent": true
+    },
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "helixis-onboarding.vercel.app"
+        }
+      ],
+      "destination": "https://occupella.com/:path*",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     {
       "source": "/start",

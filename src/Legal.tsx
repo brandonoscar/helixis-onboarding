@@ -1,4 +1,5 @@
 import { SiteFooter, SiteNav, siteCss } from "./Site";
+import { SubprocessorList } from "./legal/subprocessors";
 
 
 // Plain-English Privacy Policy + Terms of Service. Written to be honest and
@@ -53,6 +54,7 @@ const css = `
   }
 
   .legal ul { padding-left: 22px; margin-bottom: 12px; }
+  .legal .sp-list em { font-style: normal; color: var(--ink-subtle); }
   .legal a { color: var(--iris); text-decoration: none; }
   .legal a:hover { text-decoration: underline; }
 
@@ -104,7 +106,7 @@ function Shell({
 
 export function Privacy() {
   return (
-    <Shell title="Privacy Policy">
+    <Shell title="Privacy Policy" updated="Effective July 6, 2026 · Updated September 29, 2026">
       <h2>What Occupella is</h2>
       <p>
         Occupella is an execution layer for property management teams using Buildium. It
@@ -198,12 +200,12 @@ export function Privacy() {
       </ul>
 
       <h2>Subprocessors</h2>
+      {/* One list, shared with /security: src/legal/subprocessors.tsx. */}
       <p>
-        Occupella runs on a small set of infrastructure providers: cloud hosting and database
-        (Render, Supabase), AI model providers (Anthropic, Voyage AI), managed OAuth
-        (Composio), and observability/analytics (Sentry, Langfuse, PostHog). Each receives
-        only what it needs to perform its function.
+        These service providers process data for Occupella. Each receives only what it needs
+        to do its job.
       </p>
+      <SubprocessorList />
 
       <h2>Deletion and your rights</h2>
       <p>

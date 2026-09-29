@@ -4,6 +4,20 @@ import Features from "./Features";
 import Pricing from "./Pricing";
 import NotFound from "./NotFound";
 import { Privacy, Sms, Terms } from "./Legal";
+import Leasing from "./solutions/Leasing";
+import Maintenance from "./solutions/Maintenance";
+import Delinquency from "./solutions/Delinquency";
+import Screenshots from "./Screenshots";
+import Security from "./Security";
+import Contact from "./Contact";
+import OwnerReporting from "./solutions/OwnerReporting";
+import Integrations from "./integrations/Integrations";
+import BuildiumIntegration from "./integrations/Buildium";
+import BuildiumApiSetup from "./docs/BuildiumApiSetup";
+import Changelog from "./changelog/Changelog";
+import StateLawPage from "./stateLaws/StateLawPage";
+import StateLawsIndex from "./stateLaws/StateLawsIndex";
+import { STATES } from "./stateLaws/data";
 import { normalizePath } from "./seo/routes";
 
 /**
@@ -19,9 +33,22 @@ export const PAGES: Record<string, () => ReactElement> = {
   "/": () => <Landing />,
   "/features": () => <Features />,
   "/pricing": () => <Pricing />,
+  "/screenshots": () => <Screenshots />,
+  "/security": () => <Security />,
+  "/contact": () => <Contact />,
+  "/integrations": () => <Integrations />,
+  "/integrations/buildium": () => <BuildiumIntegration />,
+  "/docs/buildium-api-setup": () => <BuildiumApiSetup />,
+  "/changelog": () => <Changelog />,
+  "/solutions/owner-reporting": () => <OwnerReporting />,
+  "/solutions/delinquency": () => <Delinquency />,
+  "/solutions/maintenance": () => <Maintenance />,
+  "/solutions/leasing": () => <Leasing />,
   "/sms": () => <Sms />,
   "/terms": () => <Terms />,
   "/privacy": () => <Privacy />,
+  "/state-laws": () => <StateLawsIndex />,
+  ...Object.fromEntries(STATES.map((st) => [st.path, () => <StateLawPage state={st} />])),
 };
 
 export function pageFor(path: string): ReactElement {
