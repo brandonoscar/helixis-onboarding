@@ -304,7 +304,7 @@ const STEPS = [
   {
     n: "1",
     t: "Connect Buildium.",
-    b: "One API key, ten minutes. Occupella mirrors your properties, leases, work orders, and contacts — Buildium stays the system of record.",
+    b: "One API key, ten minutes. Occupella mirrors your properties, leases, work orders, and contacts. Buildium stays the system of record.",
   },
   {
     n: "2",
@@ -390,7 +390,7 @@ export default function Landing() {
             {/* TODO(brandon): confirm autonomous notes flag is off. This
                 ended "Then it waits for you."; restore it then. */}
             Buildium keeps the records. Occupella does the work. It reads your Buildium
-            events, pulls the history around each one, and drafts what comes next — the reply,
+            events, pulls the history around each one, and drafts what comes next: the reply,
             the work order, the owner update.
           </p>
           <div className="lp-hero-ctas rise" style={{ "--d": "600ms", marginTop: 30 } as React.CSSProperties}>
@@ -504,7 +504,7 @@ export default function Landing() {
                 <div className="lp-section-head">
                   <h2 className="lp-h2">Ask it what you'd ask your bookkeeper.</h2>
                   <p className="lp-body">
-                    Occupancy, rent roll, what is open and what is owed — read from a synced copy
+                    Occupancy, rent roll, what is open and what is owed, read from a synced copy
                     of your account, not pasted into a paragraph. Every figure traces to Buildium.
                   </p>
                 </div>
@@ -586,7 +586,7 @@ export default function Landing() {
               <h2 className="lp-h2">Start free for two weeks.</h2>
               <p className="lp-body">
                 No card to begin. Plans start at $50 a month, and nothing is charged when the
-                trial ends — you pick one then, or you do not.
+                trial ends. You pick one then, or you do not.
               </p>
             </div>
           </Reveal>

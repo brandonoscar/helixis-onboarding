@@ -45,6 +45,7 @@ import {
   MARKETING_ROUTES,
   SITE_ORIGIN,
   canonicalFor,
+  routeFor,
 } from './seo/routes';
 import {
   HEAD_END,
@@ -52,6 +53,7 @@ import {
   ORGANIZATION_JSONLD,
   WEBSITE_JSONLD,
   appShellHead,
+  breadcrumbJsonLd,
   headTags,
   notFoundHead,
   sitemapXml,
@@ -230,13 +232,34 @@ describe('every marketing route has its own head', () => {
     );
   });
 
-  it('carries only Organization and WebSite structured data', () => {
+  it('carries only Organization and WebSite structured data on a top-level page', () => {
     const head = headTags(MARKETING_ROUTES[0]);
     const types = [...head.matchAll(/"@type":"([^"]+)"/g)].map((m) => m[1]);
     expect(types).toEqual(['Organization', 'WebSite']);
     // sameAs lists only profiles that exist; an empty list is left out.
     expect('sameAs' in ORGANIZATION_JSONLD).toBe(false);
     expect(WEBSITE_JSONLD.url).toBe(`${SITE_ORIGIN}/`);
+  });
+
+  it('gives a nested page a breadcrumb only when every link in it is a real page', () => {
+    const texas = MARKETING_ROUTES.find((r) => r.path === '/state-laws/texas')!;
+    const head = headTags(texas);
+    const ld = JSON.parse(head.match(/<script type="application\/ld\+json">(\{"@context":"https:\/\/schema.org","@type":"BreadcrumbList".*?)<\/script>/)![1]);
+    expect(ld.itemListElement.map((i: { name: string }) => i.name)).toEqual(['Home', 'Landlord rules by state', 'Texas']);
+    let withCrumbs = 0;
+    for (const r of MARKETING_ROUTES) {
+      const b = breadcrumbJsonLd(r) as { itemListElement: { item: string; position: number }[] } | null;
+      if (!b) continue;
+      withCrumbs += 1;
+      expect(b.itemListElement[b.itemListElement.length - 1].item).toBe(canonicalFor(r));
+      for (const i of b.itemListElement) {
+        expect(routeFor(i.item.replace(SITE_ORIGIN, '') || '/'), i.item).toBeDefined();
+      }
+    }
+    expect(withCrumbs).toBeGreaterThan(51);
+    for (const p of ['/', '/features', '/solutions/leasing', '/docs/buildium-api-setup']) {
+      expect(breadcrumbJsonLd(MARKETING_ROUTES.find((r) => r.path === p)!), p).toBeNull();
+    }
   });
 
   it('keeps the 404 page and the app shell out of the index', () => {

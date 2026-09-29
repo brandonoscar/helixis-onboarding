@@ -30,6 +30,9 @@ export interface MarketingRoute {
   description: string;
   inSitemap: boolean;
   source: string;
+  /** The page's name in a breadcrumb trail (head.ts). Defaults to the title
+   *  up to " | ". */
+  crumb?: string;
   changefreq: "weekly" | "monthly";
   priority: number;
 }
@@ -128,6 +131,7 @@ const STATIC_ROUTES: MarketingRoute[] = [
   {
     path: "/integrations",
     name: "integrations",
+    crumb: "Integrations",
     title: "Integrations | Occupella",
     description:
       "Occupella works with Buildium, Gmail, Google Calendar and Google Drive today. Texting opens after carrier approval. See the status of each.",
@@ -139,6 +143,7 @@ const STATIC_ROUTES: MarketingRoute[] = [
   {
     path: "/integrations/buildium",
     name: "integrations_buildium",
+    crumb: "Buildium",
     title: "Occupella for Buildium: what it reads and changes",
     description:
       "What Occupella reads from your Buildium account, the changes it can make there, and the API key it needs. Revoke the key in Buildium at any time.",
@@ -231,6 +236,7 @@ const STATE_LAW_ROUTES: MarketingRoute[] = [
   {
     path: "/state-laws",
     name: "state_laws",
+    crumb: "Landlord rules by state",
     title: "Landlord rules by state | Occupella",
     description:
       "Security deposit caps and return deadlines, late fees, notice periods and source-of-income rules for all 50 states and DC, with statute citations.",
@@ -243,6 +249,7 @@ const STATE_LAW_ROUTES: MarketingRoute[] = [
     (st): MarketingRoute => ({
       path: st.path,
       name: "state_law",
+      crumb: st.rules.name,
       title: `${st.rules.name} security deposit, late fee and notice rules | Occupella`,
       description: descriptionFor(st.rules),
       inSitemap: true,
