@@ -1,3 +1,5 @@
+import { SiteFooter, SiteNav, siteCss } from "./Site";
+
 
 // Plain-English Privacy Policy + Terms of Service. Written to be honest and
 // specific to what Occupella actually does (Buildium API mirror, Composio-managed
@@ -6,87 +8,64 @@
 // beat dead links for procurement and due diligence today.
 
 const css = `
+  /* The reading column stays 720px: these are long documents that carriers
+     and procurement read, and a 1200px line is not readable. Fonts, colour
+     and the header and footer come from the site (Site.tsx). */
   .legal {
     max-width: 720px;
     margin: 0 auto;
-    padding: 22px 32px 80px;
+    padding: clamp(48px, 7vw, 88px) 32px 32px;
   }
-
-  .legal-nav {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 56px;
-  }
-
-  .legal-wordmark {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    font-size: 16px;
-    font-weight: 600;
-    letter-spacing: -0.2px;
-    color: var(--ink);
-    text-decoration: none;
-  }
+  @media (max-width: 640px) { .legal { padding-left: 20px; padding-right: 20px; } }
 
   .legal h1 {
-    font-size: 30px;
-    font-weight: 600;
+    font-family: var(--font-display);
+    font-optical-sizing: auto;
+    font-size: clamp(36px, 5vw, 48px);
+    font-weight: 560;
+    line-height: 1.08;
     letter-spacing: -0.02em;
     color: var(--ink);
-    margin-bottom: 6px;
-  }
-
-  .legal-date {
-    font-family: var(--font-mono);
-    font-size: 11.5px;
-    color: var(--ink-subtle);
-    margin-bottom: 40px;
-  }
-
-  .legal h2 {
-    font-size: 17px;
-    font-weight: 600;
-    color: var(--ink);
-    margin: 32px 0 10px;
-  }
-
-  .legal p, .legal li {
-    font-size: 14px;
-    line-height: 1.7;
-    color: var(--ink-muted);
     margin-bottom: 10px;
   }
 
-  .legal ul { padding-left: 20px; margin-bottom: 10px; }
-  .legal a { color: var(--iris); text-decoration: none; }
-
-  .legal-note {
-    border: 1px solid var(--line);
-    border-radius: var(--r-sm);
-    background: var(--canvas-1);
-    padding: 12px 14px;
-    font-size: 12.5px;
-    color: var(--ink-subtle);
+  .legal-date {
+    font-size: 15px;
+    color: var(--ink-muted);
     margin-bottom: 36px;
   }
 
-  /* ⚠ flex-wrap is load-bearing, not tidiness. This row is a no-wrap flex
-     container, so every link added to it widens the page — at seven items it
-     pushed /terms past 390px and the whole document scrolled sideways on a
-     phone. Measured, not guessed. */
-  .legal-footer {
-    border-top: 1px solid var(--line);
-    margin-top: 56px;
-    padding-top: 20px;
-    font-size: 12.5px;
-    color: var(--ink-subtle);
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px 20px;
+  .legal h2 {
+    font-family: var(--font-display);
+    font-optical-sizing: auto;
+    font-size: 24px;
+    font-weight: 560;
+    line-height: 1.25;
+    color: var(--ink);
+    margin: 40px 0 12px;
   }
-  .legal-footer a { color: var(--ink-muted); }
+
+  .legal p, .legal li {
+    font-size: 16.5px;
+    line-height: 1.7;
+    color: var(--ink-muted);
+    margin-bottom: 12px;
+  }
+
+  .legal ul { padding-left: 22px; margin-bottom: 12px; }
+  .legal a { color: var(--iris); text-decoration: none; }
+  .legal a:hover { text-decoration: underline; }
+
+  .legal-note {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--band);
+    padding: 14px 16px;
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--ink);
+    margin-bottom: 40px;
+  }
 `;
 
 function Shell({
@@ -99,43 +78,26 @@ function Shell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="legal">
+    <div className="lp">
+      <style>{siteCss}</style>
       <style>{css}</style>
-      <nav className="legal-nav">
-        {/* ⚠ Wordmark only — the ◐/grid Mark was removed here (founder call,
-            2026-09-09). At 22px beside 17px text it rendered as a smudge of
-            pale squares rather than as a logo, and a mark somebody has to
-            squint at is worse for the brand than no mark. The word alone is
-            still the link home. */}
-        <a className="legal-wordmark" href="/">
-          Occupella
-        </a>
-        <a href="/" style={{ fontSize: 13, color: "var(--ink-muted)", textDecoration: "none" }}>
-          ← Back to Occupella
-        </a>
-      </nav>
-      <h1>{title}</h1>
-      <div className="legal-date">
-        {updated ?? "Effective July 6, 2026 · Updated August 14, 2026"}
-      </div>
-      <div className="legal-note">
-        This is written in plain English on purpose. If anything here is unclear, email{" "}
-        <a href="mailto:team@occupella.com">team@occupella.com</a> and a human will answer.
-      </div>
-      {children}
-      {/* ⚠ These pages keep their own narrow shell (720px, for reading), but
-          the footer links must reach the rest of the SITE — somebody who
-          arrives here from a carrier review or a procurement email has no
-          other way to find out what the product is. */}
-      <div className="legal-footer">
-        <span>© 2026 Oscar Ventures LLC</span>
-        <a href="/features">Features</a>
-        <a href="/pricing">Pricing</a>
-        <a href="/privacy">Privacy</a>
-        <a href="/terms">Terms</a>
-        <a href="/sms">SMS</a>
-        <a href="mailto:team@occupella.com">team@occupella.com</a>
-      </div>
+      {/* The site header and footer, so somebody who arrives here from a
+          carrier review or a procurement email can reach the rest of the
+          site. The footer carries Features, Pricing, the three legal pages,
+          the contact address, the entity and the not-affiliated line. */}
+      <SiteNav />
+      <main className="legal">
+        <h1>{title}</h1>
+        <div className="legal-date">
+          {updated ?? "Effective July 6, 2026 · Updated August 14, 2026"}
+        </div>
+        <div className="legal-note">
+          This is written in plain English on purpose. If anything here is unclear, email{" "}
+          <a href="mailto:team@occupella.com">team@occupella.com</a> and a human will answer.
+        </div>
+        {children}
+      </main>
+      <SiteFooter />
     </div>
   );
 }
