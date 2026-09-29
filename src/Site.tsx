@@ -108,13 +108,6 @@ export const siteCss = `
     max-width: 22ch;
   }
 
-  /* Kept only while Landing.tsx and Features.tsx still render it; both
-     lose their labels in this redesign, and then this rule goes. */
-  .lp-eyebrow {
-    font-size: 13px; font-weight: 600; letter-spacing: 0.04em;
-    text-transform: uppercase; color: var(--ink-subtle);
-  }
-
   .lp-lede {
     font-size: 19px;
     line-height: 1.55;
@@ -205,20 +198,6 @@ export const siteCss = `
   /* ── scroll reveals: headers + cards only, 12px, once ── */
   .reveal { opacity: 0; transform: translateY(12px); transition: opacity var(--dur-reveal) var(--ease-out), transform var(--dur-reveal) var(--ease-out); }
   .reveal[data-in="true"] { opacity: 1; transform: none; }
-
-  /* ── the 1px-gap card grid ──────────────────────────────────────────
-     One grid, used by the trust list, the pricing cards and the feature
-     cards. The cells sit on a --line background with a 1px gap, so the
-     dividers ARE the background showing through and there is never a double
-     hairline where two borders meet. */
-  .lp-grid { display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; }
-  .lp-grid > * { background: var(--canvas); }
-
-  /* ── trust ── */
-  .lp-trust { margin-top: 32px; }
-  @media (min-width: 760px) { .lp-trust { grid-template-columns: 1fr 1fr; } }
-  .lp-trust-item { padding: 18px 20px; display: flex; gap: 12px; align-items: flex-start; font-size: 14px; line-height: 1.5; color: var(--ink-secondary, var(--ink-muted)); }
-  .lp-trust-item svg { flex: none; margin-top: 2px; color: var(--iris); }
 
   /* ── closing band: the page's one full-width brand colour ── */
   .lp-close { margin-top: clamp(96px, 12vw, 144px); background: var(--iris); }

@@ -1,18 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  CHECK,
-  CloseBand,
-  Icon,
-  LOCK,
-  BELL,
-  Reveal,
-  SHIELD,
-  useStartLabel,
-  SiteFooter,
-  SiteNav,
-  siteCss,
-  DemoPanel,
-} from "./Site";
+import { CloseBand, Reveal, useStartLabel, SiteFooter, SiteNav, siteCss, DemoPanel } from "./Site";
+import { DelinquencyCrop, DraftCrop, cropCss } from "./crops";
 
 // ─────────────────────────────────────────────────────────────────────
 // LANDING — the front door.
@@ -35,8 +23,8 @@ import {
 //   · Copy — sentence case, terminal period, ≤8-word headline, concrete
 //     nouns, no adjectives.
 //
-// Everything shown ships today; the screenshots are captures of the real
-// app, not mockups.
+// Everything shown ships today. The visuals are product crops rebuilt from
+// the real app (src/crops.tsx), not mockups.
 // ─────────────────────────────────────────────────────────────────────
 
 const css = `
@@ -51,12 +39,9 @@ const css = `
     letter-spacing: -0.036em;
     text-wrap: balance;
     max-width: 17ch;
-    /* Luminance gradient, not a hue gradient — reads as light falling
-       across the type rather than as decoration. */
-    background: linear-gradient(to right bottom, var(--ink) 34%, rgba(14, 22, 32, 0.58));
-    background-clip: text;
-    -webkit-background-clip: text;
-    color: transparent;
+    /* Solid ink. It used to paint a grey fade through background-clip:
+       text, which the redesign removed. */
+    color: var(--ink);
   }
 
   /* ── rotating hero word ────────────────────────────────────────────
@@ -68,11 +53,8 @@ const css = `
      hugs the word and nothing else moves — which is also why there is no
      width-reservation hack here to go stale.
 
-     ⚠ .lp-h1 paints a luminance gradient through background-clip: text
-     with color: transparent, and that clipping covers descendants — so the
-     word would render in the headline's grey ramp, not the brand blue.
-     -webkit-text-fill-color is what overrides an inherited transparent
-     fill; plain color alone does not.
+     The word sets -webkit-text-fill-color as well as color, so it stays
+     blue even if a text fill is ever put back on .lp-h1.
 
      ⚠ No backticks anywhere in this block. These styles live inside a JS
      template literal, so one backtick in a comment ends the string and the
@@ -133,34 +115,23 @@ const css = `
   /* ── hero ── */
   .lp-hero { padding: clamp(56px, 9vw, 104px) 0 0; }
   .lp-hero-ctas { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
-  /* ── proof strip ── */
-  .lp-proof {
-    display: flex; flex-wrap: wrap; gap: 10px 28px; justify-content: center;
-    padding: clamp(40px, 5vw, 64px) 0 0;
-    font-size: 13px; color: var(--ink-subtle);
-  }
-  .lp-proof span { display: inline-flex; align-items: center; gap: 8px; }
-  .lp-proof i { width: 3px; height: 3px; border-radius: 50%; background: var(--iris); opacity: 0.7; }
+  .lp-hero .lp-video { margin-top: clamp(40px, 6vw, 72px); }
 
-  /* ── steps: a real sequence, so it's numbered and asymmetric ── */
-  .lp-steps { display: grid; gap: 1px; margin-top: 36px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; }
+  /* ── steps and trust: plain blocks under a thin rule, no box. The steps
+     are a real sequence, so they keep their numbers. ── */
+  .lp-steps, .lp-trust { display: grid; gap: 36px 48px; margin-top: 48px; }
   @media (min-width: 860px) { .lp-steps { grid-template-columns: repeat(3, 1fr); } }
-  .lp-step { background: var(--canvas); padding: 24px 22px 26px; }
-  .lp-step-n {
-    font-family: var(--font-mono); font-size: 11.5px; color: var(--iris);
-    letter-spacing: 0.1em;
-  }
-  .lp-step-t { margin-top: 12px; font-size: 16px; font-weight: 600; letter-spacing: -0.012em; color: var(--ink); }
-  .lp-step-b { margin-top: 7px; font-size: 14px; line-height: 1.55; color: var(--ink-muted); }
+  @media (min-width: 760px) { .lp-trust { grid-template-columns: 1fr 1fr; } }
+  .lp-step, .lp-trust-item { border-top: 1px solid var(--line); padding-top: 20px; }
+  .lp-step-n { font-size: 15px; font-weight: 600; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+  .lp-step-t { margin-top: 10px; font-size: 18px; font-weight: 600; color: var(--ink); }
+  .lp-step-b, .lp-trust-item { font-size: 16px; line-height: 1.6; color: var(--ink-muted); }
+  .lp-step-b { margin-top: 8px; }
 
   /* ── alternating feature bands ── */
   .lp-band { display: grid; gap: clamp(28px, 4vw, 56px); align-items: center; margin-top: 36px; }
   @media (min-width: 900px) { .lp-band { grid-template-columns: 0.85fr 1.15fr; } .lp-band[data-flip="true"] > *:first-child { order: 2; } }
-  .lp-shot {
-    border-radius: var(--r-lg); border: 1px solid var(--card-edge); overflow: hidden;
-    background: var(--canvas); box-shadow: 0 18px 44px -30px rgba(14,22,32,0.35);
-  }
-  .lp-shot img { display: block; width: 100%; height: auto; }
+  .lp-crop-cap { margin-top: 12px; font-size: 14px; color: var(--ink-muted); }
 
   @media (prefers-reduced-motion: reduce) {
     /* The word still TYPES — letters appearing where they will stay move
@@ -306,10 +277,10 @@ const STEPS = [
 // full list on both is how a landing page swallows the site it is supposed to
 // be the door to.
 const TRUST = [
-  { icon: BELL, text: "Nothing auto-sends. Every draft waits for a person." },
-  { icon: CHECK, text: "Every write to Buildium or Gmail passes a confirmation card you can edit before approving." },
-  { icon: SHIELD, text: "One company's data never reaches another's — not in files, not in what it remembers." },
-  { icon: LOCK, text: "Credentials are encrypted at rest, entered once and never shown again." },
+  "Nothing auto-sends. Every draft waits for a person.",
+  "Every write to Buildium or Gmail passes a confirmation card you can edit before approving.",
+  "One company's data never reaches another's — not in files, not in what it remembers.",
+  "Credentials are encrypted at rest, entered once and never shown again.",
 ];
 
 export default function Landing() {
@@ -321,15 +292,13 @@ export default function Landing() {
     <div className="lp">
       <style>{siteCss}</style>
       <style>{css}</style>
+      <style>{cropCss}</style>
 
       <SiteNav active="home" />
 
       <header className="lp-hero">
         <div className="lp-wrap">
-          <div className="lp-eyebrow rise" style={{ "--d": "0ms" } as React.CSSProperties}>
-            Agentic Workflows for Buildium Users
-          </div>
-          <h1 className="lp-h1 rise" style={{ "--d": "200ms", marginTop: 18 } as React.CSSProperties}>
+          <h1 className="lp-h1 rise" style={{ "--d": "0ms" } as React.CSSProperties}>
             We help Buildium users with
             <br />
             <RotatingWord />
@@ -374,12 +343,6 @@ export default function Landing() {
             // the audio — without them the narration can never be heard.
             controls
           />
-
-          <div className="lp-proof">
-            <span><i />Works on your live Buildium account</span>
-            <span><i />No migration, no new system of record</span>
-            <span><i />Nothing auto-sends</span>
-          </div>
         </div>
       </header>
 
@@ -387,8 +350,7 @@ export default function Landing() {
         <div className="lp-wrap">
           <Reveal>
             <div className="lp-section-head">
-              <div className="lp-eyebrow">How it works</div>
-              <h2 className="lp-h2">The part between the event and the reply.</h2>
+                            <h2 className="lp-h2">The part between the event and the reply.</h2>
             </div>
           </Reveal>
           <Reveal delay={60}>
@@ -411,8 +373,7 @@ export default function Landing() {
             <div>
               <Reveal>
                 <div className="lp-section-head">
-                  <div className="lp-eyebrow">Drafting</div>
-                  <h2 className="lp-h2">It writes the email. You pick the tone.</h2>
+                                    <h2 className="lp-h2">It writes the email. You pick the tone.</h2>
                   <p className="lp-body">
                     When there is more than one sensible way to answer a tenant, Occupella
                     drafts each one and names the approach. Slide through, edit any word,
@@ -422,13 +383,8 @@ export default function Landing() {
               </Reveal>
             </div>
             <Reveal delay={60}>
-              <div className="lp-shot">
-                <img
-                  src="/shots/drafts.png"
-                  alt="Three composed reply drafts for a lease renewal, shown as numbered options a manager can slide through"
-                  loading="lazy"
-                />
-              </div>
+              <DraftCrop />
+              <p className="lp-crop-cap">Three drafted next steps for one work order, with example data.</p>
             </Reveal>
           </div>
         </div>
@@ -440,8 +396,7 @@ export default function Landing() {
             <div>
               <Reveal>
                 <div className="lp-section-head">
-                  <div className="lp-eyebrow">Owner reporting</div>
-                  <h2 className="lp-h2">Ask it what you'd ask your bookkeeper.</h2>
+                                    <h2 className="lp-h2">Ask it what you'd ask your bookkeeper.</h2>
                   <p className="lp-body">
                     Occupancy, rent roll, what is open and what is owed — read from a synced copy
                     of your account, not pasted into a paragraph. Every figure traces to Buildium.
@@ -455,13 +410,8 @@ export default function Landing() {
                 rendered in production, and leads on NOI, which is implemented
                 nowhere. The copy above dropped "NOI" for the same reason. */}
             <Reveal delay={60}>
-              <div className="lp-shot">
-                <img
-                  src="/shots/property.png"
-                  alt="A property in Occupella: occupancy, rent roll, open work order count and delinquent balance, above the list of open work orders with their priority and status"
-                  loading="lazy"
-                />
-              </div>
+              <DelinquencyCrop />
+              <p className="lp-crop-cap">The answer to &ldquo;who is behind on rent?&rdquo;, with example data.</p>
             </Reveal>
           </div>
         </div>
@@ -471,8 +421,7 @@ export default function Landing() {
         <div className="lp-wrap">
           <Reveal>
             <div className="lp-section-head">
-              <div className="lp-eyebrow">Trust</div>
-              <h2 className="lp-h2">It asks before it acts.</h2>
+                            <h2 className="lp-h2">It asks before it acts.</h2>
               <p className="lp-body">
                 {/* ⚠ Do NOT put "and texts residents" back. Every SMS path in
                     the product is behind carrier approval that no company has
@@ -485,12 +434,11 @@ export default function Landing() {
             </div>
           </Reveal>
           <Reveal delay={60}>
-            <div className="lp-grid lp-trust">
+            <div className="lp-trust">
               {TRUST.map((t) => (
-                <div className="lp-trust-item" key={t.text}>
-                  <Icon d={t.icon} />
-                  <span>{t.text}</span>
-                </div>
+                <p className="lp-trust-item" key={t}>
+                  {t}
+                </p>
               ))}
             </div>
           </Reveal>
@@ -507,8 +455,7 @@ export default function Landing() {
         <div className="lp-wrap">
           <Reveal>
             <div className="lp-section-head">
-              <div className="lp-eyebrow">Pricing</div>
-              <h2 className="lp-h2">Start free for two weeks.</h2>
+                            <h2 className="lp-h2">Start free for two weeks.</h2>
               <p className="lp-body">
                 No card to begin. Plans start at $50 a month, and nothing is charged when the
                 trial ends — you pick one then, or you do not.
