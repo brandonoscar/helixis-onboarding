@@ -174,6 +174,17 @@ const STATIC_ROUTES: MarketingRoute[] = [
     priority: 0.4,
   },
   {
+    path: "/tools/deposit-deadline",
+    name: "tool_deposit_deadline",
+    title: "Security deposit return deadline calculator | Occupella",
+    description:
+      "Pick a state and a move-out date to get the day a security deposit has to go back, with the statute. All 50 states and DC, business days counted.",
+    inSitemap: true,
+    source: "src/tools/DepositDeadlineTool.tsx",
+    changefreq: "monthly",
+    priority: 0.7,
+  },
+  {
     path: "/security",
     name: "security",
     title: "Security | Occupella",
