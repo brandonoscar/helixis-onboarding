@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { releaseSessionForHandOff, supabase } from "./lib/supabase";
 import { apiFetch, apiJson, APP_URL, BUILDIUM_WEBHOOK_URL } from "./lib/api";
 import { clearWizard, loadWizard, saveWizard } from "./lib/persist";
-import { firstUnmet, meetsRequirements, requirements, strength } from "./lib/passwordStrength";
+import { firstUnmet, meetsRequirements, requirements } from "./lib/passwordStrength";
+import { DraftCrop, EmailDraftCrop, HistoryCrop, NoticedCrop, WorkOrderCard, cropCss } from "./crops";
 import { resumeAction } from "./lib/resume";
 import {
   asksForAccountCode,
@@ -18,19 +19,28 @@ import {
 } from "./lib/pms";
 
 // ─────────────────────────────────────────────────────────
-// SETUP WIZARD — 4 steps + launch (2026-07 research rebuild):
-//   1 identify  — secure account: email OTP + company + doors,
-//                 saved BEFORE any credential is asked for
-//   2 pms       — pick Buildium or Rentvine, then the one high-friction
-//                 required connection (admin handoff on request for Buildium)
-//   3 live      — Buildium webhooks, reframed as "live updates", skippable;
-//                 not shown for Rentvine (lib/pms.ts stepAfterConnect)
-//   4 channels  — Google OAuth, optional
-//   finish      — launch: what Occupella is scanning now, not a summary
-// Team invites moved to the in-app Getting Started checklist.
+// SETUP WIZARD — four steps as the visitor sees them, six internally:
+//   Account  identify  — email code, company, doors, then a password,
+//                        saved BEFORE any credential is asked for
+//   Connect  pms       — pick Buildium or Rentvine, then its keys (admin
+//                        handoff on request for Buildium)
+//            live      — Buildium webhooks ("live updates"), skippable; not
+//                        shown for Rentvine (lib/pms.ts stepAfterConnect)
+//   Scan     scan      — the first read of the portfolio, filling in as it
+//                        goes; skipped when no system was connected
+//   Email    channels  — Google OAuth, optional
+//            finish    — the hand-off into the app, signed in
+// Team invites live in the in-app Getting Started checklist.
+//
+// ⚠ STYLED LIKE THE SITE since 2026-09-29 (founder brief): Fraunces for step
+// headings, IBM Plex Sans for everything else, #1957A0, no boxed cards. The
+// tokens are scoped to .ob the way the marketing pages scope theirs to .lp,
+// so nothing outside the wizard changes. Only markup and copy moved in that
+// pass; every backend call, and the order of calls inside each step, is the
+// one that was here before.
 // ─────────────────────────────────────────────────────────
 
-type Step = "identify" | "pms" | "live" | "channels" | "finish";
+type Step = "identify" | "pms" | "live" | "scan" | "channels" | "finish";
 
 interface WorkspaceData {
   name: string;
@@ -50,56 +60,28 @@ interface IntegrationState {
 // Versioned ToS/Privacy acceptance recorded at signup (the wizard is the
 // one front door — keep in sync with the app's TERMS_VERSION).
 /**
- * The meter, and the checklist under it.
+ * The password rules, ticked as they are met.
  *
- * ⚠ **Requirements are visible from the FIRST keystroke**, not revealed as
- * errors after a failed submit. Somebody who can see the bar clears it on the
- * first try; somebody who cannot types a password, gets rejected, and blames
- * the product. Before this the only hint was the field's own placeholder.
- *
- * ⚠ **The meter and the checklist deliberately DISAGREE.** Composition rules
- * are what produce `Password1!` — it ticks every box and is in every cracking
- * wordlist — so the checklist gates submission while the meter still ranks it
- * below a four-word phrase. A product doing only the first half teaches the
- * wrong lesson; only the second is a bar nobody can see. The reasoning lives
- * in full in `lib/passwordStrength.ts`.
+ * ⚠ **Visible from the FIRST keystroke**, not revealed as errors after a
+ * failed submit. Somebody who can see the bar clears it on the first try.
+ * The strength meter that used to sit above it (three bars and a "Strong"
+ * label) is gone at the founder's call (2026-09-29): it disagreed with the
+ * checklist on purpose, and two verdicts on one field read as noise. The
+ * reasoning for the rules is in `lib/passwordStrength.ts`.
  */
-function PasswordStrength({ password }: { password: string }) {
-  const reqs = requirements(password);
-  const { score, label } = strength(password);
-
-  const colour =
-    score >= 3 ? "var(--positive)" : score === 2 ? "var(--caution)" : "var(--danger)";
-
+function PasswordRules({ password }: { password: string }) {
   return (
-    <div className="pw">
-      <div className="pw-bands" aria-hidden="true">
-        {[1, 2, 3].map((band) => (
-          <div
-            key={band}
-            className="pw-band"
-            style={score >= band ? { background: colour } : undefined}
-          />
-        ))}
-      </div>
-      <div className="pw-line">
-        <span className="pw-reqs">
-          {reqs.map((r) => (
-            <span key={r.id} className={r.met ? "pw-req met" : "pw-req"}>
-              <span className="pw-tick" aria-hidden="true">
-                {r.met ? "\u2713" : ""}
-              </span>
-              {r.label}
-            </span>
-          ))}
-        </span>
-        {/* aria-live so a screen-reader user hears the band change rather than
-            only seeing bars they cannot perceive. */}
-        <span className="pw-label" style={{ color: colour }} aria-live="polite">
-          {password ? label : ""}
-        </span>
-      </div>
-    </div>
+    <ul className="ob-rules" aria-live="polite">
+      {requirements(password).map((r) => (
+        <li key={r.id} className={r.met ? "met" : undefined}>
+          <span className="ob-rule-icon" aria-hidden="true">
+            {r.met ? <CheckIcon /> : null}
+          </span>
+          {r.label}
+          <span className="ob-sr">{r.met ? " (done)" : " (not yet)"}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -134,7 +116,10 @@ const TOS_VERSION = "2026-07-05";
 const TERMS_URL = "/terms";
 const PRIVACY_URL = "/privacy";
 
-const DOORS_OPTIONS = ["1–50", "50–200", "200–500", "500–2,000", "2,000+"];
+// ⚠ Kept in the browser's wizard state only; no request sends it (checked
+// 2026-09-29: bootstrap and the company PATCH carry the name alone), so the
+// labels can change without a backend change.
+const DOORS_OPTIONS = ["1–50", "51–200", "201–500", "501–2,000", "2,000+"];
 
 /**
  * Screen recording of Buildium's own Create-API-Key flow, shown inside the
@@ -153,508 +138,258 @@ const DOORS_OPTIONS = ["1–50", "50–200", "200–500", "500–2,000", "2,000+
  */
 const BUILDIUM_KEY_CLIP = "";
 
+/**
+ * A screenshot of Buildium's API Keys tab, shown under the four steps.
+ * TODO(brandon): capture it from our own account (no account name or key
+ * visible), put it in public/ and set the path. Empty renders nothing.
+ */
+const BUILDIUM_KEY_SHOT = "";
+
 // ─────────────────────────────────────────────────────────
 // WIZARD-SPECIFIC STYLES (tokens + primitives live in theme.ts)
 // ─────────────────────────────────────────────────────────
 
 const css = `
-  .app {
-    min-height: 100vh;
-    display: flex;
-    position: relative;
-    overflow: hidden;
+  /* ── site tokens, scoped to the wizard (the marketing pages use .lp) ──
+     NO BACKTICKS ANYWHERE IN THIS BLOCK: the stylesheet is one template
+     literal and a backtick in a comment ends it. */
+  .ob {
+    --iris: #1957A0;
+    --iris-hover: #144A8A;
+    --iris-press: #0F3B70;
+    --iris-soft: rgba(25, 87, 160, 0.10);
+    --iris-ring: rgba(25, 87, 160, 0.35);
+    --band: #E3EDF9;
+    --line: #DCE3EC;
+    --line-strong: #C5D0DD;
+    --card-edge: #DCE3EC;
+    --line-focus: rgba(25, 87, 160, 0.55);
+    --font-display: 'Fraunces Variable', Georgia, 'Times New Roman', serif;
+    --font-sans: 'IBM Plex Sans Variable', 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-mono: var(--font-sans);
+    min-height: 100vh; display: flex; flex-direction: column;
+    background: var(--canvas); color: var(--ink);
+    font-family: var(--font-sans); font-size: 16px; line-height: 1.55;
+    font-variant-numeric: normal;
   }
+  .ob a { color: var(--iris); }
 
-  /* ── SIDEBAR ── */
-  .sidebar {
-    width: 264px;
-    flex-shrink: 0;
-    padding: 28px 24px;
-    display: flex;
-    flex-direction: column;
-    gap: 36px;
-    border-right: 1px solid var(--line);
-    position: relative;
-    z-index: 1;
-    background: var(--canvas-1);
+  /* ── header: the site's bar ── */
+  .ob-head {
+    height: 64px; flex: none; display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 0 32px; background: var(--canvas); border-bottom: 1px solid var(--line);
   }
-
-  .logo {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    color: var(--ink);
-    text-decoration: none;
+  .ob .ob-word {
+    font-family: var(--font-display); font-optical-sizing: auto;
+    font-size: 25px; font-weight: 600; letter-spacing: -0.015em; line-height: 1;
+    color: var(--ink); text-decoration: none;
   }
+  .ob-who { font-size: 14px; color: var(--ink-muted); text-align: right; }
+  .ob-who b { color: var(--ink); font-weight: 600; }
 
-  .logo-text { font-size: 16px; font-weight: 600; letter-spacing: -0.2px; }
-
-  .steps { display: flex; flex-direction: column; position: relative; }
-
-  .step-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 9px 10px;
-    border-radius: var(--r-sm);
-    position: relative;
+  /* ── progress: four named steps ── */
+  .ob-prog { border-bottom: 1px solid var(--line); background: var(--canvas); }
+  .ob-prog ol { list-style: none; margin: 0; padding: 0 32px; display: flex; gap: 28px; height: 52px; align-items: center; }
+  .ob-prog li { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; color: var(--ink-subtle); white-space: nowrap; }
+  .ob-prog li .n {
+    width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
+    border: 1px solid var(--line-strong); font-size: 12px; font-weight: 600; color: var(--ink-subtle);
   }
+  .ob-prog li[data-state="current"] { color: var(--iris); font-weight: 600; }
+  .ob-prog li[data-state="current"] .n { border-color: var(--iris); background: var(--iris); color: #fff; }
+  .ob-prog li[data-state="done"] { color: var(--ink); }
+  .ob-prog li[data-state="done"] .n { border-color: var(--iris); color: var(--iris); }
 
-  .step-item:not(:last-child)::before {
-    content: '';
-    position: absolute;
-    left: 20px;
-    top: 32px;
-    bottom: -10px;
-    width: 1.5px;
-    background: var(--line);
+  /* ── body: the form, and the pale blue panel on desktop ── */
+  .ob-main { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr); }
+  @media (min-width: 960px) { .ob-main { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+  .ob-form { padding: 56px 32px 64px; display: flex; justify-content: center; }
+  @media (min-width: 960px) { .ob-form { justify-content: flex-end; padding-right: 64px; } }
+  .panel { width: 100%; max-width: 440px; animation: fadeUp 0.3s var(--ease-out) both; }
+  .ob-side { display: none; background: var(--band); }
+  @media (min-width: 960px) {
+    .ob-side { display: flex; align-items: center; padding: 56px 64px; }
   }
+  .ob-side-in { width: 100%; max-width: 440px; }
+  .ob-side-next { margin-top: 20px; font-size: 16px; line-height: 1.55; color: var(--ink); max-width: 38ch; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .panel { animation: none; } }
 
-  .step-item.done:not(:last-child)::before { background: var(--iris); opacity: 0.5; }
-  .step-item.active { background: var(--iris-soft); }
-
-  .step-dot {
-    width: 21px;
-    height: 21px;
-    border-radius: 50%;
-    border: 1.5px solid var(--line-strong);
-    background: var(--canvas-1);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 10px;
-    font-weight: 500;
-    color: var(--ink-subtle);
-    flex-shrink: 0;
-    font-family: var(--font-mono);
-    transition: border-color 0.2s, background 0.2s, color 0.2s;
-    position: relative;
-    z-index: 1;
-  }
-
-  .step-item.active .step-dot { border-color: var(--iris); background: var(--iris); color: #fff; }
-  .step-item.done .step-dot { border-color: var(--iris); background: var(--iris-soft); color: var(--iris); }
-
-  .step-label { font-size: 13px; font-weight: 500; color: var(--ink-subtle); transition: color 0.15s; }
-  .step-item.active .step-label { color: var(--ink); }
-  .step-item.done .step-label { color: var(--ink-muted); }
-
-  .step-tag { margin-left: auto; font-size: 10px; color: var(--ink-subtle); font-family: var(--font-mono); }
-
-  .sidebar-footer { margin-top: auto; padding-top: 20px; border-top: 1px solid var(--line); }
-  .sidebar-footer p { font-size: 11px; color: var(--ink-subtle); line-height: 1.5; }
-  .sidebar-footer a { color: var(--iris); text-decoration: none; }
-
-  /* ── MAIN ── */
-  .main {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 48px;
-    position: relative;
-    z-index: 1;
-    overflow-y: auto;
-  }
-
-  .panel {
-    width: 100%;
-    max-width: 540px;
-    animation: fadeUp 0.35s var(--ease-out) both;
-  }
-
-  /* ── BUILDIUM KEY WALKTHROUGH ── */
-  .keys-help { margin-top: 14px; }
-
-  .keys-help summary {
-    cursor: pointer;
-    font-size: 12.5px;
-    color: var(--iris);
-    list-style: none;
-    width: fit-content;
-  }
-  .keys-help summary::-webkit-details-marker { display: none; }
-  .keys-help summary::after { content: " →"; }
-  .keys-help[open] summary::after { content: ""; }
-  .keys-help summary:hover { text-decoration: underline; }
-
-  /* Deliberately capped well under the panel width: this is a reference
-     while someone works in a second window, not something to watch. */
-  .keys-clip {
-    display: block;
-    width: 100%;
-    max-width: 380px;
-    margin: 12px 0 4px;
-    border: 1px solid var(--line);
-    border-radius: var(--r-sm);
-  }
-
-  .keys-steps {
-    margin: 10px 0 0 16px;
-    padding: 0;
-    font-size: 12.5px;
-    line-height: 1.75;
-    color: var(--ink-muted);
-  }
-  .keys-steps strong { color: var(--ink); font-weight: 500; }
-
-  /* Absolutely positioned so the centred .panel keeps its exact geometry —
-     rendering it as a flex sibling would sit it BESIDE the panel, and
-     wrapping the panel in a column would move every step's layout. */
-  .step-back { position: absolute; top: 20px; left: 20px; }
-
-  @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(14px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-
+  /* ── step heading, with Back beside it ── */
   .panel-header { margin-bottom: 28px; }
-
-  .panel-tag {
-    font-size: 11px;
-    font-weight: 500;
-    letter-spacing: 1.4px;
-    text-transform: uppercase;
-    color: var(--iris);
-    margin-bottom: 10px;
-    font-family: var(--font-mono);
+  .ob-title-row { display: flex; align-items: center; gap: 12px; }
+  .ob .ob-back {
+    flex: none; display: inline-flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px; border-radius: 6px; border: 1px solid var(--line-strong);
+    background: var(--canvas); color: var(--ink-muted); cursor: pointer; padding: 0;
   }
-
+  .ob .ob-back:hover { color: var(--ink); border-color: var(--ink-subtle); }
+  .ob .ob-back:focus-visible { outline: 2px solid var(--iris); outline-offset: 2px; }
   .panel-title {
-    font-size: 25px;
-    font-weight: 600;
-    letter-spacing: -0.02em;
-    line-height: 1.25;
-    color: var(--ink);
-    margin-bottom: 8px;
-    text-wrap: balance;
+    font-family: var(--font-display); font-optical-sizing: auto;
+    font-size: 32px; font-weight: 560; line-height: 1.15; letter-spacing: -0.015em;
+    color: var(--ink); text-wrap: balance;
   }
+  .panel-desc { margin-top: 10px; font-size: 16px; line-height: 1.55; color: var(--ink-muted); }
+  .panel-desc b { color: var(--ink); font-weight: 600; }
+  .ob-sub { margin-top: 10px; font-size: 16px; color: var(--ink-muted); }
 
-  .panel-desc { font-size: 14px; color: var(--ink-muted); line-height: 1.6; }
-
-  /* ⚠ The title's 8px bottom margin exists to separate it from the
-     description. On a step that no longer HAS one it becomes dead space, and
-     the header's own 28px turns into 36 — a gap that reads as slightly wrong
-     without being obviously broken, which is how it survives review. A
-     last-child rule handles every such step, present and future, without the
-     JSX having to know whether it rendered a paragraph.
-     ⚠ NO BACKTICKS ANYWHERE IN THIS BLOCK — the whole stylesheet is a
-     template literal, so one in a comment ends it and the file stops
-     parsing several hundred lines later. */
-  .panel-title:last-child { margin-bottom: 0; }
-
-  /* Password strength. Four segments rather than one continuous bar: a bar
-     reads as a percentage and invites "how do I get to 100?", which is not a
-     question an estimate like this can answer honestly. Segments read as
-     bands. */
-  /* NO BACKTICKS ANYWHERE IN THIS BLOCK — the whole stylesheet is one
-     template literal and a backtick in a comment terminates it (TS1005). */
-  .pw { margin-top: 14px; }
-  /* Three segments, not a continuous fill: a fill reads as a percentage and
-     invites "how do I get to 100%", which this does not answer. */
-  .pw-bands { display: flex; gap: 4px; }
-  .pw-band { height: 4px; flex: 1; border-radius: 999px; background: var(--line); transition: background 140ms ease; }
-  .pw-line { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-top: 8px; min-height: 16px; }
-  .pw-label { font-size: 12px; font-weight: 550; white-space: nowrap; }
-  /* Requirements on ONE wrapping row: three short phrases stacked in a column
-     is a lot of vertical furniture under a single field. */
-  .pw-reqs { display: flex; flex-wrap: wrap; gap: 4px 14px; }
-  .pw-req { font-size: 12px; color: var(--ink-muted); display: inline-flex; align-items: baseline; gap: 5px; }
-  .pw-req.met { color: var(--positive); }
-  /* Fixed width so ticking a box does not reflow the row. */
-  .pw-tick { display: inline-block; width: 9px; font-size: 11px; }
-  @media (prefers-reduced-motion: reduce) { .pw-band { transition: none; } }
-
-  .btn-primary.wide { width: 100%; padding: 12px; font-size: 15px; font-weight: 500; margin-top: 8px; }
-  /* NO BACKTICKS: .wide was scoped to .btn-primary only, so a ghost button
-     carrying it silently stayed auto-width — a secondary action that does not
-     line up under the primary one reads as unrelated to it. */
-  .btn-ghost.wide { width: 100%; padding: 10px; margin-top: 6px; }
-
-  .trust-line {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    padding: 10px 12px;
-    background: var(--canvas-1);
-    border: 1px solid var(--line);
-    border-radius: var(--r-sm);
-    font-size: 11.5px;
-    color: var(--ink-subtle);
-    line-height: 1.5;
-    margin-bottom: 16px;
+  /* ── fields: real labels above, sentence case ── */
+  .ob .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 18px; }
+  .ob label { font-size: 15px; font-weight: 600; color: var(--ink); letter-spacing: 0; }
+  .ob input, .ob select { height: 44px; font-size: 16px; padding: 0 14px; }
+  .ob .hint { font-size: 14px; line-height: 1.5; color: var(--ink-muted); margin-top: 2px; }
+  .ob-pw { position: relative; }
+  .ob-pw input { padding-right: 72px; }
+  .ob .ob-pw-toggle {
+    position: absolute; right: 6px; top: 6px; height: 32px; padding: 0 10px;
+    border: 0; background: none; cursor: pointer; border-radius: 4px;
+    font: inherit; font-size: 14px; font-weight: 600; color: var(--iris);
   }
+  .ob .ob-pw-toggle:focus-visible { outline: 2px solid var(--iris); outline-offset: 1px; }
 
-  .trust-line svg { flex-shrink: 0; margin-top: 1px; color: var(--ink-subtle); }
-
-  /* ── PREFLIGHT (admin check) ── */
-  .handoff-link {
-    display: block; width: 100%; margin: 4px 0 10px; padding: 0;
-    background: none; border: 0; cursor: pointer; text-align: left;
-    font-size: 13px; color: var(--ink-muted); text-decoration: underline;
-    text-underline-offset: 3px;
+  /* ── buttons: the site's ── */
+  .ob .btn { height: 40px; padding: 0 18px; border-radius: 6px; font-family: var(--font-sans); font-size: 15px; font-weight: 600; box-shadow: none; }
+  .ob .btn-primary, .ob .btn-primary:hover { color: #fff; }
+  .ob .btn-primary:disabled, .ob .btn-secondary:disabled {
+    background: #E6EAF0; border-color: #E6EAF0; color: #8A94A3; opacity: 1; cursor: not-allowed;
   }
-  .handoff-link:hover { color: var(--ink); }
+  .ob .btn-secondary { background: var(--canvas); border-color: var(--line-strong); color: var(--ink); }
+  .ob .btn-secondary:hover:not(:disabled) { background: var(--canvas); border-color: var(--ink-subtle); }
+  .ob .btn.wide { width: 100%; margin-top: 8px; }
+  .ob .btn .spinner { margin-right: 4px; }
 
-  /* ── ADMIN HANDOFF ── */
-  .handoff {
-    border: 1px solid var(--line);
-    border-radius: var(--r-sm);
-    background: var(--canvas-2);
-    padding: 16px;
-    margin-bottom: 16px;
+  /* ── the one secondary-action style: small grey text links ── */
+  .ob-alts { margin-top: 14px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+  .ob .ob-alt {
+    background: none; border: 0; padding: 0; cursor: pointer; text-align: left;
+    font: inherit; font-size: 14px; color: var(--ink-muted); text-decoration: underline;
+    text-decoration-color: var(--line-strong); text-underline-offset: 3px;
   }
+  .ob a.ob-alt { color: var(--ink-muted); }
+  .ob .ob-alt:hover:not(:disabled) { color: var(--ink); }
+  .ob .ob-alt:disabled { cursor: default; text-decoration: none; opacity: 0.8; }
+  .ob-alt-line { margin-top: 18px; font-size: 14px; color: var(--ink-muted); }
+  .ob-alt-line .ob-alt { font-size: 14px; }
 
-  .handoff-title { font-size: 13.5px; font-weight: 600; color: var(--ink); margin-bottom: 6px; }
-  .handoff-body { font-size: 12.5px; color: var(--ink-muted); line-height: 1.6; margin-bottom: 12px; }
-
-  /* ── SAMPLE PREVIEW ── */
-  .sample-toggle {
-    background: none;
-    border: none;
-    color: var(--iris);
-    font-size: 12.5px;
-    font-weight: 500;
-    cursor: pointer;
-    font-family: var(--font-sans);
-    padding: 0;
-    margin-bottom: 12px;
+  /* ── password rules ── */
+  .ob-rules { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .ob-rules li { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink-muted); }
+  .ob-rules li.met { color: var(--ink); }
+  .ob-rule-icon {
+    width: 18px; height: 18px; flex: none; border-radius: 50%; display: grid; place-items: center;
+    border: 1px solid var(--line-strong); color: #fff;
   }
+  .ob-rules li.met .ob-rule-icon { background: var(--positive); border-color: var(--positive); }
+  .ob-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
-  .sample {
-    border: 1px dashed var(--line-strong);
-    border-radius: var(--r-sm);
-    padding: 14px 16px;
-    margin-bottom: 16px;
+  /* ── six code boxes ── */
+  .otp-row { display: flex; gap: 8px; margin: 4px 0 18px; }
+  .ob .otp-box {
+    width: 52px; height: 58px; padding: 0; text-align: center;
+    font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums;
+    border-radius: 6px; border: 1px solid var(--line-strong); background: var(--canvas); color: var(--ink);
   }
+  .ob .otp-box:focus { border-color: var(--iris); box-shadow: 0 0 0 3px var(--iris-soft); }
+  @media (max-width: 420px) { .ob .otp-box { width: 44px; height: 52px; font-size: 22px; } .otp-row { gap: 6px; } }
 
-  .sample-label {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    color: var(--ink-subtle);
-    margin-bottom: 10px;
+  /* ── messages ── */
+  .test-result { margin: 4px 0 14px; padding: 10px 12px; border-radius: 6px; font-size: 14px; line-height: 1.5; display: flex; gap: 8px; align-items: flex-start; }
+  .test-result.error { background: var(--danger-soft); color: var(--danger); }
+  .test-result.success { background: var(--positive-soft); color: var(--positive); }
+  .test-result.info { background: var(--canvas-1); color: var(--ink-muted); }
+
+  /* ── system tiles ── */
+  .ob-tiles { display: grid; gap: 12px; }
+  @media (min-width: 520px) { .ob-tiles { grid-template-columns: 1fr 1fr; } }
+  .ob .ob-tile {
+    display: flex; flex-direction: column; align-items: flex-start; gap: 14px; text-align: left;
+    min-height: 148px; padding: 20px; border-radius: 8px; border: 1px solid var(--line-strong);
+    background: var(--canvas); cursor: pointer; font: inherit; color: var(--ink);
   }
+  .ob .ob-tile:hover:not(:disabled) { border-color: var(--iris); }
+  .ob .ob-tile:focus-visible { outline: 2px solid var(--iris); outline-offset: 2px; }
+  .ob .ob-tile:disabled { cursor: not-allowed; background: var(--canvas-1); color: var(--ink-subtle); }
+  .ob-tile-reads { font-size: 14px; line-height: 1.5; color: var(--ink-muted); }
+  .ob-mark { display: inline-flex; align-items: center; }
+  .ob-mark img { display: block; height: 28px; width: auto; }
+  .ob-mark-text { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; color: var(--ink); }
+  .ob-title-mark { display: inline-flex; margin-bottom: 12px; }
 
-  .sample ul { list-style: none; display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
-
-  .sample li {
-    font-size: 12.5px;
-    color: var(--ink-muted);
-    padding-left: 14px;
-    position: relative;
+  /* ── numbered setup steps ── */
+  .ob-steps { list-style: none; margin: 0 0 24px; padding: 0; counter-reset: ob; display: flex; flex-direction: column; gap: 12px; }
+  .ob-steps li { counter-increment: ob; display: grid; grid-template-columns: 28px 1fr; gap: 10px; font-size: 15px; line-height: 1.5; color: var(--ink); }
+  .ob-steps li::before {
+    content: counter(ob); width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+    border: 1px solid var(--line-strong); font-size: 13px; font-weight: 600; color: var(--iris);
   }
+  .ob-steps b { font-weight: 600; }
+  .ob-shot { display: block; width: 100%; margin: 0 0 24px; border: 1px solid var(--line); border-radius: 6px; }
+  .keys-clip { display: block; width: 100%; margin: 0 0 24px; border: 1px solid var(--line); border-radius: 6px; }
 
-  .sample li::before {
-    content: '';
-    position: absolute;
-    left: 2px;
-    top: 7px;
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: var(--iris);
-    opacity: 0.7;
+  /* ── admin handoff, sample, copy field ── */
+  .handoff { margin: 16px 0 4px; padding: 16px 0 0; border-top: 1px solid var(--line); }
+  .handoff-title { font-size: 16px; font-weight: 600; color: var(--ink); }
+  .handoff-body { margin: 6px 0 12px; font-size: 14px; line-height: 1.55; color: var(--ink-muted); }
+  .btn-row { display: flex; gap: 8px; }
+  .sample { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+  .sample-label { font-size: 14px; font-weight: 600; color: var(--ink); margin-bottom: 8px; }
+  .sample ul { margin: 0 0 8px 18px; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+  .sample li { font-size: 14px; color: var(--ink-muted); }
+  .sample-cta { font-size: 14px; color: var(--ink-muted); }
+  .copy-field { display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 6px 0 14px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--canvas-1); }
+  .copy-value { flex: 1; min-width: 0; font-size: 14px; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; user-select: all; }
+  .ob .copy-btn { height: 32px; padding: 0 10px; border: 0; background: none; cursor: pointer; border-radius: 4px; font: inherit; font-size: 14px; font-weight: 600; color: var(--iris); }
+  .ob-radio { display: flex; gap: 20px; margin-bottom: 18px; }
+  .ob-radio label { display: flex; align-items: center; gap: 8px; font-weight: 500; cursor: pointer; }
+  .ob .ob-radio input { -webkit-appearance: radio; appearance: auto; width: 18px; height: 18px; padding: 0; margin: 0; border: 0; box-shadow: none; accent-color: var(--iris); }
+
+  /* ── scan progress ── */
+  .ob-scan { list-style: none; margin: 0 0 20px; padding: 0; border-top: 1px solid var(--line); }
+  .ob-scan li { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 16px; }
+  .ob-scan .v { margin-left: auto; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .ob-scan .v.wait { color: var(--ink-subtle); font-weight: 400; }
+  .ob-scan .ic { width: 20px; height: 20px; flex: none; display: grid; place-items: center; }
+  .ob-done { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; font-size: 16px; font-weight: 600; color: var(--positive); }
+  .ob-done .dot { width: 24px; height: 24px; border-radius: 50%; background: var(--positive); color: #fff; display: grid; place-items: center; }
+  .scan-cards { display: flex; flex-direction: column; gap: 0; margin: 0 0 20px; border-top: 1px solid var(--line); }
+  .scan-card { display: grid; grid-template-columns: 72px 1fr; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .scan-num { font-size: 18px; font-weight: 600; color: var(--iris); font-variant-numeric: tabular-nums; }
+  .scan-label { font-size: 15px; font-weight: 600; color: var(--ink); }
+  .scan-sub { font-size: 14px; color: var(--ink-muted); }
+
+  /* ── Google row ── */
+  .ob-google { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+  .ob-google b { display: block; font-size: 16px; font-weight: 600; }
+  .ob-google span { font-size: 14px; color: var(--ink-muted); }
+  .ob-connected { margin-left: auto; font-size: 14px; font-weight: 600; color: var(--positive); display: inline-flex; align-items: center; gap: 6px; }
+  .ob-facts { list-style: none; margin: 0 0 20px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .ob-facts li { font-size: 15px; line-height: 1.55; color: var(--ink-muted); }
+
+  /* ── terms checkbox (the global input rule erases native checkboxes) ── */
+  .ob .tos-row { display: flex; align-items: flex-start; gap: 10px; margin: 4px 0 18px; font-size: 14px; line-height: 1.55; color: var(--ink-muted); cursor: pointer; font-weight: 400; }
+  .ob .tos-row input[type="checkbox"] {
+    appearance: auto; -webkit-appearance: auto; width: 16px; height: 16px; flex: none;
+    margin-top: 3px; padding: 0; border: none; border-radius: 0; box-shadow: none; accent-color: var(--iris); cursor: pointer;
   }
+  .ob .tos-row input[type="checkbox"]:focus-visible { outline: 2px solid var(--iris); outline-offset: 2px; }
+  .tos-row a { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
+  .ob-works { margin: -4px 0 18px; font-size: 14px; color: var(--ink-muted); }
 
-  .sample-cta { font-size: 12px; color: var(--ink-subtle); }
+  /* ── footer line ── */
+  .ob-foot { border-top: 1px solid var(--line); padding: 18px 32px; display: flex; flex-wrap: wrap; gap: 6px 20px; font-size: 14px; color: var(--ink-muted); }
+  .ob-foot a { color: var(--ink-muted); }
+  .ob-foot a:hover { color: var(--ink); }
 
-  /* ── LOCKED / SUCCESS ── */
-  .locked-banner {
-    background: var(--positive-soft);
-    border: 1px solid rgba(111, 191, 143, 0.2);
-    border-radius: var(--r-sm);
-    padding: 14px 16px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-  }
-
-  .locked-info { display: flex; align-items: center; gap: 10px; }
-
-  .locked-icon {
-    width: 30px;
-    height: 30px;
-    background: rgba(111, 191, 143, 0.14);
-    color: var(--positive);
-    border-radius: var(--r-sm);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 13px;
-  }
-
-  /* ── COPY FIELD ── */
-  .copy-field {
-    background: var(--canvas-2);
-    border: 1px solid var(--line);
-    border-radius: var(--r-sm);
-    padding: 10px 14px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .copy-value {
-    flex: 1;
-    font-family: var(--font-mono);
-    font-size: 12px;
-    color: var(--ink-muted);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    user-select: all;
-  }
-
-  .copy-btn {
-    font-size: 11px;
-    font-weight: 500;
-    color: var(--iris);
-    cursor: pointer;
-    padding: 4px 8px;
-    border-radius: var(--r-xs);
-    transition: background 0.15s;
-    white-space: nowrap;
-    background: none;
-    border: none;
-    font-family: var(--font-sans);
-  }
-
-  .copy-btn:hover { background: var(--iris-soft); }
-
-  /* ── TEST RESULT ── */
-  .test-result {
-    padding: 12px 14px;
-    border-radius: var(--r-sm);
-    font-size: 13px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 12px;
-    animation: fadeUp 0.2s var(--ease-out) both;
-  }
-
-  .test-result.success {
-    background: var(--positive-soft);
-    color: var(--positive);
-    border: 1px solid rgba(111, 191, 143, 0.2);
-  }
-
-  .test-result.error {
-    background: var(--danger-soft);
-    color: var(--danger);
-    border: 1px solid rgba(201, 111, 111, 0.2);
-  }
-
-  /* ── FINISH / LAUNCH ── */
-  .finish-hero { text-align: center; padding: 20px 0 28px; }
-
-  .scan-cards { display: flex; flex-direction: column; gap: 10px; margin: 20px 0; }
-
-  .scan-card {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 13px 14px;
-    background: var(--canvas-1);
-    border: 1px solid var(--line);
-    border-radius: var(--r-sm);
-  }
-
-  .scan-num {
-    font-family: var(--font-mono);
-    font-size: 16px;
-    font-weight: 500;
-    color: var(--iris);
-    min-width: 44px;
-    text-align: center;
-  }
-
-  .scan-label { font-size: 13px; font-weight: 500; color: var(--ink); }
-  .scan-sub { font-size: 11px; color: var(--ink-subtle); }
-
-  /* ── OTP INPUT ── */
-  .otp-row { display: flex; gap: 8px; justify-content: center; margin: 20px 0; }
-
-  .otp-box {
-    width: 48px;
-    height: 56px;
-    text-align: center;
-    font-size: 22px;
-    font-weight: 600;
-    font-family: var(--font-mono);
-    border-radius: var(--r-sm);
-    background: var(--canvas-2);
-    border: 1.5px solid var(--line);
-    color: var(--ink);
-    outline: none;
-    transition: border-color 0.15s, box-shadow 0.15s;
-  }
-
-  .otp-box:focus { border-color: var(--iris); box-shadow: 0 0 0 3px var(--iris-soft); }
-
-  /* ── TOGGLE ── */
-  .toggle-row {
-    display: flex;
-    gap: 4px;
-    background: var(--canvas-2);
-    border: 1px solid var(--line);
-    border-radius: var(--r-sm);
-    padding: 3px;
-    width: fit-content;
-  }
-
-  .toggle-opt {
-    padding: 6px 14px;
-    border-radius: var(--r-xs);
-    font-size: 12px;
-    font-weight: 500;
-    cursor: pointer;
-    color: var(--ink-subtle);
-    transition: background 0.15s, color 0.15s;
-    border: none;
-    background: none;
-    font-family: var(--font-sans);
-  }
-
-  .toggle-opt.active { background: var(--canvas-3); color: var(--ink); }
-
-  .field-row { display: flex; gap: 12px; }
-  .field-row .field { flex: 1; }
-
-  .waitlist-note { font-size: 11.5px; color: var(--ink-subtle); margin-top: 10px; }
-  .waitlist-note a { color: var(--iris); text-decoration: none; }
-  .tos-row {
-    display: flex; align-items: flex-start; gap: 9px;
-    margin-top: 14px; padding-top: 12px;
-    border-top: 1px solid var(--line);
-    font-size: 12.5px; line-height: 1.55; color: var(--ink-muted);
-    cursor: pointer; user-select: none;
-  }
-  .tos-row input[type="checkbox"] {
-    /* The global "input, select" rule (theme.ts) sets width:100%,
-       padding, radius and -webkit-appearance:none — which ERASES the
-       native checkbox (founder-reported: rendered as an empty oval).
-       Restore native rendering wholesale. */
-    appearance: auto; -webkit-appearance: auto;
-    width: 15px; height: 15px; flex: none;
-    margin-top: 2px; padding: 0;
-    border: none; border-radius: 0; box-shadow: none;
-    accent-color: var(--iris); cursor: pointer;
-  }
-  .tos-row input[type="checkbox"]:focus { box-shadow: none; }
-  .tos-row input[type="checkbox"]:focus-visible {
-    outline: 2px solid var(--iris); outline-offset: 2px;
-  }
-  .tos-row a { color: var(--ink); font-weight: 500; text-decoration: underline; text-underline-offset: 2px; }
-
-  /* ── RESPONSIVE ── */
-  @media (max-width: 768px) {
-    .sidebar { display: none; }
-    .main { padding: 24px 20px; }
-    .field-row { flex-direction: column; gap: 0; }
+  @media (max-width: 640px) {
+    .ob-head { height: auto; min-height: 64px; padding-top: 10px; padding-bottom: 10px; flex-wrap: wrap; }
+    .ob-who { font-size: 13px; text-align: left; }
+    .ob-head, .ob-foot { padding-left: 20px; padding-right: 20px; }
+    .ob-prog ol { padding: 0 20px; gap: 14px; overflow-x: auto; }
+    .ob-prog li .t { display: none; }
+    .ob-prog li[data-state="current"] .t { display: inline; }
+    .ob-form { padding: 36px 20px 48px; }
+    .panel-title { font-size: 28px; }
   }
 `;
 
@@ -677,26 +412,119 @@ function CopyField({ label, value }: { label: string; value: string }) {
       <div className="copy-field">
         <span className="copy-value">{value}</span>
         <button className="copy-btn" onClick={copy}>
-          {copied ? "✓ Copied" : "Copy"}
+          {copied ? "Copied" : "Copy"}
         </button>
       </div>
     </div>
   );
 }
 
-// "Preview with sample Buildium data" — a preview, never an alternate
-// activation path: it always points back at the real connection.
+// "Explore with sample data": a preview, never an alternate activation path.
+// ⚠ Only things the product does today (no payment promises, no auto-sends).
 function SamplePreview() {
   return (
     <div className="sample">
-      <div className="sample-label">Sample data — what your first scan looks like</div>
+      <div className="sample-label">Sample data: what a first scan shows</div>
       <ul>
-        <li>4 work orders open more than 7 days — 2 with no vendor assigned</li>
-        <li>3 owner updates ready to draft from this week's activity</li>
-        <li>2 tenants promised payment — follow-up drafted for Thursday</li>
-        <li>1 lease ending in 30 days with no renewal started</li>
+        <li>4 work orders open more than 7 days, 2 with no vendor assigned</li>
+        <li>3 leases ending in the next 90 days</li>
+        <li>$4,020 owed across 3 leases</li>
       </ul>
-      <div className="sample-cta">Connect Buildium to run this on your portfolio.</div>
+      <div className="sample-cta">Connect your system to see your own.</div>
+    </div>
+  );
+}
+
+function CheckIcon({ size = 12 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M20 6L9 17l-5-5" />
+    </svg>
+  );
+}
+
+/** The wizard's own Back (its history stack), for headings that don't pass
+ *  one. Undefined when there is nowhere to go back to. */
+const BackContext = createContext<(() => void) | undefined>(undefined);
+
+/** The step heading, with Back beside it rather than floating in a corner. */
+function StepTitle({ title, onBack: explicitBack, children }: { title: string; onBack?: () => void; children?: React.ReactNode }) {
+  const contextBack = useContext(BackContext);
+  const onBack = explicitBack ?? contextBack;
+  return (
+    <div className="panel-header">
+      {children}
+      <div className="ob-title-row">
+        {onBack ? (
+          <button type="button" className="ob-back" onClick={onBack} aria-label="Back">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+          </button>
+        ) : null}
+        <h1 className="panel-title">{title}</h1>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Each system's logo.
+ *
+ * ⚠ TODO(brandon): the official Buildium and Rentvine logo files. Drop each
+ * vendor's SVG in public/logos/ and set the path here, after checking its
+ * brand guidelines (neither was readable from the build container, and a
+ * logo is a trademark). Until then the name is set in type, so nothing on
+ * the screen pretends to be a mark it isn't.
+ */
+const PMS_LOGO: Record<Pms, string> = { buildium: "", rentvine: "" };
+
+function PmsMark({ pms }: { pms: Pms }) {
+  return (
+    <span className="ob-mark">
+      {PMS_LOGO[pms] ? <img src={PMS_LOGO[pms]} alt={PMS_NAME[pms]} /> : <span className="ob-mark-text">{PMS_NAME[pms]}</span>}
+    </span>
+  );
+}
+
+/** A masked field with a Show/Hide toggle. */
+function SecretInput({
+  id,
+  value,
+  onChange,
+  autoComplete,
+  autoFocus,
+  onEnter,
+}: {
+  id: string;
+  value: string;
+  onChange: (v: string) => void;
+  autoComplete: string;
+  autoFocus?: boolean;
+  onEnter?: () => void;
+}) {
+  const [shown, setShown] = useState(false);
+  return (
+    <div className="ob-pw">
+      <input
+        id={id}
+        type={shown ? "text" : "password"}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        autoComplete={autoComplete}
+        autoFocus={autoFocus}
+        spellCheck={false}
+        onKeyDown={onEnter ? (e) => { if (e.key === "Enter") onEnter(); } : undefined}
+      />
+      <button
+        type="button"
+        className="ob-pw-toggle"
+        onClick={() => setShown((v) => !v)}
+        aria-controls={id}
+        aria-pressed={shown}
+      >
+        {shown ? "Hide" : "Show"}
+      </button>
     </div>
   );
 }
@@ -819,11 +647,19 @@ function StepIdentify({
     });
     setLoading(false);
     if (e) { setError(e.message); return; }
-    setResendMsg("New code sent — check your inbox (and spam).");
+    setResendMsg("A new code is on its way. Check your spam folder too.");
     setResendCooldown(45);
   };
 
   const handleOtpChange = (i: number, val: string) => {
+    // ⚠ Several digits at once is a paste or the phone's one-time-code
+    // autofill landing in one box: spread them across the row instead of
+    // keeping the last digit, which is what the single-box rule did.
+    const digits = val.replace(/\D/g, "");
+    if (digits.length > 1) {
+      fillOtp(digits, i);
+      return;
+    }
     if (!/^\d*$/.test(val)) return;
     const next = [...otp];
     next[i] = val.slice(-1);
@@ -833,6 +669,14 @@ function StepIdentify({
     }
   };
 
+  const fillOtp = (digits: string, from = 0) => {
+    const next = [...otp];
+    for (let k = 0; k < digits.length && from + k < 6; k++) next[from + k] = digits[k];
+    setOtp(next);
+    const last = Math.min(from + digits.length, 6) - 1;
+    document.getElementById(`otp-${Math.min(last + 1, 5)}`)?.focus();
+  };
+
   const verifyOtp = async () => {
     const code = otp.join("");
     if (code.length !== 6) return;
@@ -840,7 +684,7 @@ function StepIdentify({
     setError("");
     const { data, error: e } = await supabase.auth.verifyOtp({ email, token: code, type: "email" });
     setLoading(false);
-    if (e || !data.session) { setError("Invalid code. Please try again."); return; }
+    if (e || !data.session) { setError("That code didn't match. Check it, or resend a new one."); return; }
     setVerifiedToken(data.session.access_token);
   };
 
@@ -900,167 +744,143 @@ function StepIdentify({
 
   return (
     <div className="panel" key="identify">
-      <div className="panel-header">
-        <div className="panel-tag">Step 1 of 4</div>
-        <h1 className="panel-title">
-          {needsPassword
-            ? "Create your password"
-            : sent
-              ? "Check your email"
-              : "Create your account"}
-        </h1>
-        {/* ⚠ Only the CODE step keeps a description, and the other two were
-            deleted rather than reworded (founder call, 2026-09-09). "Your
-            email and your company name" under a form whose two fields are
-            Email and Company, and "You'll use this to sign in" under a heading
-            that says Create your password, are the label restated — the same
-            register being stripped out of Settings in the main app. This one
-            stays because it carries a FACT the screen does not otherwise
-            have: which address the code went to, and how many digits to
-            expect. */}
-        {sent && !needsPassword && (
-          <p className="panel-desc">
-            We sent a 6-digit code to {email}. Enter it below to continue.
-          </p>
-        )}
-      </div>
+      {/* ⚠ Only the CODE step keeps a description, and it carries a FACT the
+          screen does not otherwise have: which address the code went to. The
+          account screen's line is the offer (founder brief, 2026-09-29). */}
+      <StepTitle
+        title={needsPassword ? "Create your password" : sent ? "Check your email" : "Create your account"}
+        onBack={sent && !needsPassword ? () => { setSent(false); setResendMsg(""); setOtp(["", "", "", "", "", ""]); } : undefined}
+      />
+      {!sent && !needsPassword ? <p className="ob-sub" style={{ marginTop: -18, marginBottom: 28 }}>14 days free, no card.</p> : null}
+      {sent && !needsPassword ? (
+        <p className="panel-desc" style={{ marginTop: -18, marginBottom: 24 }}>
+          We sent a 6-digit code to <b>{email}</b>.
+        </p>
+      ) : null}
 
       {needsPassword ? (
         <>
-          <div className="card">
-            <div className="field">
-              <label>Password</label>
-              <input
-                type="password"
-                placeholder="At least 8 characters"
-                value={password}
-                onChange={(e) => { setPassword(e.target.value); setError(""); }}
-                autoComplete="new-password"
-                autoFocus
-                onKeyDown={(e) => { if (e.key === "Enter") savePassword(); }}
-              />
-              <PasswordStrength password={password} />
-            </div>
-            {error && (
-              <div className="test-result error"><span>⚠</span> {error}</div>
-            )}
+          <div className="field">
+            <label htmlFor="ob-password">Password</label>
+            <SecretInput
+              id="ob-password"
+              value={password}
+              onChange={(v) => { setPassword(v); setError(""); }}
+              autoComplete="new-password"
+              autoFocus
+              onEnter={savePassword}
+            />
+            <PasswordRules password={password} />
           </div>
-          {/* ⚠ `meetsRequirements`, not `length < 8`. The checklist above is
-              the bar somebody can SEE, so the button has to gate on the same
-              predicate — a visible requirement the submit ignores teaches
-              people the list is decorative, and one the submit enforces
-              without showing is the rejection-after-the-fact this replaces.
+          {error && <div className="test-result error" role="alert">{error}</div>}
+          {/* ⚠ `meetsRequirements`, not `length < 8`. The checklist is the bar
+              somebody can SEE, so the button gates on the same predicate.
               `savePassword` keeps its own floor: a disabled button is the
               explanation, never the enforcement. */}
           <button className="btn btn-primary wide" onClick={savePassword} disabled={!meetsRequirements(password) || loading}>
-            {loading ? <><span className="spinner" /> Saving…</> : "Save password & continue →"}
+            {loading ? <><span className="spinner" /> Saving</> : "Continue"}
           </button>
         </>
       ) : !sent ? (
         <>
-          <div className="card">
-            <div className="field">
-              <label>Work Email</label>
-              <input
-                type="email"
-                placeholder="you@yourcompany.com"
-                value={email}
-                onChange={(e) => { setEmail(e.target.value); setError(""); }}
-                autoFocus
-              />
-            </div>
-            <div className="field">
-              <label>Company Name</label>
-              <input
-                type="text"
-                placeholder="Acme Property Management"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </div>
-            <div className="field-row">
-              <div className="field">
-                <label>Doors under management</label>
-                <select value={doors} onChange={(e) => setDoors(e.target.value)}>
-                  <option value="">Select…</option>
-                  {DOORS_OPTIONS.map((d) => (
-                    <option key={d} value={d}>{d}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div className="waitlist-note">
-              Runs on <strong>Buildium</strong>. On AppFolio or Yardi?{" "}
-              <a href="mailto:team@occupella.com?subject=AppFolio%2FYardi%20waitlist">Join the waitlist</a>.
-            </div>
-            <label className="tos-row">
-              <input
-                type="checkbox"
-                checked={agreed}
-                onChange={(e) => setAgreed(e.target.checked)}
-                aria-label="Agree to the Terms of Service and Privacy Policy"
-              />
-              <span>
-                I agree to the <a href={TERMS_URL} target="_blank" rel="noreferrer">Terms of Service</a> and{" "}
-                <a href={PRIVACY_URL} target="_blank" rel="noreferrer">Privacy Policy</a>.
-              </span>
-            </label>
-            {error && (
-              <div className="test-result error"><span>⚠</span> {error}</div>
-            )}
+          <div className="field">
+            <label htmlFor="ob-email">Work email</label>
+            <input
+              id="ob-email"
+              type="email"
+              placeholder="you@yourcompany.com"
+              value={email}
+              onChange={(e) => { setEmail(e.target.value); setError(""); }}
+              autoComplete="email"
+              autoFocus
+            />
           </div>
-
-
+          <div className="field">
+            <label htmlFor="ob-company">Company name</label>
+            <input
+              id="ob-company"
+              type="text"
+              placeholder="Acme Property Management"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              autoComplete="organization"
+            />
+          </div>
+          <div className="field">
+            <label htmlFor="ob-doors">Doors under management</label>
+            <select id="ob-doors" value={doors} onChange={(e) => setDoors(e.target.value)}>
+              <option value="">Choose a range</option>
+              {DOORS_OPTIONS.map((d) => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+          </div>
+          <p className="ob-works">
+            Works with Buildium and Rentvine. On AppFolio or Yardi?{" "}
+            <a href="mailto:team@occupella.com?subject=AppFolio%2FYardi%20waitlist">Join the waitlist</a>.
+          </p>
+          <label className="tos-row">
+            <input
+              type="checkbox"
+              checked={agreed}
+              onChange={(e) => setAgreed(e.target.checked)}
+              aria-label="Agree to the Terms of Service and Privacy Policy"
+            />
+            <span>
+              I agree to the <a href={TERMS_URL} target="_blank" rel="noreferrer">Terms of Service</a> and{" "}
+              <a href={PRIVACY_URL} target="_blank" rel="noreferrer">Privacy Policy</a>.
+            </span>
+          </label>
+          {error && <div className="test-result error" role="alert">{error}</div>}
           <button className="btn btn-primary wide" onClick={sendCode} disabled={!ready || loading}>
-            {loading ? <><span className="spinner" /> Sending…</> : "Send code →"}
+            {loading ? <><span className="spinner" /> Sending</> : "Send code"}
           </button>
+          <div className="ob-alts">
+            <a className="ob-alt" href={APP_URL}>Already have an account? Sign in</a>
+          </div>
         </>
       ) : (
         <>
-          <div className="card">
-            <div className="otp-row">
-              {otp.map((d, i) => (
-                <input
-                  key={i}
-                  id={`otp-${i}`}
-                  className="otp-box"
-                  maxLength={1}
-                  value={d}
-                  onChange={(e) => handleOtpChange(i, e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Backspace" && !d && i > 0) {
-                      document.getElementById(`otp-${i - 1}`)?.focus();
-                    }
-                  }}
-                  autoFocus={i === 0}
-                />
-              ))}
-            </div>
-            {error && (
-              <div className="test-result error" style={{ marginTop: 0, marginBottom: 12 }}>
-                <span>⚠</span> {error}
-              </div>
-            )}
+          <div className="otp-row" role="group" aria-label="6-digit code">
+            {otp.map((d, i) => (
+              <input
+                key={i}
+                id={`otp-${i}`}
+                className="otp-box"
+                inputMode="numeric"
+                autoComplete={i === 0 ? "one-time-code" : "off"}
+                aria-label={`Digit ${i + 1}`}
+                value={d}
+                onChange={(e) => handleOtpChange(i, e.target.value)}
+                onPaste={(e) => {
+                  const digits = e.clipboardData.getData("text").replace(/\D/g, "");
+                  if (!digits) return;
+                  e.preventDefault();
+                  fillOtp(digits, 0);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Backspace" && !d && i > 0) {
+                    document.getElementById(`otp-${i - 1}`)?.focus();
+                  }
+                  if (e.key === "Enter") verifyOtp();
+                }}
+                autoFocus={i === 0}
+              />
+            ))}
           </div>
+          {error && <div className="test-result error" role="alert">{error}</div>}
+          {resendMsg && !error && <div className="test-result success" role="status">{resendMsg}</div>}
           <button className="btn btn-primary wide" onClick={verifyOtp} disabled={otp.join("").length !== 6 || loading}>
-            {loading ? <><span className="spinner" /> Verifying…</> : "Verify & continue →"}
+            {loading ? <><span className="spinner" /> Checking</> : "Continue"}
           </button>
-          {resendMsg && !error && (
-            <div className="test-result" style={{ marginTop: 8, marginBottom: 0 }}>
-              <span>✓</span> {resendMsg}
-            </div>
-          )}
-          <button
-            className="btn btn-ghost"
-            style={{ width: "100%", marginTop: 8 }}
-            onClick={resendCode}
-            disabled={resendCooldown > 0 || loading}
-          >
-            {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : "Didn't get it? Resend code"}
-          </button>
-          <button className="btn btn-ghost" style={{ width: "100%", marginTop: 8 }} onClick={() => { setSent(false); setResendMsg(""); }}>
-            ← Use different email
-          </button>
+          <div className="ob-alts">
+            <button type="button" className="ob-alt" onClick={resendCode} disabled={resendCooldown > 0 || loading}>
+              {resendCooldown > 0 ? `Resend the code in ${resendCooldown}s` : "Resend the code"}
+            </button>
+            <button type="button" className="ob-alt" onClick={() => { setSent(false); setResendMsg(""); }}>
+              Use a different email
+            </button>
+          </div>
         </>
       )}
     </div>
@@ -1091,19 +911,24 @@ function StepBuildium({
   const [integration, setIntegration] = useState<IntegrationState>({ status: "idle" });
   const [locking, setLocking] = useState(false);
   const [showSample, setShowSample] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [copied, setCopied] = useState(false);
 
+  // ⚠ THE APPROVAL SENTENCE IS HELD ("Occupella never writes to Buildium
+  // without a person approving the change first"). TODO(brandon): confirm
+  // the autonomous notes flag is off; then it can come back here and in the
+  // step's description.
   const handoffInstructions =
-    `Hi —\n\n` +
-    `We're setting up Occupella for ${workspaceName || "our company"}. It reads our Buildium data — ` +
-    `properties, units, leases, tenants, work orders and bills — and needs an API key to do it.\n\n` +
-    `Steps (about 2 minutes):\n` +
-    `1. In Buildium, open Settings → Developer Tools → API Keys\n` +
-    `2. Click Create API Key, then copy the Client ID and Client Secret\n` +
-    `3. Send them to me securely, or finish the setup here: ${window.location.origin}/start\n\n` +
-    `Security: the credentials are encrypted at rest, are not shown again after setup, and you can ` +
-    `revoke the key from Buildium at any time. Occupella never writes to Buildium without a person ` +
-    `approving the change first.\n\n` +
+    `Hi,\n\n` +
+    `We're setting up Occupella for ${workspaceName || "our company"}. It reads our Buildium data ` +
+    `(properties, units, leases, tenants, work orders and bills) and needs an API key to do it.\n\n` +
+    `Steps, about 2 minutes:\n` +
+    `1. In Buildium, open Settings, then Developer Tools, and pick the API Keys tab\n` +
+    `2. Click Create API Key, name it Occupella and continue through the three steps\n` +
+    `3. Copy the Client ID and Client Secret\n` +
+    `4. Send them to me securely, or finish the setup here: ${window.location.origin}/start\n\n` +
+    `Security: the credentials are encrypted at rest and not shown again after setup, and you can ` +
+    `revoke the key from Buildium at any time.\n\n` +
     `Requested by ${userEmail}`;
 
   const mailtoHref =
@@ -1116,8 +941,10 @@ function StepBuildium({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const testConnection = async () => {
-    if (!apiKey || !apiSecret) return;
+  /** Saves the keys, then tests them: the same two calls, in the same order,
+   *  as before the 2026-09-29 restyle. Returns whether the test passed. */
+  const testConnection = async (): Promise<{ ok: boolean; count: number | null }> => {
+    if (!apiKey || !apiSecret) return { ok: false, count: null };
     setIntegration((s) => ({ ...s, status: "testing" }));
 
     try {
@@ -1148,170 +975,142 @@ function StepBuildium({
           // Deliberately no count here — /buildium/test's properties_count
           // is a shallow probe that can undercount, and a wrong number at
           // the moment of connection reads as a broken product.
-          testMessage: "Connected. Ready to scan your portfolio.",
+          testMessage: "Connected. Starting the first scan.",
         });
-      } else {
-        setIntegration({ status: "error", testMessage: testData.error || "Connection failed" });
+        return { ok: true, count: n ?? null };
       }
+      setIntegration({ status: "error", testMessage: testData.error || "Buildium didn't accept those keys." });
+      return { ok: false, count: null };
     } catch (e: any) {
-      setIntegration({ status: "error", testMessage: e.message || "Connection failed" });
+      setIntegration({ status: "error", testMessage: e.message || "Couldn't reach Buildium to test the keys." });
+      return { ok: false, count: null };
     }
   };
 
-  const lockAndContinue = async () => {
+  const lockAndContinue = async (count: number | null) => {
     // Credentials are already encrypted server-side; this acknowledges and
     // advances. A backend lock/immutability endpoint doesn't exist yet —
     // when it does, call it here.
     setLocking(true);
     setIntegration((s) => ({ ...s, status: "locked", lockedAt: new Date().toLocaleString() }));
     setLocking(false);
-    onNext(integration.count ?? null);
+    onNext(count);
   };
+
+  /** One button: test the keys, and only if Buildium accepts them, go on to
+   *  the scan. A failure stays on this screen with the reason inline. */
+  const connectAndScan = async () => {
+    const result = await testConnection();
+    if (result.ok) await lockAndContinue(result.count);
+  };
+
+  const busy = integration.status === "testing" || locking;
 
   return (
     <div className="panel" key="buildium">
-      <div className="panel-header">
-        <div className="panel-tag">Step 2 of 4</div>
-        <h1 className="panel-title">Connect Buildium</h1>
-        {/* ⚠ Do not restore a claim about what happens BEFORE the scan. The
-            previous copy promised "we show you exactly what Occupella can see
-            before anything launches" — the scan starts on its own once the
-            keys save, so that was a false statement about our own product.
-            Say what the keys are for and what the limit on them is. */}
-        <p className="panel-desc">
-          Occupella reads your properties, units, leases, tenants, work orders and bills.
-          It never writes anything back to Buildium without your approval.
-        </p>
+      <StepTitle title="Connect Buildium" onBack={busy ? undefined : onChangePms}>
+        <span className="ob-title-mark"><PmsMark pms="buildium" /></span>
+      </StepTitle>
+      {/* ⚠ Do not restore a claim about what happens BEFORE the scan: the
+          scan starts on its own once the keys pass. The approval sentence
+          that ended this line is held (see handoffInstructions). */}
+      <p className="panel-desc" style={{ marginTop: -18, marginBottom: 24 }}>
+        Occupella reads your {PMS_READS.buildium}. Create an API key in Buildium and paste it below.
+      </p>
+
+      {/* ⚠ The path is Developer Tools, not "API Settings" (corrected
+          2026-09-02 from a screenshot of the live console, where API Keys is
+          a tab on the Developer Tools page). Same four steps as
+          occupella.com/docs/buildium-api-setup. */}
+      <ol className="ob-steps">
+        <li><span>In Buildium, open <b>Settings</b>, then <b>Developer Tools</b>, and pick the <b>API Keys</b> tab.</span></li>
+        <li><span>Click <b>Create API Key</b> and name it <b>Occupella</b>.</span></li>
+        <li><span>Continue through Buildium&rsquo;s three steps.</span></li>
+        <li><span>Copy the <b>Client ID</b> and <b>Client Secret</b> and paste them here.</span></li>
+      </ol>
+      {BUILDIUM_KEY_SHOT ? <img className="ob-shot" src={BUILDIUM_KEY_SHOT} alt="The API Keys tab in Buildium's Developer Tools" /> : null}
+      {BUILDIUM_KEY_CLIP ? (
+        <video className="keys-clip" src={BUILDIUM_KEY_CLIP} autoPlay loop muted playsInline aria-label="Creating an API key in Buildium" />
+      ) : null}
+
+      <div className="field">
+        <label htmlFor="ob-client-id">Client ID</label>
+        {/* Plain text: the ID is not the secret, and seeing it is how
+            somebody checks they pasted the right one. */}
+        <input
+          id="ob-client-id"
+          type="text"
+          value={apiKey}
+          onChange={(e) => setApiKey(e.target.value)}
+          autoComplete="off"
+          spellCheck={false}
+        />
+      </div>
+      <div className="field">
+        <label htmlFor="ob-client-secret">Client secret</label>
+        <SecretInput id="ob-client-secret" value={apiSecret} onChange={setApiSecret} autoComplete="new-password" onEnter={connectAndScan} />
       </div>
 
-      {/* ⚠ This used to be a forced binary ("I can generate Buildium API
-          keys" / "I need my admin or partner") sitting ABOVE the form. It made
-          everyone answer a question about themselves before they could start,
-          and most people can just paste the keys — so the common path paid for
-          the rare one. The credentials form is the default now and the handoff
-          is one link away, which loses no capability. */}
-
-      {/* ⚠ The handoff kept its capability and lost its interstitial. Its
-          only entry point used to be the preflight button; now it is a link
-          under the form, so someone who cannot generate keys is one click from
-          the same email and everyone else never sees the question. */}
-      {isAdmin === false ? (
-        <div className="handoff">
-          <div className="handoff-title">Send setup instructions to your Buildium admin</div>
-          <div className="handoff-body">
-            A short email saying why Occupella needs access, where to create the key in Buildium, and
-            what gets stored — with a link back here. Your progress is saved.
-          </div>
-          <div className="btn-row">
-            <a className="btn btn-secondary" href={mailtoHref} style={{ flex: 1 }}>
-              Email my admin
-            </a>
-            <button className="btn btn-secondary" onClick={copyInstructions} style={{ flex: 1 }}>
-              {copied ? "✓ Copied" : "Copy instructions"}
-            </button>
-          </div>
-          <button className="handoff-link" onClick={() => setIsAdmin(null)}>
-            I have the keys after all
-          </button>
+      {showAdvanced ? (
+        <div className="ob-radio" role="radiogroup" aria-label="Buildium environment">
+          <label>
+            <input type="radio" name="ob-env" checked={env === "production"} onChange={() => setEnv("production")} />
+            Production
+          </label>
+          <label>
+            <input type="radio" name="ob-env" checked={env === "sandbox"} onChange={() => setEnv("sandbox")} />
+            Sandbox (a key from Buildium&rsquo;s API sandbox)
+          </label>
         </div>
       ) : null}
 
-      {(isAdmin === true || isAdmin === null) && (
-        <div className="card" style={{ marginBottom: 16 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-            <div className="card-title" style={{ marginBottom: 0 }}>Buildium API credentials</div>
-            <div className="toggle-row">
-              <button className={`toggle-opt ${env === "production" ? "active" : ""}`} onClick={() => setEnv("production")}>Production</button>
-              <button className={`toggle-opt ${env === "sandbox" ? "active" : ""}`} onClick={() => setEnv("sandbox")}>Sandbox</button>
-            </div>
-          </div>
-
-          <div className="field">
-            <label>Buildium Client ID</label>
-            <input className="secret-input" type="password" placeholder="••••••••••••••••••••" value={apiKey} onChange={(e) => setApiKey(e.target.value)} autoComplete="new-password" />
-          </div>
-          <div className="field">
-            <label>Buildium Client Secret</label>
-            <input className="secret-input" type="password" placeholder="••••••••••••••••••••" value={apiSecret} onChange={(e) => setApiSecret(e.target.value)} autoComplete="new-password" />
-            {/* ⚠ The path is Developer Tools, not "API Settings" — corrected
-                2026-09-02 from a screenshot of the live Buildium console,
-                where the page is titled "Developer Tools" and API Keys is a
-                tab on it alongside API Sandbox and Webhooks. The old wording
-                sent people to a page that does not exist. */}
-            <span className="hint">Buildium → Settings → Developer Tools → API Keys → Create API Key.</span>
-          </div>
-
-          <details className="keys-help">
-            <summary>Walk me through it</summary>
-            {BUILDIUM_KEY_CLIP && (
-              <video
-                className="keys-clip"
-                src={BUILDIUM_KEY_CLIP}
-                autoPlay
-                loop
-                muted
-                playsInline
-                aria-label="Creating an API key in Buildium"
-              />
-            )}
-            <ol className="keys-steps">
-              <li>In Buildium, open <strong>Settings → Developer Tools</strong> and pick the <strong>API Keys</strong> tab.</li>
-              <li>Click <strong>Create API Key</strong>, name it <strong>Occupella</strong>, and continue through the three steps.</li>
-              <li>Copy the <strong>Client ID</strong> and <strong>Client Secret</strong> at the end and paste them above.</li>
-            </ol>
-          </details>
-
-          {integration.status === "testing" && (
-            <div className="test-result" style={{ background: "var(--canvas-2)", border: "1px solid var(--line)", color: "var(--ink-muted)" }}>
-              <span className="spinner accent" /> Testing read access to your Buildium account…
-            </div>
-          )}
-          {integration.status === "connected" && (
-            <div className="test-result success">
-              <span>✓</span>
-              <span>{integration.testMessage}</span>
-            </div>
-          )}
-          {integration.status === "error" && (
-            <div className="test-result error">
-              <span>⚠</span> {integration.testMessage}
-            </div>
-          )}
-
-          <div className="btn-row" style={{ marginTop: 12 }}>
-            <button className="btn btn-secondary" onClick={testConnection} disabled={!apiKey || !apiSecret || integration.status === "testing"} style={{ flex: 1 }}>
-              {integration.status === "testing" ? <><span className="spinner accent" /> Testing…</> : "Test Buildium connection"}
-            </button>
-            <button className="btn btn-primary" style={{ flex: 1, margin: 0 }} onClick={lockAndContinue} disabled={integration.status !== "connected" || locking}>
-              {locking ? <><span className="spinner" /> Saving…</> : "Save & scan my portfolio →"}
-            </button>
-          </div>
-        </div>
+      {integration.status === "testing" && (
+        <div className="test-result info" role="status"><span className="spinner accent" /> Testing your keys with Buildium</div>
+      )}
+      {integration.status === "error" && (
+        <div className="test-result error" role="alert">{integration.testMessage}</div>
+      )}
+      {(integration.status === "connected" || integration.status === "locked") && (
+        <div className="test-result success" role="status">{integration.testMessage}</div>
       )}
 
+      <button className="btn btn-primary wide" onClick={connectAndScan} disabled={!apiKey || !apiSecret || busy}>
+        {busy ? <><span className="spinner" /> Connecting</> : "Connect and scan"}
+      </button>
+      <button className="btn btn-secondary wide" onClick={() => setIsAdmin((v) => (v === false ? null : false))} disabled={busy}>
+        Send these steps to my admin
+      </button>
 
-      {isAdmin !== false ? (
-        <button className="handoff-link" onClick={() => setIsAdmin(false)}>
-          I need my admin or partner to generate these keys
-        </button>
+      {isAdmin === false ? (
+        <div className="handoff">
+          <div className="handoff-title">Send the steps to your Buildium admin</div>
+          <div className="handoff-body">
+            An email saying why Occupella needs a key, where to create it and what gets stored, with a
+            link back here. Your progress is saved.
+          </div>
+          <div className="btn-row">
+            <a className="btn btn-secondary" href={mailtoHref} style={{ flex: 1 }}>Email my admin</a>
+            <button className="btn btn-secondary" onClick={copyInstructions} style={{ flex: 1 }}>
+              {copied ? "Copied" : "Copy the steps"}
+            </button>
+          </div>
+        </div>
       ) : null}
 
-      <button className="sample-toggle" onClick={() => setShowSample((s) => !s)}>
-        {showSample ? "Hide sample preview" : "Preview the first scan with sample Buildium data →"}
-      </button>
       {showSample && <SamplePreview />}
 
-      <button
-        className="btn btn-ghost"
-        style={{ width: "100%", marginTop: 8 }}
-        onClick={onSkip}
-        disabled={integration.status === "testing" || locking}
-      >
-        Skip for now — connect Buildium later from Settings →
-      </button>
-      <button className="handoff-link" onClick={onChangePms} disabled={integration.status === "testing"}>
-        ← We use Rentvine, not Buildium
-      </button>
+      <p className="ob-alt-line">
+        <button type="button" className="ob-alt" onClick={() => setShowSample((v) => !v)} disabled={busy}>
+          {showSample ? "Hide the sample data" : "Explore with sample data"}
+        </button>{" "}
+        or{" "}
+        <button type="button" className="ob-alt" onClick={onSkip} disabled={busy}>skip for now</button>.
+      </p>
+      {!showAdvanced ? (
+        <div className="ob-alts" style={{ marginTop: 8 }}>
+          <button type="button" className="ob-alt" onClick={() => setShowAdvanced(true)}>Advanced</button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1370,37 +1169,37 @@ function StepPms({
 
   return (
     <div className="panel" key="pms">
-      <div className="panel-header">
-        <div className="panel-tag">Step 2 of 4</div>
-        <h1 className="panel-title">Which property-management system do you use?</h1>
-        <p className="panel-desc">
-          Occupella reads your portfolio from it. Each workspace connects to one system.
-        </p>
-      </div>
+      <StepTitle title="Connect your property management system" />
+      <p className="panel-desc" style={{ marginTop: -18, marginBottom: 24 }}>
+        Occupella reads your portfolio from it. Each workspace connects to one system.
+      </p>
 
-      <div className="btn-row" style={{ flexDirection: "column", gap: 10 }}>
-        <button className="btn btn-secondary wide" onClick={() => setChoice("buildium")}>
-          Buildium
-        </button>
-        <button
-          className="btn btn-secondary wide"
-          onClick={() => setChoice("rentvine")}
-          disabled={rentvine === "off"}
-        >
-          Rentvine
-        </button>
+      <div className="ob-tiles">
+        {(["buildium", "rentvine"] as const).map((pms) => (
+          <button
+            key={pms}
+            type="button"
+            className="ob-tile"
+            onClick={() => setChoice(pms)}
+            disabled={pms === "rentvine" && rentvine === "off"}
+            aria-label={`Connect ${PMS_NAME[pms]}`}
+          >
+            <PmsMark pms={pms} />
+            <span className="ob-tile-reads">Reads your {PMS_READS[pms]}.</span>
+          </button>
+        ))}
       </div>
       {rentvine === "off" && (
-        <p className="hint" style={{ marginTop: 10 }}>
-          Rentvine isn't switched on for new workspaces yet. Email{" "}
+        <p className="hint" style={{ marginTop: 12 }}>
+          Rentvine isn&rsquo;t switched on for new workspaces yet. Email{" "}
           <a href="mailto:team@occupella.com?subject=Rentvine%20access">team@occupella.com</a> and
-          we'll turn it on for you, or skip this step and come back to occupella.com/start later.
+          we&rsquo;ll turn it on for you, or skip this step and come back to occupella.com/start later.
         </p>
       )}
 
-      <button className="btn btn-ghost" style={{ width: "100%", marginTop: 16 }} onClick={onSkip}>
-        Skip for now →
-      </button>
+      <p className="ob-alt-line">
+        <button type="button" className="ob-alt" onClick={onSkip}>Skip for now</button>
+      </p>
     </div>
   );
 }
@@ -1426,8 +1225,10 @@ function StepRentvine({
   const [showAccountCode, setShowAccountCode] = useState(false);
   const [integration, setIntegration] = useState<IntegrationState>({ status: "idle" });
 
-  const testConnection = async () => {
-    if (!apiKey || !apiSecret) return;
+  /** Saves the keys, then tests them (the same two calls, in the same order,
+   *  as before the 2026-09-29 restyle). Returns whether the test passed. */
+  const testConnection = async (): Promise<boolean> => {
+    if (!apiKey || !apiSecret) return false;
     setIntegration({ status: "testing" });
     try {
       await apiFetch("/api/v1/rentvine/credentials", {
@@ -1443,120 +1244,74 @@ function StepRentvine({
           status: "connected",
           testMessage: "Connected. Occupella has started reading your portfolio.",
         });
-      } else {
-        setIntegration({ status: "error", testMessage: testData.error || "Connection failed" });
+        return true;
       }
+      setIntegration({ status: "error", testMessage: testData.error || "Rentvine didn't accept those keys." });
+      return false;
     } catch (e: any) {
       // The backend's refusals are sentences for the customer (connector off,
       // workspace already on Buildium, subdomain needed). Show them as written.
       if (asksForAccountCode(e?.status)) setShowAccountCode(true);
-      setIntegration({ status: "error", testMessage: e?.message || "Connection failed" });
+      setIntegration({ status: "error", testMessage: e?.message || "Couldn't reach Rentvine to test the keys." });
+      return false;
     }
+  };
+
+  const connectAndScan = async () => {
+    if (await testConnection()) onNext();
   };
 
   const testing = integration.status === "testing";
 
   return (
     <div className="panel" key="rentvine">
-      <div className="panel-header">
-        <div className="panel-tag">Step 2 of 4</div>
-        <h1 className="panel-title">Connect Rentvine</h1>
-        <p className="panel-desc">
-          Occupella reads your {PMS_READS.rentvine}. It never writes anything back to Rentvine
-          without your approval.
-        </p>
-      </div>
+      <StepTitle title="Connect Rentvine" onBack={testing ? undefined : onChangePms}>
+        <span className="ob-title-mark"><PmsMark pms="rentvine" /></span>
+      </StepTitle>
+      {/* The approval sentence that ended this line is held, as on the
+          Buildium step. TODO(brandon): confirm the autonomous notes flag. */}
+      <p className="panel-desc" style={{ marginTop: -18, marginBottom: 24 }}>
+        Occupella reads your {PMS_READS.rentvine}. Paste a Rentvine API key below.
+      </p>
 
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div className="card-title">Rentvine API key</div>
+      <div className="field">
+        <label htmlFor="ob-rv-key">Access key</label>
+        <input id="ob-rv-key" type="text" value={apiKey} onChange={(e) => setApiKey(e.target.value)} autoComplete="off" spellCheck={false} />
+      </div>
+      <div className="field">
+        <label htmlFor="ob-rv-secret">Secret</label>
+        <SecretInput id="ob-rv-secret" value={apiSecret} onChange={setApiSecret} autoComplete="new-password" onEnter={connectAndScan} />
+        <span className="hint">
+          Rentvine shows the secret once, when the key is created. If you don&rsquo;t have it, create a
+          new key and use that pair.
+        </span>
+      </div>
+      {showAccountCode ? (
         <div className="field">
-          <label>Access key</label>
-          <input
-            className="secret-input"
-            type="password"
-            placeholder="••••••••••••••••••••"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            autoComplete="new-password"
-          />
-        </div>
-        <div className="field">
-          <label>Secret</label>
-          <input
-            className="secret-input"
-            type="password"
-            placeholder="••••••••••••••••••••"
-            value={apiSecret}
-            onChange={(e) => setApiSecret(e.target.value)}
-            autoComplete="new-password"
-          />
+          <label htmlFor="ob-rv-code">Rentvine account code</label>
+          <input id="ob-rv-code" value={accountCode} placeholder="yourcompany" onChange={(e) => setAccountCode(e.target.value)} autoComplete="off" />
           <span className="hint">
-            Rentvine shows the secret once, when the key is created. If you don't have it, create a
-            new key and use that pair.
+            The word before &ldquo;.rentvine.com&rdquo; in your browser&rsquo;s address bar when you&rsquo;re signed in.
           </span>
         </div>
-        {showAccountCode ? (
-          <div className="field">
-            <label>Rentvine account code</label>
-            <input
-              value={accountCode}
-              placeholder="yourcompany"
-              onChange={(e) => setAccountCode(e.target.value)}
-              autoComplete="off"
-            />
-            <span className="hint">
-              The word before “.rentvine.com” in your browser's address bar when you're signed in.
-            </span>
-          </div>
-        ) : (
-          <button className="handoff-link" onClick={() => setShowAccountCode(true)}>
+      ) : null}
+
+      {testing && <div className="test-result info" role="status"><span className="spinner accent" /> Testing your keys with Rentvine</div>}
+      {integration.status === "connected" && <div className="test-result success" role="status">{integration.testMessage}</div>}
+      {integration.status === "error" && <div className="test-result error" role="alert">{integration.testMessage}</div>}
+
+      <button className="btn btn-primary wide" onClick={connectAndScan} disabled={!apiKey || !apiSecret || testing}>
+        {testing ? <><span className="spinner" /> Connecting</> : "Connect and scan"}
+      </button>
+
+      <div className="ob-alts">
+        {!showAccountCode ? (
+          <button type="button" className="ob-alt" onClick={() => setShowAccountCode(true)}>
             I know my Rentvine account code
           </button>
-        )}
-
-        {testing && (
-          <div className="test-result" style={{ background: "var(--canvas-2)", border: "1px solid var(--line)", color: "var(--ink-muted)" }}>
-            <span className="spinner accent" /> Testing read access to your Rentvine account…
-          </div>
-        )}
-        {integration.status === "connected" && (
-          <div className="test-result success">
-            <span>✓</span>
-            <span>{integration.testMessage}</span>
-          </div>
-        )}
-        {integration.status === "error" && (
-          <div className="test-result error">
-            <span>⚠</span> {integration.testMessage}
-          </div>
-        )}
-
-        <div className="btn-row" style={{ marginTop: 12 }}>
-          <button
-            className="btn btn-secondary"
-            onClick={testConnection}
-            disabled={!apiKey || !apiSecret || testing}
-            style={{ flex: 1 }}
-          >
-            {testing ? <><span className="spinner accent" /> Testing…</> : "Test Rentvine connection"}
-          </button>
-          <button
-            className="btn btn-primary"
-            style={{ flex: 1, margin: 0 }}
-            onClick={onNext}
-            disabled={integration.status !== "connected"}
-          >
-            Continue →
-          </button>
-        </div>
+        ) : null}
+        <button type="button" className="ob-alt" onClick={onSkip} disabled={testing}>Skip for now</button>
       </div>
-
-      <button className="btn btn-ghost" style={{ width: "100%", marginTop: 8 }} onClick={onSkip} disabled={testing}>
-        Skip for now — come back to occupella.com/start to connect Rentvine
-      </button>
-      <button className="handoff-link" onClick={onChangePms} disabled={testing}>
-        ← We use Buildium, not Rentvine
-      </button>
     </div>
   );
 }
@@ -1596,73 +1351,62 @@ function StepLive({ onNext }: { onNext: (saved: boolean) => void }) {
 
   return (
     <div className="panel" key="live">
-      <div className="panel-header">
-        <div className="panel-tag">Step 3 of 4 · Recommended</div>
-        <h1 className="panel-title">Turn on live Buildium updates</h1>
-        <p className="panel-desc">
-          Buildium posts work orders, resident messages, lease events and payments here as they
-          happen. Without this, Occupella only sees them at the next sync.
-        </p>
-      </div>
+      <StepTitle title="Turn on live updates" />
+      <p className="panel-desc" style={{ marginTop: -18, marginBottom: 24 }}>
+        Buildium can send work orders, resident messages, lease events and payments to Occupella as
+        they happen. Without this, Occupella sees them at the next sync.
+      </p>
 
-      <div className="card">
-        <div className="card-title">1 · Add this endpoint in Buildium</div>
-        <CopyField label="Buildium → Settings → Webhooks" value={BUILDIUM_WEBHOOK_URL} />
-        <div className="hint">One endpoint for all events — Occupella routes them to your account automatically.</div>
-      </div>
+      {/* ⚠ Webhooks are a tab on Developer Tools per the 2026-09-02 console
+          screenshot, which the setup guide follows. TODO(brandon): confirm
+          which path Buildium shows; this line used to say Settings → Webhooks. */}
+      <ol className="ob-steps">
+        <li><span>In Buildium, open <b>Settings</b>, then <b>Developer Tools</b>, and pick the <b>Webhooks</b> tab.</span></li>
+        <li><span>Create a subscription with this address. One address takes every event.</span></li>
+        <li><span>Paste the signing secret Buildium shows you, once, when the subscription is created.</span></li>
+      </ol>
+      <CopyField label="Address for Buildium" value={BUILDIUM_WEBHOOK_URL} />
 
-      <div className="card">
-        <div className="card-title">2 · Paste the signing secret Buildium gives you</div>
-        {saved ? (
-          <div className="locked-banner">
-            <div className="locked-info">
-              <div className="locked-icon">✓</div>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--positive)" }}>Live updates on</div>
-                <div style={{ fontSize: 11, color: "var(--ink-subtle)" }}>Buildium events now reach Occupella in real time.</div>
-              </div>
-            </div>
-            <span className="badge badge-positive">Secured</span>
+      {saved ? (
+        <div className="test-result success" role="status" style={{ marginTop: 8 }}>
+          Live updates are on. Buildium events now reach Occupella as they happen.
+        </div>
+      ) : (
+        <>
+          <div className="field">
+            <label htmlFor="ob-signing">Signing secret</label>
+            <SecretInput id="ob-signing" value={secret} onChange={setSecret} autoComplete="new-password" onEnter={saveSecret} />
           </div>
-        ) : (
-          <>
-            <div className="field">
-              <label>Signing secret</label>
-              <input
-                className="secret-input"
-                type="password"
-                placeholder="••••••••••••••••••••"
-                value={secret}
-                onChange={(e) => setSecret(e.target.value)}
-                autoComplete="new-password"
-              />
-              <span className="hint">Buildium shows this once when you create the webhook subscription.</span>
-            </div>
-            {error && (
-              <div className="test-result error"><span>⚠</span> {error}</div>
-            )}
-            <button className="btn btn-secondary" onClick={saveSecret} disabled={saving || !secret.trim()} style={{ marginTop: 8 }}>
-              {saving ? <><span className="spinner accent" /> Saving…</> : "Save signing secret"}
-            </button>
-          </>
-        )}
-      </div>
+          {error && <div className="test-result error" role="alert">{error}</div>}
+        </>
+      )}
 
-
-      <button className="btn btn-primary wide" onClick={() => onNext(saved)}>
-        {saved ? "Continue →" : "Skip for now — run my first scan without live updates →"}
-      </button>
+      {saved ? (
+        <button className="btn btn-primary wide" onClick={() => onNext(true)}>Continue</button>
+      ) : (
+        <button className="btn btn-primary wide" onClick={saveSecret} disabled={saving || !secret.trim()}>
+          {saving ? <><span className="spinner" /> Saving</> : "Save signing secret"}
+        </button>
+      )}
+      {!saved ? (
+        <div className="ob-alts">
+          <button type="button" className="ob-alt" onClick={() => onNext(false)} disabled={saving}>
+            Skip for now and scan without live updates
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────
-// STEP 4: COMMUNICATION CHANNELS (Google OAuth, optional)
+// STEP 4 (EMAIL): GOOGLE WORKSPACE (Composio OAuth, optional)
 // ─────────────────────────────────────────────────────────
 
 function StepChannels({ onNext }: { onNext: (connected: boolean) => void }) {
   const [googleConnected, setGoogleConnected] = useState(false);
   const [googleConnecting, setGoogleConnecting] = useState(false);
+  const [error, setError] = useState("");
 
   const refreshGoogleState = useCallback(async () => {
     try {
@@ -1677,6 +1421,7 @@ function StepChannels({ onNext }: { onNext: (connected: boolean) => void }) {
 
   const connectGoogle = async () => {
     setGoogleConnecting(true);
+    setError("");
     try {
       // Composio-managed OAuth — the same connection the agent's Gmail /
       // Calendar / Drive specialists use at tool time. callbackUrl sends the
@@ -1697,7 +1442,8 @@ function StepChannels({ onNext }: { onNext: (connected: boolean) => void }) {
         }
       }
     } catch (e: any) {
-      alert(e.message || "Could not start Google sign-in");
+      // Inline rather than alert(), like every other step.
+      setError(e.message || "Couldn't start Google sign-in. Try again.");
     } finally {
       setGoogleConnecting(false);
     }
@@ -1711,90 +1457,78 @@ function StepChannels({ onNext }: { onNext: (connected: boolean) => void }) {
 
   return (
     <div className="panel" key="channels">
-      <div className="panel-header">
-        <div className="panel-tag">Step 4 of 4 · Optional</div>
-        <h1 className="panel-title">Connect Gmail &amp; Calendar</h1>
-        {/* ⚠ Describes what you can ASK for, not what arrives on its own.
-            Automatic email-to-Inbox ingest exists but is gated (known
-            Buildium contact, 120+ words) and has produced ONE card across
-            every company in the product's lifetime — measured 2026-09-02,
-            26 poll rows against 1 Email.* event. Promising an Inbox that
-            fills itself would be the same false claim the Buildium step
-            just had removed. The specialists are live and answer every
-            time, so that is what this says. */}
-        <p className="panel-desc">
-          Lets you ask Occupella what you told an owner last month, or when you're free to meet a
-          vendor, without leaving the thread you're working in.
-        </p>
-      </div>
+      <StepTitle title="Connect Google Workspace" />
+      {/* ⚠ Describes what you can ASK for, not what arrives on its own:
+          automatic email-to-Inbox ingest is gated and has produced one card
+          across every company (measured 2026-09-02). And no approval claim:
+          it is held until the autonomous notes flag is confirmed off. */}
+      <ul className="ob-facts">
+        <li>Occupella can read a Gmail thread for context, check Google Calendar for open times and find documents in Google Drive.</li>
+        <li>Access goes through Google&rsquo;s own sign-in screen, and you can disconnect it at any time in Settings.</li>
+      </ul>
 
-      <div className="card" style={{ marginBottom: 16 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ fontSize: 20 }}>
-              <svg width="20" height="20" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59A14.5 14.5 0 0 1 9.5 24c0-1.59.28-3.14.76-4.59l-7.98-6.19A23.99 23.99 0 0 0 0 24c0 3.77.9 7.35 2.56 10.53l7.97-5.94z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 5.94C6.51 42.62 14.62 48 24 48z"/></svg>
-            </div>
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 600 }}>Google Workspace</div>
-              <div style={{ fontSize: 11, color: "var(--ink-subtle)" }}>Gmail, Calendar, Drive</div>
-            </div>
-          </div>
-          {googleConnected ? (
-            <span className="badge badge-positive"><span className="dot pulse" /> Connected</span>
-          ) : (
-            <button className="btn btn-secondary" style={{ margin: 0, padding: "6px 16px", fontSize: 12 }} onClick={connectGoogle} disabled={googleConnecting}>
-              {googleConnecting ? <><span className="spinner accent" /> Connecting…</> : "Connect"}
-            </button>
-          )}
+      <div className="ob-google">
+        <svg width="28" height="28" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59A14.5 14.5 0 0 1 9.5 24c0-1.59.28-3.14.76-4.59l-7.98-6.19A23.99 23.99 0 0 0 0 24c0 3.77.9 7.35 2.56 10.53l7.97-5.94z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 5.94C6.51 42.62 14.62 48 24 48z"/></svg>
+        <div>
+          <b>Google Workspace</b>
+          <span>Gmail, Calendar and Drive</span>
         </div>
-        {googleConnected && (
-          <div style={{ marginTop: 8, fontSize: 11, color: "var(--ink-subtle)" }}>
-            Access to Gmail, Google Calendar, and Drive is authorized.
-          </div>
-        )}
+        {googleConnected ? (
+          <span className="ob-connected"><CheckIcon size={14} /> Connected</span>
+        ) : null}
       </div>
 
+      {googleConnecting && <div className="test-result info" role="status"><span className="spinner accent" /> Waiting for Google. Finish signing in in the new tab.</div>}
+      {error && <div className="test-result error" role="alert">{error}</div>}
 
-      <button className="btn btn-primary wide" onClick={() => onNext(googleConnected)}>
-        {googleConnected ? "Continue →" : "Skip — start with Buildium only →"}
-      </button>
+      {googleConnected ? (
+        <button className="btn btn-primary wide" onClick={() => onNext(true)}>Continue</button>
+      ) : (
+        <button className="btn btn-primary wide" onClick={connectGoogle} disabled={googleConnecting}>
+          {googleConnecting ? <><span className="spinner" /> Connecting</> : "Connect Google"}
+        </button>
+      )}
+      <div className="ob-alts">
+        {!googleConnected ? (
+          <button type="button" className="ob-alt" onClick={() => onNext(false)} disabled={googleConnecting}>Skip for now</button>
+        ) : null}
+      </div>
+      {/* ⚠ Outlook has no connect path (see /features). team@, not support@:
+          support@ is not confirmed to route (TODO(brandon) in Contact.tsx). */}
+      <p className="hint" style={{ marginTop: 20 }}>
+        Using Outlook? It isn&rsquo;t supported yet. Email{" "}
+        <a href="mailto:team@occupella.com?subject=Outlook">team@occupella.com</a> and tell us.
+      </p>
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────
-// LAUNCH: FIRST OPERATIONS SCAN
+// STEP 3 (SCAN): THE FIRST READ OF THE PORTFOLIO
 // ─────────────────────────────────────────────────────────
 
-function StepFinish({
-  workspace,
-  connectedPms,
-  liveUpdates,
-  googleConnected,
-}: {
-  workspace: WorkspaceData;
-  connectedPms: Pms | null;
-  liveUpdates: boolean;
-  googleConnected: boolean;
-}) {
-  const pmsName = connectedPms ? PMS_NAME[connectedPms] : "Buildium or Rentvine";
+/** The rows the scan fills in, in the order a person reads a portfolio. */
+const SCAN_ROWS: { key: keyof ScanData; one: string; many: string }[] = [
+  { key: "properties", one: "property", many: "properties" },
+  { key: "units", one: "unit", many: "units" },
+  { key: "tenants", one: "tenant", many: "tenants" },
+  { key: "active_leases", one: "active lease", many: "active leases" },
+  { key: "open_work_orders", one: "open work order", many: "open work orders" },
+];
+
+function StepScan({ connectedPms, onNext }: { connectedPms: Pms; onNext: () => void }) {
+  const pmsName = PMS_NAME[connectedPms];
   // The real day-one scan (GET /reports/first-scan): deterministic mirror
-  // counts. Poll while the initial backfill fills the mirror (synced=false);
-  // any error falls back to the static setup-status cards so an older
-  // backend deploy can never break the launch screen.
+  // counts. Poll while the initial backfill fills the mirror (synced=false),
+  // every 5 s, at most 12 times; an error stops polling and the screen says
+  // so rather than showing zeros.
   const [scan, setScan] = useState<ScanData | null>(null);
   const [scanning, setScanning] = useState(true);
-  const [appHref, setAppHref] = useState(APP_URL);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     let active = true;
     let attempts = 0;
-
-    // No system connected → nothing to scan; go straight to the setup cards.
-    if (!connectedPms) {
-      setScanning(false);
-      return;
-    }
 
     const poll = async () => {
       try {
@@ -1807,7 +1541,8 @@ function StepFinish({
         }
       } catch {
         if (!active) return;
-        setScanning(false); // endpoint missing/unreachable → static fallback
+        setFailed(true);
+        setScanning(false); // endpoint missing/unreachable: say so, never $0
         return;
       }
       attempts += 1;
@@ -1820,14 +1555,81 @@ function StepFinish({
     };
   }, []);
 
+  // ⚠ Built in lib/pms.ts, which leaves the rent-owed card out when the
+  // backend cannot know it (Rentvine sends no balances) instead of showing $0.
+  const findings = findingCards(scan);
+  const done = Boolean(scan?.synced);
+
+  return (
+    <div className="panel" key="scan">
+      <StepTitle title={done ? `Here's your ${pmsName} portfolio` : `Reading your ${pmsName} account`}>
+        <span className="ob-title-mark"><PmsMark pms={connectedPms} /></span>
+      </StepTitle>
+
+      {done ? (
+        <div className="ob-done" role="status">
+          <span className="dot"><CheckIcon size={13} /></span> Done. Every number is read from your {pmsName} data.
+        </div>
+      ) : null}
+
+      <ul className="ob-scan" aria-live="polite">
+        {SCAN_ROWS.map((r) => {
+          const n = scan ? (scan[r.key] as number | null | undefined) : undefined;
+          const known = typeof n === "number" && (done || n > 0);
+          return (
+            <li key={r.key}>
+              <span className="ic">
+                {known ? <span style={{ color: "var(--positive)" }}><CheckIcon size={14} /></span> : scanning ? <span className="spinner accent" /> : null}
+              </span>
+              <span>{r.many.charAt(0).toUpperCase() + r.many.slice(1)}</span>
+              <span className={known ? "v" : "v wait"}>{known ? n : scanning ? "Reading" : "Not yet"}</span>
+            </li>
+          );
+        })}
+      </ul>
+
+      {findings ? (
+        <div className="scan-cards">
+          {findings.map((c) => (
+            <div className="scan-card" key={c.label}>
+              <div className="scan-num">{c.num}</div>
+              <div>
+                <div className="scan-label">{c.label}</div>
+                <div className="scan-sub">{c.sub}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {!done && !scanning ? (
+        <p className="hint" style={{ marginBottom: 16 }}>
+          {failed
+            ? "Occupella couldn't read the scan's progress just now. The scan itself keeps running, and the app shows each record as it arrives."
+            : `${pmsName} is still sending records. The scan keeps running after you move on, and the app fills in as it does.`}
+        </p>
+      ) : null}
+
+      <button className="btn btn-primary wide" onClick={onNext}>Continue</button>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────
+// FINISH: INTO THE APP, SIGNED IN
+// ─────────────────────────────────────────────────────────
+
+function StepFinish({ workspace }: { workspace: WorkspaceData }) {
+  const [appHref, setAppHref] = useState(APP_URL);
+
   // Setup is done — hand the user to the app SIGNED IN, not at its login
   // form. The app is a different origin, so its Supabase client can't see
   // the wizard's session; it is, however, created with
   // ``detectSessionInUrl: true``, so an implicit-grant-shaped URL fragment
   // signs the user straight in (the exact mechanism its own Google OAuth
   // return uses) and supabase-js scrubs the tokens from the URL on load.
-  // Fragments never reach any server. Short delay so the launch screen
-  // registers; the primary button remains for anyone who clicks first.
+  // Fragments never reach any server. Short delay so the screen registers;
+  // the primary button remains for anyone who clicks first.
   useEffect(() => {
     let cancelled = false;
     let t: number | undefined;
@@ -1856,184 +1658,93 @@ function StepFinish({
     };
   }, []);
 
-  const statusLine = [
-    liveUpdates ? "Live updates: on" : "Live updates: off — enable later in Settings",
-    googleConnected ? "Gmail & Calendar: connected" : "Gmail & Calendar: skipped",
-  ].join(" · ");
-
-  // ⚠ Built in lib/pms.ts, which leaves the rent-owed card out when the
-  // backend cannot know it (Rentvine sends no balances) instead of showing $0.
-  const findings = findingCards(scan);
-
-  const fallbackCards = [
-    connectedPms
-      ? {
-          // No count — the shallow test probe undercounts (see StepBuildium);
-          // real numbers come from the mirror-backed scan `findings` above.
-          num: "✓",
-          label: `${pmsName} connected`,
-          sub: `Occupella is mirroring your ${PMS_READS[connectedPms]} now.`,
-        }
-      : {
-          num: "off",
-          label: "Property-management system",
-          sub: "Skipped — come back to occupella.com/start to connect Buildium or Rentvine.",
-        },
-    connectedPms === "rentvine"
-      ? {
-          num: "—",
-          label: "Live updates",
-          sub: "Not available for Rentvine yet. Occupella re-reads Rentvine on a schedule instead.",
-        }
-      : liveUpdates
-        ? { num: "on", label: "Live updates", sub: "New Buildium events land in your Inbox in real time." }
-        : { num: "off", label: "Live updates", sub: "Skipped — turn on later from Settings for real-time events." },
-    googleConnected
-      ? { num: "on", label: "Gmail & Calendar", sub: "Ask Occupella about a thread or a date and it can read them." }
-      : { num: "off", label: "Gmail & Calendar", sub: "Skipped — connect later from Settings → Connectors." },
-  ];
-
   return (
     <div className="panel" key="finish">
-      <div className="finish-hero">
-        <h1 className="panel-title" style={{ textAlign: "center" }}>
-          {findings
-            ? `Here's what Occupella found in ${workspace.name || "your portfolio"}`
-            : connectedPms
-              ? `${workspace.name || "Your workspace"} is live — first scan running`
-              : `${workspace.name || "Your workspace"} is live`}
-        </h1>
-        <p className="panel-desc" style={{ textAlign: "center" }}>
-          {findings ? (
-            <>
-              {scan!.properties} propert{scan!.properties === 1 ? "y" : "ies"} · {scan!.units} unit
-              {scan!.units === 1 ? "" : "s"} · {scan!.tenants} tenant{scan!.tenants === 1 ? "" : "s"} mirrored.
-              Every number below is read straight from your {pmsName} data.
-            </>
-          ) : connectedPms ? (
-            "Occupella is reading your portfolio now. Open the app — the Inbox fills in as the scan runs."
-          ) : (
-            "Open the app now, and come back to occupella.com/start to connect Buildium or Rentvine — your first scan runs the moment it's linked."
-          )}
-        </p>
-      </div>
-
-      {scanning && !findings && (
-        <div className="scan-card" style={{ justifyContent: "center", gap: 10 }}>
-          <span className="spinner accent" />
-          <span style={{ fontSize: 13, color: "var(--ink-muted)" }}>
-            Scanning your portfolio — properties, leases, work orders, balances…
-          </span>
-        </div>
-      )}
-
-      <div className="scan-cards">
-        {(findings ?? fallbackCards).map((c) => (
-          <div className="scan-card" key={c.label}>
-            <div className="scan-num">{c.num}</div>
-            <div>
-              <div className="scan-label">{c.label}</div>
-              <div className="scan-sub">{c.sub}</div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {findings && (
-        <div className="hint" style={{ textAlign: "center", marginBottom: 4 }}>{statusLine}</div>
-      )}
-
-      <a className="btn btn-primary wide" href={appHref} style={{ marginTop: 4 }} onClick={() => releaseSessionForHandOff()}>
-        Open Occupella → review your Inbox
+      <StepTitle title={`${workspace.name || "Your workspace"} is ready`} />
+      <p className="panel-desc" style={{ marginTop: -18, marginBottom: 24 }}>
+        Opening Occupella. The Getting started checklist there walks you through the rest: your first
+        question, Gmail and inviting your team.
+      </p>
+      <a className="btn btn-primary wide" href={appHref} onClick={() => releaseSessionForHandOff()}>
+        Open Occupella
       </a>
-      <div className="hint" style={{ textAlign: "center", marginTop: 8 }}>
-        Taking you to Occupella automatically…
-      </div>
-      <div className="btn-row" style={{ marginTop: 8 }}>
-        <a className="btn btn-ghost" href={appHref} style={{ flex: 1, textAlign: "center" }} onClick={() => releaseSessionForHandOff()}>
-          Invite my team (in-app)
-        </a>
-        <a
-          className="btn btn-ghost"
-          href="mailto:team@occupella.com?subject=15-minute%20setup%20help"
-          style={{ flex: 1, textAlign: "center" }}
-        >
-          Book 15-minute setup help
-        </a>
-      </div>
-      <div className="hint" style={{ textAlign: "center", marginTop: 12 }}>
-        The Getting Started checklist inside Occupella walks you through the rest — first question,
-        Gmail, team invites.
+      <div className="ob-alts">
+        <a className="ob-alt" href="mailto:team@occupella.com?subject=15-minute%20setup%20help">Book 15 minutes of setup help</a>
       </div>
     </div>
   );
 }
 
 // ─────────────────────────────────────────────────────────
-// SIDEBAR
+// SHELL: HEADER, PROGRESS, SIDE PANEL, FOOTER
 // ─────────────────────────────────────────────────────────
 
-const STEPS: { id: Step; label: string; tag?: string }[] = [
-  { id: "identify", label: "Secure account" },
-  { id: "pms", label: "Connect your PMS" },
-  { id: "live", label: "Live updates", tag: "rec" },
-  { id: "channels", label: "Gmail & Calendar", tag: "opt" },
-  { id: "finish", label: "Launch scan" },
+/** The four steps a visitor sees, and which internal steps each covers. */
+const PROGRESS: { label: string; steps: Step[] }[] = [
+  { label: "Account", steps: ["identify"] },
+  { label: "Connect", steps: ["pms", "live"] },
+  { label: "Scan", steps: ["scan"] },
+  { label: "Email", steps: ["channels"] },
 ];
 
-function Sidebar({
-  current,
-  completed,
-  signedInAs,
-  onStartOver,
-}: {
-  current: Step;
-  completed: Set<Step>;
-  signedInAs: string;
-  onStartOver: () => void;
-}) {
+function Progress({ step, completed }: { step: Step; completed: Set<Step> }) {
+  const current = PROGRESS.findIndex((g) => g.steps.includes(step));
   return (
-    <div className="sidebar">
-      <a className="logo" href="/">
-        <div className="logo-text">Occupella</div>
-      </a>
-
-      <div className="steps">
-        {STEPS.map((s, i) => {
-          const isDone = completed.has(s.id);
-          const isActive = s.id === current;
+    <nav className="ob-prog" aria-label="Setup progress">
+      <ol>
+        {PROGRESS.map((g, i) => {
+          const done = g.steps.every((st) => completed.has(st));
+          const state = i === current ? "current" : done ? "done" : "todo";
           return (
-            <div key={s.id} className={`step-item ${isActive ? "active" : ""} ${isDone ? "done" : ""}`}>
-              <div className="step-dot">{isDone ? "✓" : i + 1}</div>
-              <div className="step-label">{s.label}</div>
-              {s.tag && <div className="step-tag">{s.tag}</div>}
-            </div>
+            <li key={g.label} data-state={state} aria-current={i === current ? "step" : undefined}>
+              <span className="n">{state === "done" ? <CheckIcon size={11} /> : i + 1}</span>
+              <span className="t">{g.label}</span>
+              {state === "done" ? <span className="ob-sr"> (done)</span> : null}
+            </li>
           );
         })}
-      </div>
+      </ol>
+    </nav>
+  );
+}
 
-      <div className="sidebar-footer">
-        {/* ⚠ The ONE thing that lets somebody set up a second account on the
-            same machine. Wizard progress is no longer persisted, but the
-            Supabase session is — so without this a returning visitor is
-            silently carried back into the account they already made, with no
-            visible reason and nothing to click (founder report, 2026-09-09).
-            Shown only when a session actually exists: an empty "signed in as"
-            on a fresh visit would be the same confusion pointed the other
-            way. */}
-        {signedInAs && (
-          <p className="signed-in">
-            Signed in as {signedInAs} ·{" "}
-            <button type="button" className="linklike" onClick={onStartOver}>
-              Use a different account
-            </button>
-          </p>
-        )}
-        <p>Stuck on a step? Email <a href="mailto:team@occupella.com">team@occupella.com</a> — a human answers.</p>
-        {/* Legal-entity attribution (A2P/Twilio verification crawls). */}
-        <p style={{ marginTop: 6 }}>Occupella is operated by Oscar Ventures LLC.</p>
+/** The pale blue panel: one product crop per step and what happens next. */
+const SIDE: Record<Step, { crop: () => React.ReactElement; next: string }> = {
+  identify: {
+    crop: () => <WorkOrderCard />,
+    next: "Next you connect Buildium or Rentvine. New work orders arrive as cards like this one.",
+  },
+  pms: {
+    crop: () => <HistoryCrop />,
+    next: "Once the keys pass, Occupella reads your portfolio and pulls the history behind each record.",
+  },
+  live: {
+    crop: () => <HistoryCrop />,
+    next: "With live updates on, a new work order reaches Occupella as it happens, not at the next sync.",
+  },
+  scan: {
+    crop: () => <NoticedCrop />,
+    next: "After the scan, Occupella checks each new event against the record, like this.",
+  },
+  channels: {
+    crop: () => <EmailDraftCrop />,
+    next: "With Google connected, you send drafted emails like this one from your own address.",
+  },
+  finish: {
+    crop: () => <DraftCrop />,
+    next: "In the app, each event comes with a drafted next step you can edit.",
+  },
+};
+
+function SidePanel({ step }: { step: Step }) {
+  const side = SIDE[step];
+  return (
+    <aside className="ob-side" aria-label="What happens next">
+      <div className="ob-side-in">
+        {side.crop()}
+        <p className="ob-side-next">{side.next}</p>
       </div>
-    </div>
+    </aside>
   );
 }
 
@@ -2056,8 +1767,6 @@ export default function App() {
   const [doors, setDoors] = useState(persisted.doors || "");
   // Which system step 2 connected, or null when it was skipped.
   const [connectedPms, setConnectedPms] = useState<Pms | null>(null);
-  const [liveUpdates, setLiveUpdates] = useState(false);
-  const [googleConnected, setGoogleConnected] = useState(false);
   const [creatingWorkspace, setCreatingWorkspace] = useState(false);
   const didResume = useRef(false);
   // See persist.ts: true only between "send me a code" and step 1 completing.
@@ -2072,6 +1781,11 @@ export default function App() {
   // wizard STOPS and asks instead of silently carrying somebody back into the
   // account they already made. Holds the email so the question can name it.
   const [returningAs, setReturningAs] = useState<string | null>(null);
+  // ⚠ Whether Supabase holds a session, which is what "Signed in as" means.
+  // `userEmail` is set the moment the account form is sent, BEFORE the code
+  // is verified, so it cannot be the test (the old sidebar used it and said
+  // "Signed in" on the code screen).
+  const [signedIn, setSignedIn] = useState(false);
 
   // Where "back" goes, as a stack rather than a table of predecessors: the
   // flow is not linear. handlePmsSkip jumps pms → channels, so a
@@ -2182,6 +1896,7 @@ export default function App() {
     let active = true;
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!active || !session?.user) return;
+      setSignedIn(true);
       setUserEmail(session.user.email || "");
 
       // ⚠ **A live session is not permission to continue, and it is not proof
@@ -2213,6 +1928,7 @@ export default function App() {
       setAwaitingPassword(true);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSignedIn(Boolean(session?.user));
       if (session?.user) setUserEmail(session.user.email || "");
     });
     return () => {
@@ -2288,127 +2004,138 @@ export default function App() {
     setConnectedPms(pms);
     complete("pms");
     const next = stepAfterConnect(pms);
-    // A skipped step still reads as done in the sidebar, the way skipping the
-    // whole PMS step already marks live updates done.
+    // No live-updates step for this system: Connect still reads as done.
     if (next !== "live") complete("live");
     go(next);
   };
 
   // Skipping the PMS also bypasses live updates (webhooks are meaningless
-  // without credentials); Gmail & Calendar still stand on their own.
+  // without credentials) and the scan (nothing to read). Google still stands
+  // on its own. The scan is NOT marked done: nothing was scanned.
   const handlePmsSkip = () => {
     complete("pms");
     complete("live");
     go("channels");
   };
 
-  const handleLive = (saved: boolean) => {
-    setLiveUpdates(saved);
+  // Whether the secret was saved is shown on the live step itself; nothing
+  // after it reads it, so it is not kept.
+  const handleLive = (_saved: boolean) => {
     complete("live");
+    go("scan");
+  };
+
+  const handleScanned = () => {
+    complete("scan");
     go("channels");
   };
 
-  const handleChannels = (connected: boolean) => {
-    setGoogleConnected(connected);
+  const handleChannels = (_connected: boolean) => {
     complete("channels");
     complete("finish");
     setStep("finish");
   };
 
+  // Back is offered from the step after Account onward (the account exists
+  // by then, so there is nothing to undo there), never on the hand-off and
+  // never while the workspace is being written.
+  // Not on the scan either: the keys have passed and the scan is running,
+  // so going back would only offer to re-enter keys that already work.
+  const backHandler =
+    history.length > 0 && step !== "finish" && step !== "scan" && !creatingWorkspace ? back : undefined;
+  const sideStep: Step = returningAs || creatingWorkspace ? "identify" : step;
+
   return (
-    <>
+    <div className="ob">
       <style>{css}</style>
-      <div className="app">
-        <Sidebar
-          current={step}
-          completed={completed}
-          signedInAs={userEmail}
-          onStartOver={startOver}
-        />
-        <div className="main">
-          {/* Hidden on `finish` — the scan has been launched, so there is
-              nothing behind it to go back to. Hidden while the workspace is
-              being created for the same reason: that panel is mid-write. */}
-          {history.length > 0 && step !== "finish" && !creatingWorkspace && (
-            <button type="button" className="btn btn-ghost step-back" onClick={back}>
-              ← Back
-            </button>
-          )}
-          {/* ⚠ Stands IN FRONT of step 1 whenever a session was found that is
-              not a magic-link continuation. Two states used to run the same
-              code silently — "Start setup" bootstrapped the existing account
-              and dropped you mid-flow, so the button said one thing and did
-              another. Now the two states are two buttons. */}
-          {returningAs && !creatingWorkspace ? (
-            <div className="panel" key="returning">
-              <div className="panel-header">
-                <div className="panel-tag">Already signed in</div>
-                {/* ⚠ The address goes in the DESCRIPTION, not the heading. An
-                    email is long and unbreakable, so at display size it
-                    overflows the panel and pushes the actual question off
-                    screen — and it is the detail, not the point. */}
-                <h1 className="panel-title">You're already signed in</h1>
-                <p className="panel-desc">
-                  This browser is signed in as <strong>{returningAs}</strong>. Carry on with that
-                  account, or sign out and set up a different one.
+      <style>{cropCss}</style>
+      <header className="ob-head">
+        <a className="ob-word" href="/" aria-label="Occupella home">occupella</a>
+        {/* ⚠ The ONE thing that lets somebody set up a second account on the
+            same machine: the Supabase session persists, so without this a
+            returning visitor is carried back into the account they already
+            made with nothing to click (founder report, 2026-09-09). Shown
+            only when a session actually exists. */}
+        {signedIn && userEmail ? (
+          <span className="ob-who">
+            Signed in as <b>{userEmail}</b> ·{" "}
+            <button type="button" className="ob-alt" onClick={startOver}>Use a different account</button>
+          </span>
+        ) : null}
+      </header>
+      <Progress step={step} completed={completed} />
+
+      <BackContext.Provider value={backHandler}>
+        <main className="ob-main">
+          <section className="ob-form">
+            {/* ⚠ Stands IN FRONT of step 1 whenever a session was found that
+                is not a magic-link continuation: two states used to run the
+                same code silently, so now they are two buttons. */}
+            {returningAs && !creatingWorkspace ? (
+              <div className="panel" key="returning">
+                <StepTitle title="You're already signed in" />
+                {/* The address goes in the description, not the heading: an
+                    email is long and unbreakable at display size. */}
+                <p className="panel-desc" style={{ marginTop: -18, marginBottom: 24 }}>
+                  This browser is signed in as <b>{returningAs}</b>. Carry on with that account, or sign
+                  out and set up a different one.
+                </p>
+                <button className="btn btn-primary wide" onClick={() => resumeInto(returningAs)}>
+                  Continue with this account
+                </button>
+                <div className="ob-alts">
+                  <button type="button" className="ob-alt" onClick={startOver}>Set up a different account</button>
+                </div>
+              </div>
+            ) : step === "identify" && !creatingWorkspace ? (
+              <StepIdentify
+                // ⚠ Keyed on the resumed email so a magic-link arrival
+                // REMOUNTS with the address the session actually carries; the
+                // component reads `initial` once, at mount.
+                key={awaitingPassword ? `resumed:${userEmail}` : "fresh"}
+                initial={{ email: userEmail, name: workspace.name, doors }}
+                onProfile={handleProfile}
+                onVerified={handleVerified}
+                resumedSession={awaitingPassword}
+              />
+            ) : null}
+            {creatingWorkspace && (
+              <div className="panel">
+                <StepTitle title="Setting up your workspace" />
+                <p className="panel-desc" style={{ marginTop: -18 }}>
+                  <span className="spinner accent" /> Creating {workspace.name || "your workspace"}.
                 </p>
               </div>
-              <button
-                className="btn btn-primary wide"
-                onClick={() => resumeInto(returningAs)}
-              >
-                Continue with this account →
-              </button>
-              {/* Secondary on purpose: continuing is the common case, and a
-                  destructive-looking sign-out should not be the default
-                  target for someone who just wanted to get back in. */}
-              <button className="btn btn-ghost wide" onClick={startOver}>
-                Set up a different account
-              </button>
-            </div>
-          ) : step === "identify" && !creatingWorkspace ? (
-            <StepIdentify
-              // ⚠ Keyed on the resumed email so a magic-link arrival REMOUNTS
-              // with the address the session actually carries. The component
-              // reads `initial` once, at mount, and on this path it mounted
-              // from localStorage before the session was read — so without the
-              // key it would show, and hand back, whatever the last attempt in
-              // this browser stored.
-              key={awaitingPassword ? `resumed:${userEmail}` : "fresh"}
-              initial={{ email: userEmail, name: workspace.name, doors }}
-              onProfile={handleProfile}
-              onVerified={handleVerified}
-              resumedSession={awaitingPassword}
-            />
-          ) : null}
-          {creatingWorkspace && (
-            <div className="panel">
-              <div className="panel-header">
-                <h1 className="panel-title"><span className="spinner" /> Setting up your workspace…</h1>
-                <p className="panel-desc">Creating {workspace.name || "your workspace"}.</p>
-              </div>
-            </div>
-          )}
-          {step === "pms" && (
-            <StepPms
-              userEmail={userEmail}
-              workspaceName={workspace.name}
-              onConnected={handlePmsConnected}
-              onSkip={handlePmsSkip}
-            />
-          )}
-          {step === "live" && <StepLive onNext={handleLive} />}
-          {step === "channels" && <StepChannels onNext={handleChannels} />}
-          {step === "finish" && (
-            <StepFinish
-              workspace={workspace}
-              connectedPms={connectedPms}
-              liveUpdates={liveUpdates}
-              googleConnected={googleConnected}
-            />
-          )}
-        </div>
-      </div>
-    </>
+            )}
+            {step === "pms" && (
+              <StepPms
+                userEmail={userEmail}
+                workspaceName={workspace.name}
+                onConnected={handlePmsConnected}
+                onSkip={handlePmsSkip}
+              />
+            )}
+            {step === "live" && <StepLive onNext={handleLive} />}
+            {step === "scan" && connectedPms && <StepScan connectedPms={connectedPms} onNext={handleScanned} />}
+            {step === "channels" && <StepChannels onNext={handleChannels} />}
+            {step === "finish" && <StepFinish workspace={workspace} />}
+          </section>
+          <SidePanel step={sideStep} />
+        </main>
+      </BackContext.Provider>
+
+      <footer className="ob-foot">
+        <span>
+          <a href={TERMS_URL} target="_blank" rel="noreferrer">Terms</a> ·{" "}
+          <a href={PRIVACY_URL} target="_blank" rel="noreferrer">Privacy</a> · Occupella is not affiliated
+          with Buildium.
+        </span>
+        {/* Legal-entity attribution (A2P/Twilio verification crawls read it). */}
+        <span>Operated by Oscar Ventures LLC.</span>
+        <span>
+          Stuck on a step? Email <a href="mailto:team@occupella.com">team@occupella.com</a>.
+        </span>
+      </footer>
+    </div>
   );
 }

@@ -62,9 +62,9 @@ describe('the finish step', () => {
   }
   if (scope) walk(scope)
 
-  it('releases the session on both ways out: the timer and the buttons', () => {
+  it('releases the session on both ways out: the timer and the button', () => {
     expect(scope, 'StepFinish not found in App.tsx').toBeTruthy()
-    expect(calls.filter((c) => c === 'releaseSessionForHandOff')).toHaveLength(3)
+    expect(calls.filter((c) => c === 'releaseSessionForHandOff')).toHaveLength(2)
   })
 
   it('never signs out, which would end the app’s session too', () => {

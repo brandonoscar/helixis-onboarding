@@ -32,12 +32,13 @@ export const PMS_READS: Record<Pms, string> = {
 };
 
 /** Where the wizard goes after a system is connected. */
-export function stepAfterConnect(pms: Pms): "live" | "channels" {
+export function stepAfterConnect(pms: Pms): "live" | "scan" {
   // Live updates are Buildium webhooks. Rentvine's receiver refuses every
   // delivery until its signature scheme is known, so the step would ask the
   // customer to wire up something that cannot work. Rentvine is re-read on a
-  // schedule instead.
-  return pms === "buildium" ? "live" : "channels";
+  // schedule instead, and goes straight to the scan (Scan comes before Email
+  // since the 2026-09-29 restyle).
+  return pms === "buildium" ? "live" : "scan";
 }
 
 /** Whether the Rentvine option can be offered, from the GET's answer. */
@@ -124,7 +125,7 @@ export function findingCards(scan: ScanData | null): Card[] | null {
       label: `open work order${scan.open_work_orders === 1 ? "" : "s"}`,
       sub:
         scan.stalled_work_orders > 0
-          ? `${scan.stalled_work_orders} look stalled — no update in over 7 days.`
+          ? `${scan.stalled_work_orders} look stalled, with no update in over 7 days.`
           : "None look stalled right now.",
     },
     {
@@ -139,8 +140,8 @@ export function findingCards(scan: ScanData | null): Card[] | null {
       label: `owed across ${scan.delinquent_leases} lease${scan.delinquent_leases === 1 ? "" : "s"}`,
       sub:
         scan.pending_promises > 0
-          ? `${scan.pending_promises} tenant${scan.pending_promises === 1 ? " has" : "s have"} promised payment — Occupella tracks those dates.`
-          : "Rent reminders Occupella will send once you approve them.",
+          ? `${scan.pending_promises} tenant${scan.pending_promises === 1 ? " has" : "s have"} promised payment. Occupella tracks those dates.`
+          : "Occupella lists who owes what, and how late.",
     });
   }
   return cards;
