@@ -9,6 +9,9 @@
  *                                             /oauth are rewritten to
  *   dist/sitemap.xml                          from src/seo/routes.ts
  *
+ * Then it runs vercel.json against what it wrote (src/seo/vercelRouting.ts)
+ * and checks /start, /oauth/callback and every page get the right file.
+ *
  * ⚠ IT CHECKS ITS OWN OUTPUT AND FAILS THE BUILD, and in this repo a failed
  * build freezes the live site on the previous deploy (gotcha 131). That is the
  * safer direction here: without the check, a page that rendered empty would
@@ -16,8 +19,8 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join, relative, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -59,7 +62,7 @@ function bodyText(html) {
 const canonicals = (html) => [...html.matchAll(/<link rel="canonical" href="([^"]+)"/g)].map((m) => m[1]);
 
 for (const route of ssr.MARKETING_ROUTES) {
-  const file = route.path === "/" ? "index.html" : `${route.path.slice(1)}.html`;
+  const file = ssr.pageFile(route.path);
   const html = write(file, page(ssr.headTags(route), ssr.render(route.path)));
   const expected = route.path === "/" ? "https://occupella.com/" : `https://occupella.com${route.path}`;
   if (JSON.stringify(canonicals(html)) !== JSON.stringify([expected])) {
@@ -91,6 +94,25 @@ function lastCommitDate(source) {
   }
 }
 writeFileSync(join(dist, "sitemap.xml"), ssr.sitemapXml((r) => lastCommitDate(r.source)));
+
+// What Vercel will actually serve, from vercel.json and the files just
+// written: /start and /oauth/callback must reach the shell, every marketing
+// page its own file. On 2026-09-29 the rewrite pointed at a name cleanUrls
+// never serves and signup returned the 404 page; see src/seo/vercelRouting.ts.
+const builtFiles = new Set(
+  readdirSync(dist, { recursive: true, withFileTypes: true })
+    .filter((d) => d.isFile())
+    .map((d) => relative(dist, join(d.parentPath, d.name)).split(sep).join("/")),
+);
+const vercelConfig = JSON.parse(readFileSync(join(root, "vercel.json"), "utf8"));
+problems.push(
+  ...ssr.routingProblems(
+    vercelConfig,
+    builtFiles,
+    ssr.MARKETING_ROUTES.map((r) => r.path),
+    ssr.CLIENT_ONLY_PREFIXES,
+  ),
+);
 
 rmSync(ssrDir, { recursive: true, force: true });
 
