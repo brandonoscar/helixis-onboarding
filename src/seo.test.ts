@@ -132,6 +132,38 @@ describe('static files a crawler asks for reach the filesystem', () => {
   });
 });
 
+/**
+ * ⚠ ONE HOST. setup.occupella.com and helixis-onboarding.vercel.app served
+ * full copies of the site until 2026-09-29, so every page existed three
+ * times. vercel.json now sends both to occupella.com. A redirect with no host
+ * condition, or one that matches occupella.com itself, would send every
+ * visitor round in a loop; these pin the shape.
+ */
+describe('other hosts redirect to occupella.com', () => {
+  const config = JSON.parse(vercelRaw) as {
+    redirects?: { source: string; has?: { type: string; value: string }[]; destination: string; permanent?: boolean }[];
+  };
+  const canonicalHost = new URL(SITE_ORIGIN).host;
+
+  it('sends the two old hosts, and only those, permanently', () => {
+    const hosts = (config.redirects ?? []).map((r) => r.has?.find((h) => h.type === 'host')?.value);
+    expect(hosts.sort()).toEqual(['helixis-onboarding.vercel.app', 'setup.occupella.com']);
+    for (const r of config.redirects ?? []) {
+      expect(r.has?.length, r.source).toBe(1);
+      expect(r.has![0].value).not.toBe(canonicalHost);
+      expect(r.source).toBe('/:path*');
+      expect(r.destination).toBe(`${SITE_ORIGIN}/:path*`);
+      expect(r.permanent).toBe(true);
+    }
+  });
+
+  it('serves the IndexNow key file as itself', () => {
+    const keys = PUBLIC_FILES.filter((f) => /^[0-9a-f]{32}\.txt$/.test(f));
+    expect(keys).toHaveLength(1);
+    expect(rewritten(`/${keys[0]}`)).toBe(false);
+  });
+});
+
 describe('robots.txt', () => {
   it('lets the site be crawled', () => {
     expect(robots).toMatch(/^User-agent:\s*\*/m);
