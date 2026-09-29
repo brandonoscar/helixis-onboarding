@@ -33,10 +33,20 @@ function esc(s: string): string {
  */
 const SAME_AS: string[] = [];
 
+/**
+ * ⚠ The description and legalName are here to DISAMBIGUATE. "Occupella" is
+ * also the name of a Bay Area activist a cappella group (occupella.org,
+ * active since 2011), and it owns the search results for the bare name.
+ * Telling Google plainly that this Occupella is property-management
+ * software, run by Oscar Ventures LLC, is the on-site half of fixing that;
+ * the off-site half is the profiles listed in SAME_AS.
+ */
 export const ORGANIZATION_JSONLD = {
   "@context": "https://schema.org",
   "@type": "Organization",
   name: "Occupella",
+  legalName: "Oscar Ventures LLC",
+  description: "Occupella is AI software for property managers who use Buildium.",
   url: `${SITE_ORIGIN}/`,
   logo: `${SITE_ORIGIN}/icon-512.png`,
   ...(SAME_AS.length ? { sameAs: SAME_AS } : {}),

@@ -546,6 +546,7 @@ export function SiteFooter() {
               <a href="/">Home</a>
               <a href="/features">Features</a>
               <a href="/pricing">Pricing</a>
+              <a href="/screenshots">Screenshots</a>
               <a href="/start">Start free trial</a>
               <a href={APP_URL}>Sign in</a>
             </div>

@@ -67,6 +67,17 @@ export const MARKETING_ROUTES: readonly MarketingRoute[] = [
     priority: 0.9,
   },
   {
+    path: "/screenshots",
+    name: "screenshots",
+    title: "Screenshots of the Occupella Inbox, chat and Operations",
+    description:
+      "Screenshots of Occupella, the AI assistant for Buildium property managers: a work order in the Inbox, answers in chat and the Operations tables.",
+    inSitemap: true,
+    source: "src/Screenshots.tsx",
+    changefreq: "monthly",
+    priority: 0.6,
+  },
+  {
     path: "/solutions/delinquency",
     name: "solutions_delinquency",
     title: "Late rent follow-up for Buildium users | Occupella",
