@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import "@fontsource-variable/fraunces/opsz.css";
+import "@fontsource-variable/ibm-plex-sans";
 import { TrackingOptOut } from "./ConsentBar";
 import { APP_URL } from "./lib/api";
 
@@ -36,51 +38,91 @@ import { APP_URL } from "./lib/api";
 // ─────────────────────────────────────────────────────────────────────
 
 export const siteCss = `
-  .lp { position: relative; overflow-x: clip; }
-  .lp-wrap { max-width: 1120px; margin: 0 auto; padding: 0 32px; }
+  /* ── marketing tokens ────────────────────────────────────────────────
+     Scoped to .lp, the root of every marketing page, so the setup wizard
+     (/start) and the OAuth popup keep Geist and the app's tokens untouched.
+     Redefining the shared names (--iris, --line, --font-sans) here rather
+     than inventing new ones is what lets theme.ts's .btn and every page's
+     existing rules pick the marketing values up without a second copy.
 
-  /* ── type scale ── */
-  .lp-h2 {
-    font-size: clamp(28px, 3.4vw, 40px);
-    font-weight: 600;
-    line-height: 1.15;
-    letter-spacing: -0.026em;
+     One chromatic colour, #1957A0, for primary buttons, links, the typed
+     word in the hero and the closing band. The app's #1E73BC/#2A80CC read
+     light next to the Fraunces headings. */
+  .lp {
+    --iris: #1957A0;
+    --iris-hover: #144A8A;
+    --iris-press: #0F3B70;
+    --iris-soft: rgba(25, 87, 160, 0.10);
+    --iris-ring: rgba(25, 87, 160, 0.35);
+    --band: #E3EDF9;
+    --line: #DCE3EC;
+    --line-strong: #C5D0DD;
+    --card-edge: #DCE3EC;
+    --foot: #F6F8FB;
+    --font-display: 'Fraunces Variable', Georgia, 'Times New Roman', serif;
+    --font-sans: 'IBM Plex Sans Variable', 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --dur-reveal: 200ms;
+    --dur-entrance: 200ms;
+
+    position: relative; overflow-x: clip;
+    background: var(--canvas);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: 17px;
+    line-height: 1.6;
+    font-variant-numeric: normal;
+  }
+  .lp-wrap { max-width: 1200px; margin: 0 auto; padding: 0 32px; }
+  @media (max-width: 640px) { .lp-wrap { padding: 0 20px; } }
+
+  .lp a { color: var(--iris); }
+  .lp a:hover { color: var(--iris-hover); }
+
+  /* ── buttons: primary, secondary, text link. 6px radius, no shadow ── */
+  .lp .btn { font-family: var(--font-sans); font-weight: 600; border-radius: 6px; box-shadow: none; }
+  .lp .btn:focus-visible { box-shadow: 0 0 0 3px var(--iris-ring); }
+  .lp .btn-primary, .lp .btn-primary:hover { color: #fff; }
+  .lp .btn-secondary { background: var(--canvas); border-color: var(--line-strong); color: var(--ink); }
+  .lp .btn-secondary:hover:not(:disabled) { background: var(--canvas); border-color: var(--ink-subtle); color: var(--ink); }
+  .lp .btn-ghost { color: var(--ink-muted); font-weight: 500; }
+  .lp .btn-ghost:hover { color: var(--ink); background: transparent; }
+
+  /* ── type scale: Fraunces for H1 and H2, IBM Plex Sans for the rest ── */
+  .lp-h1-page, .lp-h2 {
+    font-family: var(--font-display);
+    font-optical-sizing: auto;
+    font-weight: 560;
     color: var(--ink);
     text-wrap: balance;
-    max-width: 20ch;
   }
-
-  /* A secondary page's title. Deliberately NOT .lp-h1: that one paints a
-     luminance gradient through background-clip, which is the front door's
-     one flourish. Repeating it on every page would spend the effect. */
   .lp-h1-page {
-    font-size: clamp(34px, 4.6vw, 54px);
-    font-weight: 600;
-    line-height: 1.08;
-    letter-spacing: -0.03em;
-    color: var(--ink);
-    text-wrap: balance;
-    max-width: 18ch;
+    font-size: clamp(40px, 5.6vw, 64px);
+    line-height: 1.04;
+    letter-spacing: -0.02em;
+    max-width: 16ch;
+  }
+  .lp-h2 {
+    font-size: clamp(30px, 3.6vw, 44px);
+    line-height: 1.1;
+    letter-spacing: -0.015em;
+    max-width: 22ch;
   }
 
+  /* Kept only while Landing.tsx and Features.tsx still render it; both
+     lose their labels in this redesign, and then this rule goes. */
   .lp-eyebrow {
-    font-family: var(--font-mono);
-    font-size: 12px;
-    font-weight: 500;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--ink-faint);
+    font-size: 13px; font-weight: 600; letter-spacing: 0.04em;
+    text-transform: uppercase; color: var(--ink-subtle);
   }
 
   .lp-lede {
-    font-size: 18px;
+    font-size: 19px;
     line-height: 1.55;
-    letter-spacing: -0.006em;
     color: var(--ink-muted);
-    max-width: 54ch;
+    max-width: 58ch;
   }
 
-  .lp-body { font-size: 15.5px; line-height: 1.6; color: var(--ink-muted); max-width: 58ch; }
+  .lp-body { font-size: 17px; line-height: 1.6; color: var(--ink-muted); max-width: 62ch; }
 
   .lp-sr {
     position: absolute;
@@ -92,67 +134,57 @@ export const siteCss = `
     border: 0;
   }
 
-  /* ── nav ── */
+  /* ── header: solid white, one hairline, fixed height ────────────────
+     It used to be a translucent blue tint with a backdrop blur, and the
+     copy scrolling under it showed through. */
   .lp-nav {
     position: sticky; top: 0; z-index: 20;
-    height: 56px;
-    display: flex; align-items: center; justify-content: space-between;
-    /* --chrome, the same rail tint the app's sidebar uses. A visitor sees
-       this page and then the product within ten minutes, and the top bar is
-       the one surface both have. Held at 0.86 so the page still shows
-       through as it scrolls under. The solid declaration above it is the
-       fallback: without one, a browser that does not know color-mix drops
-       the property entirely and the nav goes transparent over the copy
-       scrolling beneath it. */
-    background: var(--chrome);
-    background: color-mix(in srgb, var(--chrome) 86%, transparent);
-    backdrop-filter: saturate(180%) blur(12px);
-    border-bottom: 1px solid transparent;
-    transition: border-color var(--dur-state) var(--ease-std);
+    height: 64px;
+    display: flex; align-items: center;
+    background: var(--canvas);
+    border-bottom: 1px solid var(--line);
   }
-  .lp-nav[data-stuck="true"] { border-bottom-color: var(--chrome-line); }
   .lp-nav-inner {
-    max-width: 1120px; margin: 0 auto; padding: 0 32px; width: 100%;
-    display: flex; align-items: center; justify-content: space-between;
+    max-width: 1200px; margin: 0 auto; padding: 0 32px; width: 100%;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
   }
-  .lp-wordmark {
-    display: inline-flex; align-items: center; gap: 9px;
-    font-size: 15px; font-weight: 600; letter-spacing: -0.02em;
+  .lp .lp-wordmark {
+    font-family: var(--font-display);
+    font-optical-sizing: auto;
+    font-size: 25px; font-weight: 600; letter-spacing: -0.015em; line-height: 1;
     color: var(--ink); text-decoration: none;
   }
+  .lp .lp-wordmark:hover { color: var(--ink); }
   .lp-nav-right { display: flex; align-items: center; gap: 4px; }
-
-  /* The current page, marked with weight and ink rather than a rule or a
-     pill — the nav is 56px tall and an underline in it reads as a mistake. */
+  .lp-nav-right .btn-ghost { font-size: 15px; padding: 8px 12px; }
   .lp-nav-right .btn-ghost[aria-current="page"] { color: var(--ink); font-weight: 600; }
+  .lp-nav-right .btn-primary { height: 36px; padding: 0 16px; font-size: 14px; margin-left: 8px; }
 
   /* Below ~640px the section links go and the nav keeps the two things a
-     visitor on a phone actually needs: sign in, and start. The links are not
-     duplicated into a burger — /features and /pricing are one tap away from
-     the footer of every page, and a menu nobody opens is worse than a link
-     they scroll to. */
+     visitor on a phone needs: sign in, and start. /features and /pricing are
+     in the footer of every page. */
   @media (max-width: 640px) {
     .lp-nav-inner { padding: 0 20px; }
     .lp-nav-sec { display: none; }
+    .lp-nav-right .btn-ghost { padding: 8px 8px; }
   }
 
-  /* ── sections ── */
-  .lp-section { padding: clamp(64px, 9vw, 96px) 0 0; }
-  .lp-section-head { display: flex; flex-direction: column; gap: 14px; }
+  /* ── sections: more space between them than inside them ── */
+  .lp-section { padding: clamp(80px, 10vw, 128px) 0 0; }
+  .lp-section-head { display: flex; flex-direction: column; gap: 16px; }
 
   /* A secondary page's opening. Shorter than the landing hero on purpose:
      somebody who clicked "Pricing" has already been sold the idea and wants
      the number, not another pitch. */
-  .lp-pagehead { padding: clamp(44px, 6vw, 76px) 0 0; }
-  .lp-pagehead .lp-lede { margin-top: 18px; }
-  .lp-pagehead .lp-h1-page { margin-top: 16px; }
+  .lp-pagehead { padding: clamp(56px, 7vw, 96px) 0 0; }
+  .lp-pagehead .lp-lede { margin-top: 22px; }
 
-  .lp-textlink {
-    font-size: 14.5px; font-weight: 500; color: var(--ink-muted);
+  .lp .lp-textlink {
+    font-size: 16px; font-weight: 600; color: var(--iris);
     text-decoration: none; transition: color var(--dur-state) var(--ease-std);
   }
-  .lp-textlink:hover { color: var(--ink); }
-  .lp-note { font-size: 13px; color: var(--ink-subtle); }
+  .lp .lp-textlink:hover { color: var(--iris-hover); }
+  .lp-note { font-size: 15px; color: var(--ink-muted); }
 
   /* ── the entrance: elements settle DOWN into place ── */
   /* ── product panel ──────────────────────────────────────────────
@@ -223,58 +255,57 @@ export const siteCss = `
   .lp-trust-item { padding: 18px 20px; display: flex; gap: 12px; align-items: flex-start; font-size: 14px; line-height: 1.5; color: var(--ink-secondary, var(--ink-muted)); }
   .lp-trust-item svg { flex: none; margin-top: 2px; color: var(--iris); }
 
-  /* ── closing band — the one polarity flip on a page ── */
-  .lp-close { margin-top: clamp(72px, 10vw, 120px); background: var(--deep); }
+  /* ── closing band: the page's one full-width brand colour ── */
+  .lp-close { margin-top: clamp(96px, 12vw, 144px); background: var(--iris); }
   .lp-close-inner {
-    max-width: 1120px; margin: 0 auto; padding: clamp(64px, 8vw, 96px) 32px;
-    display: flex; flex-direction: column; align-items: flex-start; gap: 18px;
+    max-width: 1200px; margin: 0 auto; padding: clamp(64px, 8vw, 96px) 32px;
+    display: flex; flex-direction: column; align-items: flex-start; gap: 20px;
   }
-  .lp-close h2 { font-size: clamp(28px, 3.6vw, 42px); font-weight: 600; line-height: 1.1; letter-spacing: -0.03em; color: var(--deep-ink); max-width: 18ch; }
-  .lp-close p { font-size: 16px; line-height: 1.55; color: var(--deep-muted); max-width: 52ch; }
-  .lp-close .btn-primary { background: var(--canvas); color: var(--deep); }
-  .lp-close .btn-primary:hover { background: #E8F0F9; }
+  .lp-close h2 {
+    font-family: var(--font-display); font-optical-sizing: auto;
+    font-size: clamp(30px, 3.6vw, 44px); font-weight: 560; line-height: 1.1;
+    letter-spacing: -0.015em; color: #fff; max-width: 20ch; text-wrap: balance;
+  }
+  .lp-close p { font-size: 18px; line-height: 1.55; color: #DCE7F4; max-width: 52ch; }
+  .lp .lp-close .btn-primary { background: #fff; color: var(--iris); height: 48px; padding: 0 24px; font-size: 16px; }
+  .lp .lp-close .btn-primary:hover { background: var(--band); color: var(--iris-press); }
+  .lp .lp-close .btn:focus-visible { box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.6); }
 
-  /* ── footer ──────────────────────────────────────────────────────────
-     A real site footer rather than the single row this had as a one-page
-     site. It is also the mobile navigation: the nav drops its section links
+  /* ── footer: light, a top border, headings in normal case ───────────
+     It is also the mobile navigation: the nav drops its section links
      under 640px, so these columns are how somebody on a phone reaches
      /features and /pricing. */
-  .lp-footer { background: var(--deep); border-top: 1px solid var(--deep-line); }
+  .lp-footer { background: var(--foot); border-top: 1px solid var(--line); }
   .lp-footer-inner {
-    max-width: 1120px; margin: 0 auto; padding: clamp(44px, 6vw, 64px) 32px 40px;
+    max-width: 1200px; margin: 0 auto; padding: clamp(48px, 6vw, 72px) 32px 40px;
   }
   .lp-footer-cols {
     display: grid; gap: 32px 24px;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   @media (min-width: 760px) { .lp-footer-cols { grid-template-columns: 1.4fr repeat(3, minmax(0, 1fr)); } }
-  .lp-footer-brand { display: flex; flex-direction: column; gap: 10px; }
-  .lp-footer-brand .lp-wordmark { color: var(--deep-ink); }
-  .lp-footer-blurb { font-size: 13px; line-height: 1.55; color: var(--deep-muted); max-width: 30ch; }
-  .lp-footer-h {
-    font-family: var(--font-mono); font-size: 11px; font-weight: 500;
-    letter-spacing: 0.12em; text-transform: uppercase; color: var(--deep-muted);
-    opacity: 0.75; margin-bottom: 12px;
-  }
-  .lp-footer-col { display: flex; flex-direction: column; gap: 9px; }
-  .lp-footer-col a { font-size: 13.5px; color: var(--deep-muted); text-decoration: none; transition: color var(--dur-state) var(--ease-std); }
-  .lp-footer-col a:hover { color: var(--deep-ink); }
+  .lp-footer-brand { display: flex; flex-direction: column; gap: 12px; }
+  .lp-footer-blurb { font-size: 15px; line-height: 1.55; color: var(--ink-muted); max-width: 30ch; }
+  .lp-footer-h { font-size: 15px; font-weight: 600; color: var(--ink); margin-bottom: 12px; }
+  .lp-footer-col { display: flex; flex-direction: column; gap: 10px; }
+  .lp .lp-footer-col a { font-size: 15px; color: var(--ink-muted); text-decoration: none; }
+  .lp .lp-footer-col a:hover { color: var(--ink); }
   /* The tracking opt-out sits in the Legal column and has to read as one of
-     its links, but it is a button — it changes a stored preference rather
+     its links, but it is a button: it changes a stored preference rather
      than navigating, and an <a> with no href is not reachable by keyboard. */
   .lp-optout {
-    font: inherit; font-size: 13.5px; text-align: left;
+    font: inherit; font-size: 15px; text-align: left;
     background: none; border: 0; padding: 0; cursor: pointer;
-    color: var(--deep-muted); transition: color var(--dur-state) var(--ease-std);
+    color: var(--ink-muted);
   }
-  .lp-optout:hover { color: var(--deep-ink); }
-  .lp-optout:focus-visible { outline: 2px solid var(--iris-light); outline-offset: 2px; border-radius: 2px; }
-  .lp-optout-done { font-size: 13.5px; color: var(--deep-muted); }
+  .lp-optout:hover { color: var(--ink); }
+  .lp-optout:focus-visible { outline: 2px solid var(--iris); outline-offset: 2px; border-radius: 2px; }
+  .lp-optout-done { font-size: 15px; color: var(--ink-muted); }
   .lp-footer-legal {
     margin-top: clamp(36px, 5vw, 52px); padding-top: 20px;
-    border-top: 1px solid var(--deep-line);
-    display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: center;
-    font-size: 12.5px; color: var(--deep-muted);
+    border-top: 1px solid var(--line);
+    display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: center;
+    font-size: 14px; color: var(--ink-muted);
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -454,7 +485,8 @@ export const BELL = "M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9 M13.7 21a2 2 0 
 export const MINUS = "M5 12h14";
 
 /**
- * Always "Start setup".
+ * Always "Start free trial", on marketing pages only. The wizard's own
+ * buttons keep their labels.
  *
  * ⚠ **"Resume setup" was removed, not broken** (founder call, 2026-09-09).
  * It read the wizard's persisted `completed` set and promised a saved draft;
@@ -469,19 +501,21 @@ export const MINUS = "M5 12h14";
  * place. Someone re-introducing a two-state label has one place to do it.
  */
 export function useStartLabel(): string {
-  return "Start setup";
+  return "Start free trial";
 }
 
-/** The nav's hairline appears only once the page has moved. */
-function useStuck(): boolean {
-  const [stuck, setStuck] = useState(false);
-  useEffect(() => {
-    const onScroll = () => setStuck(window.scrollY > 8);
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-  return stuck;
+/**
+ * The name, in one place: the header and the footer both render this.
+ *
+ * TODO(brandon): provide the lowercase Fraunces "occupella" SVG. Until then
+ * this is live text set in Fraunces; swapping the SVG in is this one element.
+ */
+export function Wordmark() {
+  return (
+    <a className="lp-wordmark" href="/" aria-label="Occupella home">
+      occupella
+    </a>
+  );
 }
 
 export type SitePage = "home" | "features" | "pricing";
@@ -498,14 +532,11 @@ const NAV_LINKS: { href: string; label: string; page: SitePage }[] = [
 ];
 
 export function SiteNav({ active }: { active?: SitePage }) {
-  const stuck = useStuck();
   const start = useStartLabel();
   return (
-    <nav className="lp-nav" data-stuck={stuck}>
+    <nav className="lp-nav">
       <div className="lp-nav-inner">
-        <a className="lp-wordmark" href="/">
-          Occupella
-        </a>
+        <Wordmark />
         <div className="lp-nav-right">
           {NAV_LINKS.map((l) => (
             <a
@@ -522,11 +553,7 @@ export function SiteNav({ active }: { active?: SitePage }) {
           <a className="btn btn-ghost" href={APP_URL}>
             Sign in
           </a>
-          <a
-            className="btn btn-primary"
-            href="/start"
-            style={{ padding: "8px 16px", fontSize: 13.5 }}
-          >
+          <a className="btn btn-primary" href="/start">
             {start}
           </a>
         </div>
@@ -559,8 +586,8 @@ export function CloseBand({
           <p>{body}</p>
         </Reveal>
         <Reveal delay={120}>
-          <a className="btn btn-primary" href="/start" style={{ padding: "13px 28px", fontSize: 15 }}>
-            {start} →
+          <a className="btn btn-primary" href="/start">
+            {start}
           </a>
         </Reveal>
       </div>
@@ -574,12 +601,12 @@ export function SiteFooter() {
       <div className="lp-footer-inner">
         <div className="lp-footer-cols">
           <div className="lp-footer-brand">
-            <a className="lp-wordmark" href="/">
-              Occupella
-            </a>
+            <Wordmark />
+            {/* TODO(brandon): confirm autonomous notes flag is off. The old
+                blurb ended "waiting for your approval", which is the approval
+                claim; it comes back when the flag is confirmed off. */}
             <p className="lp-footer-blurb">
-              The work between a Buildium event and the reply — drafted, and waiting for your
-              approval.
+              An AI assistant for property managers who use Buildium.
             </p>
           </div>
 
@@ -592,7 +619,7 @@ export function SiteFooter() {
               <a href="/">Home</a>
               <a href="/features">Features</a>
               <a href="/pricing">Pricing</a>
-              <a href="/start">Start setup</a>
+              <a href="/start">Start free trial</a>
               <a href={APP_URL}>Sign in</a>
             </div>
           </div>
@@ -634,15 +661,13 @@ export function SiteFooter() {
  */
 export function SitePageShell({
   active,
-  eyebrow,
   title,
   lede,
   css,
   children,
   close,
 }: {
-  active: SitePage;
-  eyebrow: string;
+  active?: SitePage;
   title: string;
   lede: React.ReactNode;
   css?: string;
@@ -656,13 +681,10 @@ export function SitePageShell({
       <SiteNav active={active} />
       <header className="lp-pagehead">
         <div className="lp-wrap">
-          <div className="lp-eyebrow rise" style={{ "--d": "0ms" } as React.CSSProperties}>
-            {eyebrow}
-          </div>
-          <h1 className="lp-h1-page rise" style={{ "--d": "120ms" } as React.CSSProperties}>
+          <h1 className="lp-h1-page rise" style={{ "--d": "0ms" } as React.CSSProperties}>
             {title}
           </h1>
-          <p className="lp-lede rise" style={{ "--d": "240ms" } as React.CSSProperties}>
+          <p className="lp-lede rise" style={{ "--d": "80ms" } as React.CSSProperties}>
             {lede}
           </p>
         </div>

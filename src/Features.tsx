@@ -316,7 +316,6 @@ export default function Features() {
   return (
     <SitePageShell
       active="features"
-      eyebrow="Features"
       title="Agentic AI for leasing and operations."
       lede={
         <>

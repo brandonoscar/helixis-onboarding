@@ -34,26 +34,24 @@ const css = `
   @media (min-width: 620px) { .nf-links { grid-template-columns: 1fr 1fr; } }
   .nf-link {
     display: block; padding: 18px 20px; border-radius: var(--r-md);
-    border: 1px solid var(--line); background: var(--card);
+    border: 1px solid var(--line); background: var(--canvas);
     text-decoration: none; transition: border-color var(--dur-state) var(--ease-std);
   }
   .nf-link:hover { border-color: var(--line-strong); }
-  .nf-link b { display: block; font-size: 15px; font-weight: 550; color: var(--ink); }
-  .nf-link span { display: block; font-size: 13.5px; color: var(--muted); margin-top: 3px; }
+  .nf-link b { display: block; font-size: 17px; font-weight: 600; color: var(--ink); }
+  .nf-link span { display: block; font-size: 15px; color: var(--ink-muted); margin-top: 3px; }
 `;
 
 export default function NotFound() {
   return (
     <SitePageShell
-      // No nav item is current — this page is not one of them, and marking
-      // one would tell the visitor they are somewhere they are not.
-      active={"home"}
-      eyebrow="404"
+      // No nav item is current: this page is not one of them, and marking
+      // one would tell the visitor they are somewhere they are not. It used to
+      // pass "home" here, which marked Home current on every 404.
       title="That page isn't here"
       lede={
         <>
-          The link is either out of date or slightly off. Nothing is broken — here is
-          everything this site has.
+          The link is out of date or slightly off. Here is everything on this site.
         </>
       }
       css={css}
@@ -78,7 +76,7 @@ export default function NotFound() {
               <span>Four plans and what separates them.</span>
             </a>
             <a className="nf-link" href="/start">
-              <b>Start setup</b>
+              <b>Start free trial</b>
               <span>Connect Buildium and be running today.</span>
             </a>
           </div>
