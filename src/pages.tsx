@@ -9,6 +9,9 @@ import Maintenance from "./solutions/Maintenance";
 import Delinquency from "./solutions/Delinquency";
 import Screenshots from "./Screenshots";
 import OwnerReporting from "./solutions/OwnerReporting";
+import StateLawPage from "./stateLaws/StateLawPage";
+import StateLawsIndex from "./stateLaws/StateLawsIndex";
+import { STATES } from "./stateLaws/data";
 import { normalizePath } from "./seo/routes";
 
 /**
@@ -32,6 +35,8 @@ export const PAGES: Record<string, () => ReactElement> = {
   "/sms": () => <Sms />,
   "/terms": () => <Terms />,
   "/privacy": () => <Privacy />,
+  "/state-laws": () => <StateLawsIndex />,
+  ...Object.fromEntries(STATES.map((st) => [st.path, () => <StateLawPage state={st} />])),
 };
 
 export function pageFor(path: string): ReactElement {

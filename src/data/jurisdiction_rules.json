@@ -1,0 +1,2173 @@
+{
+  "version": "2026-08",
+  "legend": {
+    "soi_protection": "Y = statewide source-of-income protection (voucher refusal illegal), N = none statewide, P = state PREEMPTS localities from adding one, L = local ordinances only (see quirks/note)",
+    "pm_license": "B = real-estate broker license required for third-party management, PM = dedicated property-management license, N = no license required (see note)",
+    "eviction_speed_tier": "1 = fastest (~2-4 weeks), 2 = moderate (~1-2 months), 3 = slow (~2-4 months), 4 = slowest (4+ months, tenant-protective courts)",
+    "verify_flag": "true = rule changed recently or has known ambiguity - verify the controlling statute before acting on it",
+    "deposit.cap_months": "null = no statewide cap",
+    "notice.nonpay_days": "statutory pay-or-quit notice before filing; string values are special regimes (e.g. 'demand', 'none - file directly')",
+    "rates": "annually-published figures the formulas need. value=null means the current-cycle figure is NOT loaded: output the formula + citation and say 'current-year rate not loaded' - NEVER estimate a percentage or dollar maximum. Populate values via jurisdiction_notes config rows (param 'rates.<id>.value') on each publisher's cycle.",
+    "pending_change": "a dated rule change: {field, new_value, effective_from, precision, citation}. Lookup applies the value in force TODAY and flags the transition; precision='year' means the exact in-year date is unverified - treat the tenant-protective side as in force and flag.",
+    "return_deadline_unit": "day-count type for deposit return deadlines: calendar (default) or business. When absent, count the LONGER interpretation."
+  },
+  "federal": {
+    "cares_act_nonpay_notice_days": {
+      "value": 30,
+      "citation": "CARES Act §4024",
+      "note": "Applies to 'covered properties' (federally backed mortgage or federal housing program). The 30-day notice requirement has no statutory sunset and courts are split - safest practice is a 30-day nonpayment notice on any covered property, regardless of shorter state timelines."
+    },
+    "fair_housing_protected_classes": {
+      "value": [
+        "race",
+        "color",
+        "religion",
+        "national origin",
+        "sex",
+        "familial status",
+        "disability"
+      ],
+      "citation": "Fair Housing Act, 42 U.S.C. §3601 et seq.",
+      "note": "Disparate-impact liability applies (HUD rule; Inclusive Communities, 2015) - a facially neutral policy that disproportionately excludes a protected class can violate the FHA. Blanket criminal-history bans risk violation under HUD's 2016 guidance (Keating memo): use individualized assessment of nature, severity, and recency."
+    },
+    "assistance_animals": {
+      "value": "no pet fees, pet deposits, or pet rent for assistance animals; breed/weight restrictions do not apply",
+      "citation": "HUD FHEO-2020-01",
+      "note": "Assistance animals (service + emotional support) are a disability accommodation, not pets. Documentation requests are limited when the disability or need is not apparent."
+    },
+    "lead_disclosure": {
+      "value": "pre-1978 housing requires lead-based paint disclosure + EPA pamphlet before lease signing",
+      "citation": "42 U.S.C. §4852d; 24 CFR Part 35"
+    },
+    "scra_protections": {
+      "value": "eviction of active-duty servicemembers or dependents requires a court order when rent is at or below the SCRA threshold (~$10k/mo, adjusted annually); courts may stay proceedings; military-status affidavit required for default judgments",
+      "citation": "Servicemembers Civil Relief Act, 50 U.S.C. §3951-3953"
+    },
+    "fcra_adverse_action": {
+      "value": "denying, conditioning, or pricing tenancy based on a consumer report (credit or tenant screening) requires an adverse-action notice naming the reporting agency",
+      "citation": "FCRA, 15 U.S.C. §1681m"
+    },
+    "fdcpa": {
+      "value": "third-party collection of rent debt (including by managers collecting for owners in some circuits) is subject to FDCPA notice, validation, and conduct rules",
+      "citation": "15 U.S.C. §1692 et seq."
+    },
+    "nspire": {
+      "value": "HUD-assisted units are inspected under NSPIRE standards (replaced HQS/UPCS)",
+      "citation": "24 CFR Part 5 Subpart G"
+    },
+    "vawa": {
+      "value": "in covered federal programs, being a victim of domestic violence, dating violence, sexual assault, or stalking cannot be the basis for denial, eviction, or termination of assistance",
+      "citation": "34 U.S.C. §12491"
+    },
+    "rates": {
+      "scra_eviction_rent_threshold": {
+        "formula": "DoD annual housing-cost adjustment (~monthly rent threshold below which eviction of a covered servicemember requires a court order)",
+        "publisher": "DoD, annually",
+        "citation": "50 U.S.C. §3951",
+        "value": null,
+        "unit": "dollars_per_month",
+        "scope": "national"
+      },
+      "hud_fmr": {
+        "formula": "Fair Market Rents per metro/county",
+        "publisher": "HUD, Oct 1 (income limits April)",
+        "citation": "24 CFR Part 888",
+        "value": null,
+        "unit": "reference",
+        "scope": "reference via the live fmr_for_zip lookup - never cached here"
+      }
+    }
+  },
+  "states": {
+    "AL": {
+      "name": "Alabama",
+      "deposit": {
+        "cap_months": 1,
+        "return_deadline_days": 60,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "failure to return on time forfeits the landlord's claim and can double recovery",
+        "interest_owed": false,
+        "citation": "Ala. Code §35-9A-201",
+        "verify_flag": false,
+        "note": "cap excludes pet deposits and increased-risk deposits"
+      },
+      "late_fee": {
+        "rule": "none set by statute",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": 7,
+        "nonpay_unit": "business",
+        "mtm_termination_days": 30,
+        "entry_hours": 48
+      },
+      "screening": {
+        "soi_protection": "N"
+      },
+      "licensing": {
+        "pm_license": "B"
+      },
+      "eviction_speed_tier": 1,
+      "quirks": [],
+      "overlay_market": false,
+      "overlay_note": null
+    },
+    "AK": {
+      "name": "Alaska",
+      "deposit": {
+        "cap_months": 2,
+        "return_deadline_days": 30,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "none specified",
+        "interest_owed": false,
+        "citation": "AS 34.03.070",
+        "verify_flag": false,
+        "note": "cap applies only when rent ≤ $2,000/mo; return is 14 days when no deductions are taken, 30 days with deductions"
+      },
+      "late_fee": {
+        "rule": "none set by statute",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": 7,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": 30,
+        "entry_hours": 24
+      },
+      "screening": {
+        "soi_protection": "N"
+      },
+      "licensing": {
+        "pm_license": "B"
+      },
+      "eviction_speed_tier": 2,
+      "quirks": [],
+      "overlay_market": false,
+      "overlay_note": null
+    },
+    "AZ": {
+      "name": "Arizona",
+      "deposit": {
+        "cap_months": 1.5,
+        "return_deadline_days": 14,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "2x wrongfully withheld amount",
+        "interest_owed": false,
+        "citation": "A.R.S. §33-1321",
+        "verify_flag": false,
+        "note": "14 business days",
+        "return_deadline_unit": "business"
+      },
+      "late_fee": {
+        "rule": "must be reasonable and stated in the lease",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": 5,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": 30,
+        "entry_hours": 48
+      },
+      "screening": {
+        "soi_protection": "N"
+      },
+      "licensing": {
+        "pm_license": "B"
+      },
+      "eviction_speed_tier": 1,
+      "quirks": [],
+      "overlay_market": false,
+      "overlay_note": null
+    },
+    "AR": {
+      "name": "Arkansas",
+      "deposit": {
+        "cap_months": 2,
+        "return_deadline_days": 60,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "none specified",
+        "interest_owed": false,
+        "citation": "A.C.A. §18-16-305",
+        "verify_flag": false
+      },
+      "late_fee": {
+        "rule": "none set by statute",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": 3,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": 30,
+        "entry_hours": null
+      },
+      "screening": {
+        "soi_protection": "N"
+      },
+      "licensing": {
+        "pm_license": "B"
+      },
+      "eviction_speed_tier": 1,
+      "quirks": [
+        "Only state with NO implied warranty of habitability - landlord repair duties are largely contractual"
+      ],
+      "overlay_market": false,
+      "overlay_note": null
+    },
+    "CA": {
+      "name": "California",
+      "deposit": {
+        "cap_months": 1,
+        "return_deadline_days": 21,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "2x deposit for bad-faith retention",
+        "interest_owed": false,
+        "citation": "Civ. Code §1950.5 (AB 12, 2024)",
+        "verify_flag": false,
+        "note": "small landlords (≤2 properties, ≤4 units, natural person) may take 2 months; some local ordinances require interest"
+      },
+      "late_fee": {
+        "rule": "enforceable only as a valid liquidated-damages provision",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": 3,
+        "nonpay_unit": "court",
+        "mtm_termination_days": "30 (<1 yr) / 60 (≥1 yr); just cause required after 12 months (AB 1482)",
+        "entry_hours": 24,
+        "note": "entry notice must be written"
+      },
+      "screening": {
+        "soi_protection": "Y"
+      },
+      "licensing": {
+        "pm_license": "B"
+      },
+      "eviction_speed_tier": 3,
+      "quirks": [
+        "AB 1482 statewide rent cap: 5% + CPI, max 10%, for covered buildings 15+ years old",
+        "Dense local overlays (LA, SF, Oakland, San José, etc.) with stricter rent control and just-cause rules than state law"
+      ],
+      "overlay_market": true,
+      "overlay_note": "Never answer from state law alone - check the city ordinance",
+      "rates": {
+        "ab1482_max_increase": {
+          "formula": "5% + regional CPI, capped at 10%; applies to the Aug 1 - Jul 31 window",
+          "publisher": "CA DOJ / CAA tables, annually (April CPI)",
+          "citation": "Civ. Code §1947.12 (AB 1482)",
+          "value": null,
+          "unit": "percent",
+          "scope": "state (covered buildings 15+ years old)"
+        },
+        "local_board_increases": {
+          "formula": "board-specific: SF 60% of CPI, Berkeley 65% of CPI; Oakland, Santa Monica, and LA RSO each set annually",
+          "publisher": "each rent board, annually",
+          "citation": "local rent ordinances",
+          "value": null,
+          "unit": "percent",
+          "scope": "local rent-control boards - always check the board, never AB 1482 alone"
+        },
+        "application_screening_fee_cap": {
+          "formula": "statutory base adjusted annually by CPI",
+          "publisher": "annual CPI adjustment",
+          "citation": "Civ. Code §1950.6",
+          "value": null,
+          "unit": "dollars",
+          "scope": "state"
+        }
+      }
+    },
+    "CO": {
+      "name": "Colorado",
+      "deposit": {
+        "cap_months": 2,
+        "return_deadline_days": 30,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "3x wrongfully withheld amount",
+        "interest_owed": false,
+        "citation": "C.R.S. §38-12-103 (SB23-184)",
+        "verify_flag": true,
+        "note": "cap was 2 months under SB23-184; a 1-month cap takes effect in 2026 - the lookup applies the value in force today and flags the change; lease may extend return to 60 days",
+        "pending_change": {
+          "field": "cap_months",
+          "new_value": 1,
+          "effective_from": "2026-01-01",
+          "precision": "year",
+          "citation": "SB23-184 follow-on; verify the exact effective date and any small-landlord carve-outs"
+        }
+      },
+      "late_fee": {
+        "rule": "greater of $50 or 5% of overdue amount",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": 10,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": "for-cause only (HB24-1098)",
+        "entry_hours": null
+      },
+      "screening": {
+        "soi_protection": "Y"
+      },
+      "licensing": {
+        "pm_license": "B"
+      },
+      "eviction_speed_tier": 2,
+      "quirks": [
+        "No-cause terminations are banned (HB24-1098) - every non-renewal needs an enumerated cause"
+      ],
+      "overlay_market": true,
+      "overlay_note": "Denver and Boulder require rental licenses to operate"
+    },
+    "CT": {
+      "name": "Connecticut",
+      "deposit": {
+        "cap_months": 2,
+        "return_deadline_days": 21,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "2x deposit",
+        "interest_owed": true,
+        "citation": "C.G.S. §47a-21",
+        "verify_flag": false,
+        "note": "cap is 1 month for tenants 62+; deadline is 21 days after tenancy ends or 15 days after receiving forwarding address, whichever is later"
+      },
+      "late_fee": {
+        "rule": "allowed after grace period",
+        "grace_days": 9
+      },
+      "notice": {
+        "nonpay_days": 3,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": "3-day notice to quit",
+        "entry_hours": "reasonable",
+        "note": "nonpay notice runs after the 9-day statutory grace period",
+        "verify_flag": true
+      },
+      "screening": {
+        "soi_protection": "Y"
+      },
+      "licensing": {
+        "pm_license": "B"
+      },
+      "eviction_speed_tier": 3,
+      "quirks": [],
+      "overlay_market": false,
+      "overlay_note": null,
+      "rates": {
+        "deposit_interest_rate": {
+          "formula": "rate set annually by the Banking Commissioner",
+          "publisher": "CT Banking Dept., annually",
+          "citation": "C.G.S. §47a-21",
+          "value": null,
+          "unit": "percent",
+          "scope": "state"
+        }
+      }
+    },
+    "DE": {
+      "name": "Delaware",
+      "deposit": {
+        "cap_months": 1,
+        "return_deadline_days": 20,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "2x wrongfully withheld amount",
+        "interest_owed": false,
+        "citation": "25 Del. C. §5514",
+        "verify_flag": false,
+        "note": "cap applies to leases of 1 year or more"
+      },
+      "late_fee": {
+        "rule": "capped at 5% of monthly rent",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": 5,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": 60,
+        "entry_hours": 48
+      },
+      "screening": {
+        "soi_protection": "N",
+        "verify_flag": true,
+        "note": "recent legislative activity - verify current status"
+      },
+      "licensing": {
+        "pm_license": "B"
+      },
+      "eviction_speed_tier": 3,
+      "quirks": [],
+      "overlay_market": false,
+      "overlay_note": null
+    },
+    "DC": {
+      "name": "District of Columbia",
+      "deposit": {
+        "cap_months": 1,
+        "return_deadline_days": 45,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "up to 3x for bad faith",
+        "interest_owed": true,
+        "citation": "14 DCMR §§308-311",
+        "verify_flag": false
+      },
+      "late_fee": {
+        "rule": "capped at 5% of monthly rent",
+        "grace_days": 5
+      },
+      "notice": {
+        "nonpay_days": 30,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": "for-cause only",
+        "entry_hours": 48
+      },
+      "screening": {
+        "soi_protection": "Y"
+      },
+      "licensing": {
+        "pm_license": "PM"
+      },
+      "eviction_speed_tier": 4,
+      "quirks": [
+        "Rent Administration Division (RAD) registration required; rent control applies to most pre-1976 buildings with landlords owning 5+ units",
+        "Dedicated property-manager license jurisdiction"
+      ],
+      "overlay_market": true,
+      "overlay_note": "RAD registration is license-to-operate",
+      "rates": {
+        "stabilized_increase": {
+          "formula": "CPI-W + 2%, capped at 10% (elderly/disabled: CPI only, capped at 5%)",
+          "publisher": "DC Rent Administrator, spring",
+          "citation": "DC rent stabilization",
+          "value": null,
+          "unit": "percent",
+          "scope": "rent-stabilized (RAD-registered) units"
+        },
+        "deposit_interest_rate": {
+          "formula": "rate set per DCMR schedule",
+          "publisher": "DC, annually",
+          "citation": "14 DCMR §311",
+          "value": null,
+          "unit": "percent",
+          "scope": "district-wide"
+        }
+      }
+    },
+    "FL": {
+      "name": "Florida",
+      "deposit": {
+        "cap_months": null,
+        "return_deadline_days": 15,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "late claim notice forfeits the right to keep any of the deposit",
+        "interest_owed": "only if held in an interest-bearing account (accounting option)",
+        "citation": "Fla. Stat. §83.49",
+        "verify_flag": false,
+        "note": "15 days to return when no claim; 30 days to send an itemized claim notice"
+      },
+      "late_fee": {
+        "rule": "none set by statute",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": 3,
+        "nonpay_unit": "business",
+        "mtm_termination_days": 30,
+        "entry_hours": 12
+      },
+      "screening": {
+        "soi_protection": "L",
+        "note": "Miami-Dade ordinance protects source of income; state preemption limits new local rules"
+      },
+      "licensing": {
+        "pm_license": "B"
+      },
+      "eviction_speed_tier": 1,
+      "quirks": [],
+      "overlay_market": false,
+      "overlay_note": null,
+      "rates": {
+        "estoppel_fee_caps": {
+          "formula": "statutory caps, DBPR-adjusted every 5 years",
+          "publisher": "FL DBPR",
+          "citation": "Fla. Stat. §§718.116 / 719.108 / 720.30851",
+          "value": null,
+          "unit": "dollars",
+          "scope": "condo/co-op/HOA estoppel certificates"
+        }
+      }
+    },
+    "GA": {
+      "name": "Georgia",
+      "deposit": {
+        "cap_months": 2,
+        "return_deadline_days": 30,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "3x deposit for bad-faith retention",
+        "interest_owed": false,
+        "citation": "O.C.G.A. §44-7-34 (HB 404, 2024)",
+        "verify_flag": false
+      },
+      "late_fee": {
+        "rule": "none set by statute",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": "demand",
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": 60,
+        "entry_hours": null,
+        "note": "nonpayment requires a demand for possession, not a fixed statutory day count; HB 404 added a 3-business-day cure right after filing"
+      },
+      "screening": {
+        "soi_protection": "N"
+      },
+      "licensing": {
+        "pm_license": "B"
+      },
+      "eviction_speed_tier": 1,
+      "quirks": [
+        "HB 404 (2024) added the 2-month deposit cap and a 3-business-day post-filing cure right"
+      ],
+      "overlay_market": false,
+      "overlay_note": null
+    },
+    "HI": {
+      "name": "Hawaii",
+      "deposit": {
+        "cap_months": 1,
+        "return_deadline_days": 14,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "forfeits deposit plus damages",
+        "interest_owed": false,
+        "citation": "HRS §521-44",
+        "verify_flag": false,
+        "note": "plus 0.5 month allowed as pet deposit"
+      },
+      "late_fee": {
+        "rule": "capped at 8% of overdue rent",
+        "grace_days": null,
+        "verify_flag": true
+      },
+      "notice": {
+        "nonpay_days": 5,
+        "nonpay_unit": "business",
+        "mtm_termination_days": 45,
+        "entry_hours": 48
+      },
+      "screening": {
+        "soi_protection": "N",
+        "verify_flag": true
+      },
+      "licensing": {
+        "pm_license": "B"
+      },
+      "eviction_speed_tier": 3,
+      "quirks": [],
+      "overlay_market": false,
+      "overlay_note": null
+    },
+    "ID": {
+      "name": "Idaho",
+      "deposit": {
+        "cap_months": null,
+        "return_deadline_days": 21,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "none specified",
+        "interest_owed": false,
+        "citation": "Idaho Code §6-321",
+        "verify_flag": false,
+        "note": "parties may agree to up to 30 days"
+      },
+      "late_fee": {
+        "rule": "none set by statute",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": 3,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": 30,
+        "entry_hours": null
+      },
+      "screening": {
+        "soi_protection": "N"
+      },
+      "licensing": {
+        "pm_license": "N"
+      },
+      "eviction_speed_tier": 1,
+      "quirks": [],
+      "overlay_market": false,
+      "overlay_note": null
+    },
+    "IL": {
+      "name": "Illinois",
+      "deposit": {
+        "cap_months": null,
+        "return_deadline_days": 45,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "2x deposit",
+        "interest_owed": "required for buildings with 25+ units",
+        "citation": "765 ILCS 710",
+        "verify_flag": false,
+        "note": "itemized statement due in 30 days, return in 45 (applies to 5+ unit buildings); Chicago RLTO is stricter"
+      },
+      "late_fee": {
+        "rule": "$20 or 20% of monthly rent",
+        "grace_days": null,
+        "verify_flag": true
+      },
+      "notice": {
+        "nonpay_days": 5,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": 30,
+        "entry_hours": null,
+        "note": "no statewide entry-notice statute; Chicago RLTO requires 48h"
+      },
+      "screening": {
+        "soi_protection": "Y",
+        "note": "statewide since 2023"
+      },
+      "licensing": {
+        "pm_license": "B"
+      },
+      "eviction_speed_tier": 3,
+      "quirks": [
+        "Chicago RLTO replaces much of state law inside the city; Chicago move-in fees commonly used INSTEAD of security deposits to escape RLTO deposit rules",
+        "An LLC landlord must appear through an attorney in Cook County eviction court"
+      ],
+      "overlay_market": true,
+      "overlay_note": "Chicago is effectively its own regime (RLTO + rental registration)",
+      "rates": {
+        "chicago_deposit_interest_rate": {
+          "formula": "rate set annually by the City Comptroller",
+          "publisher": "Chicago Comptroller, annually",
+          "citation": "Chicago RLTO §5-12-081",
+          "value": null,
+          "unit": "percent",
+          "scope": "Chicago RLTO"
+        }
+      }
+    },
+    "IN": {
+      "name": "Indiana",
+      "deposit": {
+        "cap_months": null,
+        "return_deadline_days": 45,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "none specified",
+        "interest_owed": false,
+        "citation": "Ind. Code §32-31-3-12",
+        "verify_flag": false
+      },
+      "late_fee": {
+        "rule": "none set by statute",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": 10,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": 30,
+        "entry_hours": "reasonable"
+      },
+      "screening": {
+        "soi_protection": "P",
+        "note": "state preempts local source-of-income ordinances"
+      },
+      "licensing": {
+        "pm_license": "B"
+      },
+      "eviction_speed_tier": 1,
+      "quirks": [],
+      "overlay_market": false,
+      "overlay_note": null
+    },
+    "IA": {
+      "name": "Iowa",
+      "deposit": {
+        "cap_months": 2,
+        "return_deadline_days": 30,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "up to 2 months rent punitive for bad faith",
+        "interest_owed": false,
+        "citation": "Iowa Code §562A.12",
+        "verify_flag": false
+      },
+      "late_fee": {
+        "rule": "rent < $700/mo: $12/day, max $60/mo; rent ≥ $700: $20/day, max $100/mo",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": 3,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": 30,
+        "entry_hours": 24
+      },
+      "screening": {
+        "soi_protection": "P",
+        "note": "state preempts local source-of-income ordinances"
+      },
+      "licensing": {
+        "pm_license": "B"
+      },
+      "eviction_speed_tier": 2,
+      "quirks": [],
+      "overlay_market": false,
+      "overlay_note": null
+    },
+    "KS": {
+      "name": "Kansas",
+      "deposit": {
+        "cap_months": 1,
+        "return_deadline_days": 30,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "1.5x wrongfully withheld amount",
+        "interest_owed": false,
+        "citation": "K.S.A. §58-2550",
+        "verify_flag": false,
+        "note": "1 month unfurnished, 1.5 furnished"
+      },
+      "late_fee": {
+        "rule": "must be reasonable",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": 3,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": 30,
+        "entry_hours": "reasonable",
+        "verify_flag": true
+      },
+      "screening": {
+        "soi_protection": "N"
+      },
+      "licensing": {
+        "pm_license": "N",
+        "verify_flag": true
+      },
+      "eviction_speed_tier": 1,
+      "quirks": [],
+      "overlay_market": false,
+      "overlay_note": null
+    },
+    "KY": {
+      "name": "Kentucky",
+      "deposit": {
+        "cap_months": null,
+        "return_deadline_days": 60,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "none specified",
+        "interest_owed": false,
+        "citation": "KRS §383.580 (URLTA counties)",
+        "verify_flag": false,
+        "note": "30-60 days depending on dispute; URLTA applies only in adopting counties"
+      },
+      "late_fee": {
+        "rule": "none set by statute",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": 7,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": 30,
+        "entry_hours": 48,
+        "note": "7-day right-to-cure applies in URLTA counties only"
+      },
+      "screening": {
+        "soi_protection": "L",
+        "note": "Louisville ordinance",
+        "verify_flag": true
+      },
+      "licensing": {
+        "pm_license": "B"
+      },
+      "eviction_speed_tier": 2,
+      "quirks": [
+        "URLTA adopted county-by-county - tenant protections differ sharply between (e.g.) Louisville/Lexington and non-URLTA counties"
+      ],
+      "overlay_market": false,
+      "overlay_note": null
+    },
+    "LA": {
+      "name": "Louisiana",
+      "deposit": {
+        "cap_months": null,
+        "return_deadline_days": 30,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "$200 or actual damages (whichever greater) for willful noncompliance",
+        "interest_owed": false,
+        "citation": "La. R.S. 9:3251",
+        "verify_flag": false
+      },
+      "late_fee": {
+        "rule": "none set by statute",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": 5,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": 10,
+        "entry_hours": null,
+        "note": "the 5-day notice is WAIVABLE in the lease and commonly waived"
+      },
+      "screening": {
+        "soi_protection": "N"
+      },
+      "licensing": {
+        "pm_license": "B"
+      },
+      "eviction_speed_tier": 1,
+      "quirks": [
+        "Civil-law state - landlord-tenant vocabulary and procedure differ from every common-law state; notice waivers are enforceable"
+      ],
+      "overlay_market": false,
+      "overlay_note": null
+    },
+    "ME": {
+      "name": "Maine",
+      "deposit": {
+        "cap_months": 2,
+        "return_deadline_days": 30,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "2x deposit",
+        "interest_owed": false,
+        "citation": "14 M.R.S. §§6032-6038",
+        "verify_flag": false,
+        "note": "21 days for tenancies at will"
+      },
+      "late_fee": {
+        "rule": "capped at 4% of monthly rent",
+        "grace_days": 15
+      },
+      "notice": {
+        "nonpay_days": 7,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": 30,
+        "entry_hours": 24,
+        "note": "Portland requires just cause for termination"
+      },
+      "screening": {
+        "soi_protection": "Y",
+        "verify_flag": true
+      },
+      "licensing": {
+        "pm_license": "N"
+      },
+      "eviction_speed_tier": 2,
+      "quirks": [],
+      "overlay_market": true,
+      "overlay_note": "Portland: rent control + just-cause ordinance",
+      "rates": {
+        "portland_me_rent_cap": {
+          "formula": "70% of CPI plus any rent-board actions",
+          "publisher": "Portland rent board, annually",
+          "citation": "Portland rent control ordinance",
+          "value": null,
+          "unit": "percent",
+          "scope": "Portland"
+        }
+      }
+    },
+    "MD": {
+      "name": "Maryland",
+      "deposit": {
+        "cap_months": 1,
+        "return_deadline_days": 45,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "3x wrongfully withheld amount",
+        "interest_owed": true,
+        "citation": "Md. Real Prop. §8-203",
+        "verify_flag": true,
+        "note": "cap dropped to 1 month Oct 2024; interest ~1.5%/yr or statutory index - verify current rate"
+      },
+      "late_fee": {
+        "rule": "capped at 5% of monthly rent",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": 10,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": 60,
+        "entry_hours": 24,
+        "note": "60-day MTM and 24h entry effective Oct 2025 - verify",
+        "verify_flag": true
+      },
+      "screening": {
+        "soi_protection": "Y"
+      },
+      "licensing": {
+        "pm_license": "N",
+        "verify_flag": true
+      },
+      "eviction_speed_tier": 3,
+      "quirks": [],
+      "overlay_market": true,
+      "overlay_note": "Baltimore City requires a rental license to operate",
+      "rates": {
+        "montgomery_co_cap": {
+          "formula": "lesser of CPI + 3% or 6%",
+          "publisher": "Montgomery County, annually",
+          "citation": "county rent stabilization law",
+          "value": null,
+          "unit": "percent",
+          "scope": "Montgomery County"
+        },
+        "deposit_interest_rate": {
+          "formula": "statutory index (~1.5% or per state schedule)",
+          "publisher": "MD, annually",
+          "citation": "Md. Real Prop. §8-203",
+          "value": null,
+          "unit": "percent",
+          "scope": "state"
+        }
+      }
+    },
+    "MA": {
+      "name": "Massachusetts",
+      "deposit": {
+        "cap_months": 1,
+        "return_deadline_days": 30,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "3x deposit + attorney's fees",
+        "interest_owed": true,
+        "citation": "M.G.L. c.186 §15B",
+        "verify_flag": false,
+        "note": "5% interest (or bank rate); strict compliance regime - separate escrow account, receipts, statement of condition"
+      },
+      "late_fee": {
+        "rule": "no fee may be charged until rent is 30 days late",
+        "grace_days": 30
+      },
+      "notice": {
+        "nonpay_days": 14,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": "one full rental period (30 days typical)",
+        "entry_hours": null
+      },
+      "screening": {
+        "soi_protection": "Y"
+      },
+      "licensing": {
+        "pm_license": "N"
+      },
+      "eviction_speed_tier": 4,
+      "quirks": [
+        "The deposit statute is the most dangerous in the country: ANY procedural miss (wrong account, missing receipt, missing condition statement) can void deductions and trigger treble damages + fees - many MA operators simply don't take deposits"
+      ],
+      "overlay_market": true,
+      "overlay_note": "Boston rental registration",
+      "rates": {
+        "deposit_interest_rate": {
+          "formula": "5% or the actual bank rate, whichever the account yields",
+          "publisher": "statute (constant) / bank rate",
+          "citation": "M.G.L. c.186 §15B",
+          "value": 5,
+          "unit": "percent",
+          "scope": "state"
+        }
+      }
+    },
+    "MI": {
+      "name": "Michigan",
+      "deposit": {
+        "cap_months": 1.5,
+        "return_deadline_days": 30,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "2x wrongfully withheld amount",
+        "interest_owed": false,
+        "citation": "MCL §§554.602-616",
+        "verify_flag": false
+      },
+      "late_fee": {
+        "rule": "must be reasonable",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": 7,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": 30,
+        "entry_hours": null
+      },
+      "screening": {
+        "soi_protection": "Y",
+        "verify_flag": true,
+        "note": "2024 law; verify scope (may apply to larger buildings first)"
+      },
+      "licensing": {
+        "pm_license": "B"
+      },
+      "eviction_speed_tier": 2,
+      "quirks": [],
+      "overlay_market": false,
+      "overlay_note": null
+    },
+    "MN": {
+      "name": "Minnesota",
+      "deposit": {
+        "cap_months": null,
+        "return_deadline_days": 21,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "bad faith adds $500 punitive",
+        "interest_owed": true,
+        "citation": "Minn. Stat. §504B.178",
+        "verify_flag": false,
+        "note": "1% simple interest"
+      },
+      "late_fee": {
+        "rule": "capped at 8% of overdue rent",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": 14,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": "one rental period plus one day",
+        "entry_hours": 24
+      },
+      "screening": {
+        "soi_protection": "Y"
+      },
+      "licensing": {
+        "pm_license": "B"
+      },
+      "eviction_speed_tier": 3,
+      "quirks": [],
+      "overlay_market": true,
+      "overlay_note": "Minneapolis requires a rental license to operate",
+      "rates": {
+        "st_paul_rent_cap": {
+          "formula": "3% flat annual cap (exception process available)",
+          "publisher": "city ordinance (constant, not annually indexed)",
+          "citation": "St. Paul residential rent stabilization ordinance",
+          "value": 3,
+          "unit": "percent",
+          "scope": "St. Paul"
+        },
+        "deposit_interest_rate": {
+          "formula": "1% simple interest (statutory constant)",
+          "publisher": "statute",
+          "citation": "Minn. Stat. §504B.178",
+          "value": 1,
+          "unit": "percent",
+          "scope": "state"
+        }
+      }
+    },
+    "MS": {
+      "name": "Mississippi",
+      "deposit": {
+        "cap_months": null,
+        "return_deadline_days": 45,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "none specified",
+        "interest_owed": false,
+        "citation": "Miss. Code §89-8-21",
+        "verify_flag": false
+      },
+      "late_fee": {
+        "rule": "none set by statute",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": 3,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": 30,
+        "entry_hours": null
+      },
+      "screening": {
+        "soi_protection": "N"
+      },
+      "licensing": {
+        "pm_license": "B"
+      },
+      "eviction_speed_tier": 1,
+      "quirks": [],
+      "overlay_market": false,
+      "overlay_note": null
+    },
+    "MO": {
+      "name": "Missouri",
+      "deposit": {
+        "cap_months": 2,
+        "return_deadline_days": 30,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "2x wrongfully withheld amount",
+        "interest_owed": false,
+        "citation": "Mo. Rev. Stat. §535.300",
+        "verify_flag": false
+      },
+      "late_fee": {
+        "rule": "must be reasonable",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": "demand",
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": 30,
+        "entry_hours": null,
+        "note": "nonpayment requires a rent demand, then suit - no fixed statutory notice period"
+      },
+      "screening": {
+        "soi_protection": "L",
+        "note": "St. Louis and Kansas City ordinances"
+      },
+      "licensing": {
+        "pm_license": "B"
+      },
+      "eviction_speed_tier": 1,
+      "quirks": [],
+      "overlay_market": false,
+      "overlay_note": null
+    },
+    "MT": {
+      "name": "Montana",
+      "deposit": {
+        "cap_months": null,
+        "return_deadline_days": 30,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "none specified",
+        "interest_owed": false,
+        "citation": "Mont. Code §70-25-202",
+        "verify_flag": false,
+        "note": "10 days when no deductions are taken"
+      },
+      "late_fee": {
+        "rule": "none set by statute",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": 3,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": 30,
+        "entry_hours": 24
+      },
+      "screening": {
+        "soi_protection": "N"
+      },
+      "licensing": {
+        "pm_license": "PM"
+      },
+      "eviction_speed_tier": 2,
+      "quirks": [
+        "Dedicated property-management license state"
+      ],
+      "overlay_market": false,
+      "overlay_note": null
+    },
+    "NE": {
+      "name": "Nebraska",
+      "deposit": {
+        "cap_months": 1,
+        "return_deadline_days": 14,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "none specified",
+        "interest_owed": false,
+        "citation": "Neb. Rev. Stat. §76-1416",
+        "verify_flag": false,
+        "note": "plus 0.25 month allowed as pet deposit"
+      },
+      "late_fee": {
+        "rule": "none set by statute",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": 7,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": 30,
+        "entry_hours": 24
+      },
+      "screening": {
+        "soi_protection": "N"
+      },
+      "licensing": {
+        "pm_license": "B"
+      },
+      "eviction_speed_tier": 1,
+      "quirks": [],
+      "overlay_market": false,
+      "overlay_note": null
+    },
+    "NV": {
+      "name": "Nevada",
+      "deposit": {
+        "cap_months": 3,
+        "return_deadline_days": 30,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "none specified",
+        "interest_owed": false,
+        "citation": "NRS 118A.242",
+        "verify_flag": false
+      },
+      "late_fee": {
+        "rule": "capped at 5% of monthly rent",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": 7,
+        "nonpay_unit": "judicial",
+        "mtm_termination_days": 30,
+        "entry_hours": 24,
+        "note": "60 days for tenants 60+ or with a disability (on request)"
+      },
+      "screening": {
+        "soi_protection": "N"
+      },
+      "licensing": {
+        "pm_license": "B",
+        "note": "broker license PLUS a property-management permit"
+      },
+      "eviction_speed_tier": 1,
+      "quirks": [
+        "Summary eviction inverts the burden: the TENANT must file an affidavit to contest or the landlord wins by default - one of the fastest processes in the country"
+      ],
+      "overlay_market": false,
+      "overlay_note": null
+    },
+    "NH": {
+      "name": "New Hampshire",
+      "deposit": {
+        "cap_months": 1,
+        "return_deadline_days": 30,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "2x deposit",
+        "interest_owed": "only if held 1 year or more",
+        "citation": "RSA 540-A",
+        "verify_flag": false,
+        "note": "cap is greater of 1 month or $100"
+      },
+      "late_fee": {
+        "rule": "none set by statute",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": 7,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": "good cause required (RSA 540)",
+        "entry_hours": "adequate"
+      },
+      "screening": {
+        "soi_protection": "N"
+      },
+      "licensing": {
+        "pm_license": "B"
+      },
+      "eviction_speed_tier": 2,
+      "quirks": [
+        "Good-cause standard applies even to periodic tenancies - no pure no-cause termination"
+      ],
+      "overlay_market": false,
+      "overlay_note": null
+    },
+    "NJ": {
+      "name": "New Jersey",
+      "deposit": {
+        "cap_months": 1.5,
+        "return_deadline_days": 30,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "2x wrongfully withheld amount",
+        "interest_owed": true,
+        "citation": "N.J.S.A. §46:8-21.1",
+        "verify_flag": false,
+        "note": "annual interest or credit to tenant"
+      },
+      "late_fee": {
+        "rule": "5-business-day grace required for seniors and certain benefit recipients",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": "none - file directly",
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": "no no-cause termination (Anti-Eviction Act)",
+        "entry_hours": 24,
+        "note": "nonpayment suits may be filed without prior notice; habitual-late-payer cases need a notice to cease"
+      },
+      "screening": {
+        "soi_protection": "Y"
+      },
+      "licensing": {
+        "pm_license": "B"
+      },
+      "eviction_speed_tier": 4,
+      "quirks": [
+        "Anti-Eviction Act: virtually no no-cause removals for covered tenancies - the lease effectively renews forever absent good cause",
+        "Many municipalities have local rent control"
+      ],
+      "overlay_market": true,
+      "overlay_note": "Municipal rent-control ordinances are common (Newark, Jersey City, etc.)",
+      "rates": {
+        "deposit_interest_rate": {
+          "formula": "money-market / bank rate on the deposit account, credited annually",
+          "publisher": "bank-indexed",
+          "citation": "N.J.S.A. §46:8-19",
+          "value": null,
+          "unit": "percent",
+          "scope": "state"
+        }
+      }
+    },
+    "NM": {
+      "name": "New Mexico",
+      "deposit": {
+        "cap_months": 1,
+        "return_deadline_days": 30,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "none specified",
+        "interest_owed": "required when deposit exceeds 1 month (annual interest)",
+        "citation": "N.M. Stat. §47-8-18",
+        "verify_flag": false,
+        "note": "1-month cap applies to leases under 1 year"
+      },
+      "late_fee": {
+        "rule": "capped at 10% of rent",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": 3,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": 30,
+        "entry_hours": 24
+      },
+      "screening": {
+        "soi_protection": "N",
+        "verify_flag": true
+      },
+      "licensing": {
+        "pm_license": "B"
+      },
+      "eviction_speed_tier": 2,
+      "quirks": [],
+      "overlay_market": false,
+      "overlay_note": null
+    },
+    "NY": {
+      "name": "New York",
+      "deposit": {
+        "cap_months": 1,
+        "return_deadline_days": 14,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "2x deposit for willful violation",
+        "interest_owed": "required for buildings with 6+ units",
+        "citation": "GOL §7-108 (HSTPA 2019)",
+        "verify_flag": false
+      },
+      "late_fee": {
+        "rule": "lesser of $50 or 5% of monthly rent",
+        "grace_days": 5
+      },
+      "notice": {
+        "nonpay_days": 14,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": "30 / 60 / 90 by length of tenancy (<1yr / 1-2yr / 2yr+)",
+        "entry_hours": null
+      },
+      "screening": {
+        "soi_protection": "Y"
+      },
+      "licensing": {
+        "pm_license": "B"
+      },
+      "eviction_speed_tier": 4,
+      "quirks": [
+        "NYC is its own regime: rent stabilization, Multiple Dwelling Registration, Good Cause Eviction (2024), housing court backlogs measured in months to years"
+      ],
+      "overlay_market": true,
+      "overlay_note": "NYC Multiple Dwelling Registration is license-to-operate; never answer NYC questions from state law alone",
+      "rates": {
+        "rgb_stabilized_renewal": {
+          "formula": "annual 1-yr / 2-yr renewal percentages for rent-stabilized leases",
+          "publisher": "NYC Rent Guidelines Board, June",
+          "citation": "RGB annual orders",
+          "value": null,
+          "unit": "percent",
+          "scope": "NYC rent-stabilized units"
+        },
+        "deposit_interest_rate": {
+          "formula": "prevailing rate for buildings 6+ units",
+          "publisher": "bank-indexed",
+          "citation": "GOL §7-103",
+          "value": null,
+          "unit": "percent",
+          "scope": "buildings 6+ units"
+        }
+      }
+    },
+    "NC": {
+      "name": "North Carolina",
+      "deposit": {
+        "cap_months": 1.5,
+        "return_deadline_days": 30,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "none specified",
+        "interest_owed": false,
+        "citation": "N.C.G.S. §§42-50 to 42-56",
+        "verify_flag": false,
+        "note": "1.5 months MTM, 2 months for longer terms; deposit must sit in a NC trust account or be bonded; 60-day final accounting allowed when damages are still being assessed"
+      },
+      "late_fee": {
+        "rule": "greater of $15 or 5% of rent",
+        "grace_days": 5
+      },
+      "notice": {
+        "nonpay_days": 10,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": 7,
+        "entry_hours": null
+      },
+      "screening": {
+        "soi_protection": "L"
+      },
+      "licensing": {
+        "pm_license": "B"
+      },
+      "eviction_speed_tier": 2,
+      "quirks": [
+        "7-day month-to-month termination notice - the shortest in the nation"
+      ],
+      "overlay_market": false,
+      "overlay_note": null
+    },
+    "ND": {
+      "name": "North Dakota",
+      "deposit": {
+        "cap_months": 1,
+        "return_deadline_days": 30,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "none specified",
+        "interest_owed": "required when held 9+ months",
+        "citation": "N.D.C.C. §47-16-07.1",
+        "verify_flag": false,
+        "note": "pet deposit may add up to $2,500"
+      },
+      "late_fee": {
+        "rule": "none set by statute",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": 3,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": 30,
+        "entry_hours": "reasonable"
+      },
+      "screening": {
+        "soi_protection": "N"
+      },
+      "licensing": {
+        "pm_license": "B"
+      },
+      "eviction_speed_tier": 1,
+      "quirks": [],
+      "overlay_market": false,
+      "overlay_note": null
+    },
+    "OH": {
+      "name": "Ohio",
+      "deposit": {
+        "cap_months": null,
+        "return_deadline_days": 30,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "wrongfully withheld amount doubled + attorney's fees",
+        "interest_owed": "narrow: 5% on the excess when deposit > $50 or 1 month and held 6+ months",
+        "citation": "Ohio Rev. Code §5321.16",
+        "verify_flag": false
+      },
+      "late_fee": {
+        "rule": "must be reasonable",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": 3,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": 30,
+        "entry_hours": 24
+      },
+      "screening": {
+        "soi_protection": "L",
+        "note": "Columbus ordinance"
+      },
+      "licensing": {
+        "pm_license": "B"
+      },
+      "eviction_speed_tier": 2,
+      "quirks": [],
+      "overlay_market": false,
+      "overlay_note": null
+    },
+    "OK": {
+      "name": "Oklahoma",
+      "deposit": {
+        "cap_months": null,
+        "return_deadline_days": 45,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "none specified",
+        "interest_owed": false,
+        "citation": "41 O.S. §115",
+        "verify_flag": false
+      },
+      "late_fee": {
+        "rule": "none set by statute",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": 5,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": 30,
+        "entry_hours": 24
+      },
+      "screening": {
+        "soi_protection": "P",
+        "note": "state preempts local source-of-income ordinances"
+      },
+      "licensing": {
+        "pm_license": "B"
+      },
+      "eviction_speed_tier": 1,
+      "quirks": [],
+      "overlay_market": false,
+      "overlay_note": null
+    },
+    "OR": {
+      "name": "Oregon",
+      "deposit": {
+        "cap_months": null,
+        "return_deadline_days": 31,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "2x wrongfully withheld amount",
+        "interest_owed": false,
+        "citation": "ORS 90.300",
+        "verify_flag": false
+      },
+      "late_fee": {
+        "rule": "allowed only after a 4-day grace period, with statutory limits",
+        "grace_days": 4,
+        "citation": "ORS 90.260"
+      },
+      "notice": {
+        "nonpay_days": 10,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": "just cause required after 12 months (SB 608)",
+        "entry_hours": 24,
+        "verify_flag": true,
+        "note": "10-day nonpay notice per 2023 change - verify"
+      },
+      "screening": {
+        "soi_protection": "Y"
+      },
+      "licensing": {
+        "pm_license": "PM"
+      },
+      "eviction_speed_tier": 3,
+      "quirks": [
+        "Statewide rent cap (7% + CPI, buildings 15+ years old)",
+        "Dedicated property-management license state"
+      ],
+      "overlay_market": true,
+      "overlay_note": "Portland: registration + mandatory relocation assistance on no-cause/rent-increase displacement",
+      "rates": {
+        "statewide_rent_cap": {
+          "formula": "lesser of 10% or 7% + CPI",
+          "publisher": "OR DAS, annually (~Sept for the following year)",
+          "citation": "ORS 90.324",
+          "value": null,
+          "unit": "percent",
+          "scope": "state (covered buildings 15+ years old)"
+        }
+      }
+    },
+    "PA": {
+      "name": "Pennsylvania",
+      "deposit": {
+        "cap_months": 2,
+        "return_deadline_days": 30,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "2x wrongfully withheld amount",
+        "interest_owed": "required from year 2 onward",
+        "citation": "68 P.S. §250.511",
+        "verify_flag": false,
+        "note": "2 months in year one, 1 month thereafter"
+      },
+      "late_fee": {
+        "rule": "none set by statute",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": 10,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": "15 (<1 yr) / 30 (1 yr+)",
+        "entry_hours": null,
+        "note": "Philadelphia has its own notice and diversion rules"
+      },
+      "screening": {
+        "soi_protection": "L",
+        "note": "Philadelphia, State College, Pittsburgh ordinances"
+      },
+      "licensing": {
+        "pm_license": "B"
+      },
+      "eviction_speed_tier": 3,
+      "quirks": [
+        "Philadelphia: rental license + lead-safe certification + MANDATORY eviction-diversion program before filing"
+      ],
+      "overlay_market": true,
+      "overlay_note": "Philadelphia is license-to-operate with a pre-filing diversion mandate"
+    },
+    "RI": {
+      "name": "Rhode Island",
+      "deposit": {
+        "cap_months": 1,
+        "return_deadline_days": 20,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "2x wrongfully withheld amount",
+        "interest_owed": false,
+        "citation": "R.I.G.L. §34-18-19",
+        "verify_flag": false
+      },
+      "late_fee": {
+        "rule": "none set by statute",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": 5,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": 30,
+        "entry_hours": 48
+      },
+      "screening": {
+        "soi_protection": "Y"
+      },
+      "licensing": {
+        "pm_license": "B"
+      },
+      "eviction_speed_tier": 3,
+      "quirks": [],
+      "overlay_market": false,
+      "overlay_note": null
+    },
+    "SC": {
+      "name": "South Carolina",
+      "deposit": {
+        "cap_months": null,
+        "return_deadline_days": 30,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "none specified",
+        "interest_owed": false,
+        "citation": "S.C. Code §27-40-410",
+        "verify_flag": false
+      },
+      "late_fee": {
+        "rule": "none set by statute",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": 5,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": 30,
+        "entry_hours": 24
+      },
+      "screening": {
+        "soi_protection": "N"
+      },
+      "licensing": {
+        "pm_license": "PM",
+        "note": "property-manager-in-charge license regime"
+      },
+      "eviction_speed_tier": 1,
+      "quirks": [
+        "The 5-day nonpay notice can be satisfied ONCE by conspicuous lease language - a compliant lease clause acts as permanent standing notice, allowing immediate filing"
+      ],
+      "overlay_market": false,
+      "overlay_note": null
+    },
+    "SD": {
+      "name": "South Dakota",
+      "deposit": {
+        "cap_months": 1,
+        "return_deadline_days": 14,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "none specified",
+        "interest_owed": false,
+        "citation": "SDCL §43-32-6.1",
+        "verify_flag": false,
+        "note": "itemized accounting due within 45 days on tenant request"
+      },
+      "late_fee": {
+        "rule": "none set by statute",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": 3,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": 30,
+        "entry_hours": 24
+      },
+      "screening": {
+        "soi_protection": "N"
+      },
+      "licensing": {
+        "pm_license": "B",
+        "verify_flag": true
+      },
+      "eviction_speed_tier": 1,
+      "quirks": [],
+      "overlay_market": false,
+      "overlay_note": null
+    },
+    "TN": {
+      "name": "Tennessee",
+      "deposit": {
+        "cap_months": null,
+        "return_deadline_days": 30,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "none specified",
+        "interest_owed": false,
+        "citation": "Tenn. Code §66-28-301 (URLTA counties)",
+        "verify_flag": true,
+        "note": "no hard statutory deadline - 30 days is standard practice; verify per county"
+      },
+      "late_fee": {
+        "rule": "capped at 10% of overdue amount",
+        "grace_days": 5
+      },
+      "notice": {
+        "nonpay_days": 14,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": 30,
+        "entry_hours": null
+      },
+      "screening": {
+        "soi_protection": "L",
+        "note": "Memphis-area activity - verify",
+        "verify_flag": true
+      },
+      "licensing": {
+        "pm_license": "B"
+      },
+      "eviction_speed_tier": 1,
+      "quirks": [
+        "URLTA applies only in counties over ~75k population - rules differ between (e.g.) Nashville/Memphis and rural counties (URLTA counties run closer to tier 2)"
+      ],
+      "overlay_market": false,
+      "overlay_note": null
+    },
+    "TX": {
+      "name": "Texas",
+      "deposit": {
+        "cap_months": null,
+        "return_deadline_days": 30,
+        "deadline_trigger": "surrender_plus_forwarding_address",
+        "penalty": "$100 + 3x wrongfully withheld amount for bad faith",
+        "interest_owed": false,
+        "citation": "Tex. Prop. Code §§92.103-92.109",
+        "verify_flag": false,
+        "note": "30-day clock starts at surrender AND receipt of forwarding address"
+      },
+      "late_fee": {
+        "rule": "capped at 12% of rent (≤4 units) or 10% (larger)",
+        "grace_days": 2,
+        "citation": "Tex. Prop. Code §92.019"
+      },
+      "notice": {
+        "nonpay_days": 3,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": 30,
+        "entry_hours": "as the lease provides",
+        "note": "the lease can shorten the 3-day nonpay notice to as little as 1 day"
+      },
+      "screening": {
+        "soi_protection": "P",
+        "note": "state preempts local voucher ordinances"
+      },
+      "licensing": {
+        "pm_license": "B"
+      },
+      "eviction_speed_tier": 1,
+      "quirks": [],
+      "overlay_market": false,
+      "overlay_note": null
+    },
+    "UT": {
+      "name": "Utah",
+      "deposit": {
+        "cap_months": null,
+        "return_deadline_days": 30,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "deposit + $100 if not returned within 5 days of a written demand",
+        "interest_owed": false,
+        "citation": "Utah Code §§57-17-1 to -5",
+        "verify_flag": false
+      },
+      "late_fee": {
+        "rule": "only as provided in the lease",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": 3,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": 15,
+        "entry_hours": 24
+      },
+      "screening": {
+        "soi_protection": "N"
+      },
+      "licensing": {
+        "pm_license": "B"
+      },
+      "eviction_speed_tier": 1,
+      "quirks": [
+        "15-day month-to-month termination - among the shortest"
+      ],
+      "overlay_market": false,
+      "overlay_note": null
+    },
+    "VT": {
+      "name": "Vermont",
+      "deposit": {
+        "cap_months": null,
+        "return_deadline_days": 14,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "late return forfeits the right to withhold; willful violation doubles it",
+        "interest_owed": "Burlington ordinance only",
+        "citation": "9 V.S.A. §4461",
+        "verify_flag": false
+      },
+      "late_fee": {
+        "rule": "none set by statute",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": 14,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": "60 (<2 yr) / 90 (2 yr+)",
+        "entry_hours": 48
+      },
+      "screening": {
+        "soi_protection": "Y"
+      },
+      "licensing": {
+        "pm_license": "N"
+      },
+      "eviction_speed_tier": 3,
+      "quirks": [],
+      "overlay_market": false,
+      "overlay_note": null
+    },
+    "VA": {
+      "name": "Virginia",
+      "deposit": {
+        "cap_months": 2,
+        "return_deadline_days": 45,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "none specified",
+        "interest_owed": false,
+        "citation": "Va. Code §55.1-1226",
+        "verify_flag": false
+      },
+      "late_fee": {
+        "rule": "capped at the greater of $10 or 10% of the periodic rent (or of the amount due, if less)",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": 5,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": 30,
+        "entry_hours": 72
+      },
+      "screening": {
+        "soi_protection": "Y",
+        "note": "statewide since 2020"
+      },
+      "licensing": {
+        "pm_license": "B"
+      },
+      "eviction_speed_tier": 2,
+      "quirks": [],
+      "overlay_market": false,
+      "overlay_note": null
+    },
+    "WA": {
+      "name": "Washington",
+      "deposit": {
+        "cap_months": null,
+        "return_deadline_days": 21,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "up to 2x for intentional refusal",
+        "interest_owed": false,
+        "citation": "RCW 59.18.280",
+        "verify_flag": false,
+        "note": "Seattle caps deposits at 1 month total (deposit + fees)"
+      },
+      "late_fee": {
+        "rule": "must be reasonable; Seattle caps late fees at $10/mo",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": 14,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": "just cause required statewide (RCW 59.18.650)",
+        "entry_hours": 48,
+        "note": "24h for showings"
+      },
+      "screening": {
+        "soi_protection": "Y"
+      },
+      "licensing": {
+        "pm_license": "B"
+      },
+      "eviction_speed_tier": 3,
+      "quirks": [
+        "Statewide just-cause regime - no-cause termination is gone for most tenancies"
+      ],
+      "overlay_market": true,
+      "overlay_note": "Seattle RRIO registration is license-to-operate; Seattle first-in-time screening and winter-eviction rules",
+      "rates": {
+        "statewide_rent_cap": {
+          "formula": "7% + CPI, capped at 10%; manufactured homes 5%",
+          "publisher": "WA Dept. of Commerce, annually (~June)",
+          "citation": "HB 1217",
+          "value": null,
+          "unit": "percent",
+          "scope": "state"
+        }
+      }
+    },
+    "WV": {
+      "name": "West Virginia",
+      "deposit": {
+        "cap_months": null,
+        "return_deadline_days": 60,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "none specified",
+        "interest_owed": false,
+        "citation": "W. Va. Code §37-6A-1",
+        "verify_flag": false,
+        "note": "45 days if the unit is re-rented sooner"
+      },
+      "late_fee": {
+        "rule": "none set by statute",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": 0,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": 30,
+        "entry_hours": null,
+        "note": "NO pre-filing notice required for nonpayment - the landlord may file immediately"
+      },
+      "screening": {
+        "soi_protection": "N"
+      },
+      "licensing": {
+        "pm_license": "B"
+      },
+      "eviction_speed_tier": 1,
+      "quirks": [
+        "Zero-notice nonpayment filings - unique nationally"
+      ],
+      "overlay_market": false,
+      "overlay_note": null
+    },
+    "WI": {
+      "name": "Wisconsin",
+      "deposit": {
+        "cap_months": null,
+        "return_deadline_days": 21,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "2x as an unfair trade practice (plus fees)",
+        "interest_owed": false,
+        "citation": "Wis. Admin. Code ATCP 134.06",
+        "verify_flag": false
+      },
+      "late_fee": {
+        "rule": "none set by statute",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": 5,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": 28,
+        "entry_hours": 12,
+        "note": "5-day notice carries a right to cure"
+      },
+      "screening": {
+        "soi_protection": "L",
+        "note": "Madison ordinance"
+      },
+      "licensing": {
+        "pm_license": "N",
+        "verify_flag": true
+      },
+      "eviction_speed_tier": 2,
+      "quirks": [],
+      "overlay_market": false,
+      "overlay_note": null
+    },
+    "WY": {
+      "name": "Wyoming",
+      "deposit": {
+        "cap_months": null,
+        "return_deadline_days": 30,
+        "deadline_trigger": "tenancy_end",
+        "penalty": "none specified",
+        "interest_owed": false,
+        "citation": "Wyo. Stat. §1-21-1208",
+        "verify_flag": false,
+        "note": "plus 15 additional days when deductions are itemized"
+      },
+      "late_fee": {
+        "rule": "none set by statute",
+        "grace_days": null
+      },
+      "notice": {
+        "nonpay_days": 3,
+        "nonpay_unit": "calendar",
+        "mtm_termination_days": "no statute - one rental period by common practice",
+        "entry_hours": null
+      },
+      "screening": {
+        "soi_protection": "N"
+      },
+      "licensing": {
+        "pm_license": "B"
+      },
+      "eviction_speed_tier": 1,
+      "quirks": [],
+      "overlay_market": false,
+      "overlay_note": null
+    }
+  },
+  "overlay_jurisdictions": {
+    "CA": {
+      "places": [
+        {
+          "name": "Los Angeles",
+          "warning": "RSO rent control + just-cause + relocation fees on covered units",
+          "license_to_operate": false
+        },
+        {
+          "name": "San Francisco",
+          "warning": "Rent Ordinance: rent control, just-cause, buyout regulation",
+          "license_to_operate": false
+        },
+        {
+          "name": "Oakland",
+          "warning": "Rent Adjustment Program + just-cause",
+          "license_to_operate": false
+        }
+      ]
+    },
+    "WA": {
+      "places": [
+        {
+          "name": "Seattle",
+          "warning": "RRIO registration required to rent; 1-month total deposit cap, $10 late-fee cap, first-in-time screening, winter/school-year eviction defenses",
+          "license_to_operate": true
+        }
+      ]
+    },
+    "OR": {
+      "places": [
+        {
+          "name": "Portland",
+          "warning": "Rental registration + mandatory relocation assistance (up to $4,500) on no-cause termination or 10%+ rent increase; stricter screening rules (FAIR ordinance)",
+          "license_to_operate": true
+        }
+      ]
+    },
+    "NY": {
+      "places": [
+        {
+          "name": "New York City",
+          "warning": "Multiple Dwelling Registration required; rent stabilization covers ~1M units; Good Cause Eviction (2024); housing-court timelines of many months",
+          "license_to_operate": true
+        }
+      ]
+    },
+    "IL": {
+      "places": [
+        {
+          "name": "Chicago",
+          "warning": "RLTO governs most rentals + rental registration; deposit rules so strict that move-in fees are commonly used instead; LLC landlords must appear through an attorney",
+          "license_to_operate": true
+        }
+      ]
+    },
+    "MD": {
+      "places": [
+        {
+          "name": "Baltimore City",
+          "warning": "Rental license + inspection required before renting",
+          "license_to_operate": true
+        }
+      ]
+    },
+    "CO": {
+      "places": [
+        {
+          "name": "Denver",
+          "warning": "Residential rental license required (per-property)",
+          "license_to_operate": true
+        },
+        {
+          "name": "Boulder",
+          "warning": "Rental license + SmartRegs compliance required",
+          "license_to_operate": true
+        }
+      ]
+    },
+    "DC": {
+      "places": [
+        {
+          "name": "District-wide",
+          "warning": "Basic Business License + RAD registration required; rent control on covered buildings; TOPA gives tenants purchase rights on sale",
+          "license_to_operate": true
+        }
+      ]
+    },
+    "PA": {
+      "places": [
+        {
+          "name": "Philadelphia",
+          "warning": "Rental license + lead-safe certification required; MANDATORY eviction-diversion program before any filing",
+          "license_to_operate": true
+        }
+      ]
+    },
+    "MN": {
+      "places": [
+        {
+          "name": "Minneapolis",
+          "warning": "Rental license required; inclusive-screening ordinance limits credit/criminal criteria",
+          "license_to_operate": true
+        }
+      ]
+    },
+    "MA": {
+      "places": [
+        {
+          "name": "Boston",
+          "warning": "Rental registration + inspection cycle required",
+          "license_to_operate": true
+        }
+      ]
+    },
+    "NJ": {
+      "places": [
+        {
+          "name": "Newark",
+          "warning": "Municipal rent control + registration",
+          "license_to_operate": false
+        },
+        {
+          "name": "Jersey City",
+          "warning": "Municipal rent control + registration",
+          "license_to_operate": false
+        }
+      ]
+    },
+    "ME": {
+      "places": [
+        {
+          "name": "Portland (ME)",
+          "warning": "Rent control + just-cause ordinance (voter-enacted)",
+          "license_to_operate": false
+        }
+      ]
+    }
+  }
+}

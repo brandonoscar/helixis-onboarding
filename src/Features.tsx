@@ -582,6 +582,9 @@ export default function Features() {
             applies is where the property sits. Occupella looks it up for that property and does
             the arithmetic.
           </Head>
+          <a className="lp-textlink" href="/state-laws" style={{ display: "inline-block", marginTop: 16 }}>
+            Landlord rules for every state
+          </a>
           <Blocks items={LAW} />
         </div>
       </section>

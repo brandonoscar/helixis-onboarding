@@ -17,6 +17,8 @@
  * the two agree.
  */
 
+import { STATES, descriptionFor } from "../stateLaws/data";
+
 export const SITE_ORIGIN = "https://occupella.com";
 
 export interface MarketingRoute {
@@ -32,7 +34,7 @@ export interface MarketingRoute {
   priority: number;
 }
 
-export const MARKETING_ROUTES: readonly MarketingRoute[] = [
+const STATIC_ROUTES: MarketingRoute[] = [
   {
     path: "/",
     name: "landing",
@@ -156,6 +158,38 @@ export const MARKETING_ROUTES: readonly MarketingRoute[] = [
     priority: 0.3,
   },
 ];
+
+/**
+ * The landlord-rules pages, generated from src/data/jurisdiction_rules.json:
+ * an index and one page per state (50 states and DC).
+ */
+const STATE_LAW_ROUTES: MarketingRoute[] = [
+  {
+    path: "/state-laws",
+    name: "state_laws",
+    title: "Landlord rules by state | Occupella",
+    description:
+      "Security deposit caps and return deadlines, late fees, notice periods and source-of-income rules for all 50 states and DC, with statute citations.",
+    inSitemap: true,
+    source: "src/data/jurisdiction_rules.json",
+    changefreq: "monthly",
+    priority: 0.7,
+  },
+  ...STATES.map(
+    (st): MarketingRoute => ({
+      path: st.path,
+      name: "state_law",
+      title: `${st.rules.name} security deposit, late fee and notice rules | Occupella`,
+      description: descriptionFor(st.rules),
+      inSitemap: true,
+      source: "src/data/jurisdiction_rules.json",
+      changefreq: "monthly",
+      priority: 0.5,
+    }),
+  ),
+];
+
+export const MARKETING_ROUTES: readonly MarketingRoute[] = [...STATIC_ROUTES, ...STATE_LAW_ROUTES];
 
 /** Served for any URL no route answers, with a real 404 status. */
 export const NOT_FOUND_PAGE = {
