@@ -101,6 +101,7 @@ const ASK = [
 export default function Maintenance() {
   return (
     <SitePageShell
+      active="solutions"
       title="Maintenance requests, from the first report to the work order"
       lede={
         <>

@@ -107,6 +107,7 @@ const SHOTS: Shot[] = [
 export default function Screenshots() {
   return (
     <SitePageShell
+      active="resources"
       title="What Occupella looks like"
       lede={
         <>

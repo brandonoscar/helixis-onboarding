@@ -70,6 +70,7 @@ const ASK = [
 export default function OwnerReporting() {
   return (
     <SitePageShell
+      active="solutions"
       title="The numbers an owner asks for, from your Buildium data"
       lede={
         <>

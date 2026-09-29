@@ -115,6 +115,7 @@ function Blocks({ items, cols }: { items: Block[]; cols?: 3 }) {
 export default function Leasing() {
   return (
     <SitePageShell
+      active="solutions"
       title="Leasing follow-up, from first message to signed lease"
       lede={
         <>

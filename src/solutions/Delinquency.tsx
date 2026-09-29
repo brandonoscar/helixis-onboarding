@@ -55,6 +55,7 @@ const LEDGER = [
 export default function Delinquency() {
   return (
     <SitePageShell
+      active="solutions"
       title="Late rent, from the missed payment to the follow-up"
       lede={
         <>

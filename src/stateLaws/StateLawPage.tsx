@@ -115,6 +115,7 @@ export default function StateLawPage({ state }: { state: StateEntry }) {
 
   return (
     <SitePageShell
+      active="resources"
       title={`${s.name} landlord rules: deposits, late fees and notices`}
       lede={
         <>

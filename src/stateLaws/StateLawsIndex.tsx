@@ -22,6 +22,7 @@ const css = `
 export default function StateLawsIndex() {
   return (
     <SitePageShell
+      active="resources"
       title="Landlord rules by state"
       lede={
         <>
