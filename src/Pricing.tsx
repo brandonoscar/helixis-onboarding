@@ -52,89 +52,74 @@ import { CHECK, Icon, MINUS, Reveal, SitePageShell } from "./Site";
 // ─────────────────────────────────────────────────────────────────────
 
 const css = `
-  .pr-cards { margin-top: 36px; }
-  @media (min-width: 700px) { .pr-cards { grid-template-columns: 1fr 1fr; } }
-  @media (min-width: 1060px) { .pr-cards { grid-template-columns: repeat(4, 1fr); } }
+  /* ── plans: four separate columns, space between them ────────────────
+     Pro is marked by a heavier border and nothing else. It used to carry a
+     "Most teams" pill, which is a claim about customers there is no data
+     behind. */
+  .pr-plans { display: grid; gap: 20px; margin-top: 56px; }
+  @media (min-width: 700px) { .pr-plans { grid-template-columns: 1fr 1fr; } }
+  @media (min-width: 1100px) { .pr-plans { grid-template-columns: repeat(4, 1fr); } }
 
-  .pr-card { padding: 26px 22px 24px; display: flex; flex-direction: column; gap: 10px; }
-  /* The recommended plan is marked by GROUND, not by a border or a scale —
-     a card that grows on a pricing page shoves the other three around and
-     reads as a pop-up. */
-  .pr-card[data-featured="true"] { background: var(--canvas-1); }
-
-  .pr-name { font-size: 12px; letter-spacing: .09em; text-transform: uppercase; font-weight: 600; color: var(--ink-muted); display: flex; align-items: center; gap: 8px; }
-  .pr-tag {
-    font-family: var(--font-mono); font-size: 10px; letter-spacing: .08em;
-    text-transform: uppercase; font-weight: 500;
-    color: var(--iris); background: var(--iris-soft);
-    border-radius: var(--r-pill); padding: 3px 7px;
+  .pr-plan {
+    display: flex; flex-direction: column; gap: 12px;
+    padding: 28px 24px 24px;
+    border: 1px solid var(--line); border-radius: 8px; background: var(--canvas);
   }
-  .pr-fig { font-size: 32px; font-weight: 700; letter-spacing: -.025em; font-variant-numeric: tabular-nums; line-height: 1.1; color: var(--ink); }
-  .pr-fig span { font-size: 14px; font-weight: 500; color: var(--ink-muted); letter-spacing: 0; }
-  .pr-allow { font-size: 13.5px; color: var(--ink-secondary, var(--ink-muted)); font-variant-numeric: tabular-nums; }
-  .pr-for { font-size: 14px; line-height: 1.55; color: var(--ink-muted); flex: 1; }
-  .pr-leasing { font-size: 13px; line-height: 1.5; display: flex; gap: 8px; align-items: flex-start; }
-  .pr-leasing svg { flex: none; margin-top: 2px; }
-  .pr-leasing[data-has="true"] { color: var(--ink-secondary, var(--ink-muted)); }
-  .pr-leasing[data-has="true"] svg { color: var(--iris); }
+  .pr-plan[data-featured="true"] { border: 2px solid var(--ink-secondary); padding: 27px 23px 23px; }
+
+  .pr-name { font-size: 17px; font-weight: 600; color: var(--ink); }
+  .pr-fig {
+    font-family: var(--font-display); font-optical-sizing: auto;
+    font-size: 44px; font-weight: 560; letter-spacing: -0.02em; line-height: 1;
+    color: var(--ink); font-variant-numeric: lining-nums tabular-nums;
+  }
+  .pr-unit { font-size: 15px; color: var(--ink-muted); }
+  .pr-allow { font-size: 16px; font-weight: 500; color: var(--ink); }
+  .pr-for { font-size: 16px; line-height: 1.55; color: var(--ink-muted); flex: 1; }
+  .pr-leasing { font-size: 15px; line-height: 1.5; display: flex; gap: 8px; align-items: flex-start; }
+  .pr-leasing svg { flex: none; margin-top: 3px; }
+  .pr-leasing[data-has="true"] { color: var(--ink); }
   /* Excluded reads MUTED, never red. A cheaper plan is a smaller plan, not a
      broken one, and the danger colour is reserved for real failure. */
-  .pr-leasing[data-has="false"] { color: var(--ink-subtle); }
+  .pr-leasing[data-has="false"] { color: var(--ink-muted); }
   .pr-leasing[data-has="false"] svg { color: var(--ink-faint); }
-  .pr-cta { margin-top: 4px; }
-  .pr-cta .btn { width: 100%; justify-content: center; }
+  .pr-cta { margin-top: 8px; }
+  .pr-cta .btn { width: 100%; height: 44px; font-size: 15px; }
+  .pr-note { margin-top: 24px; font-size: 16px; color: var(--ink-muted); max-width: 62ch; }
 
   /* ── comparison table ────────────────────────────────────────────────
      Scrolls inside its own container so the PAGE never scrolls sideways on
-     a phone, and the first column stays put so a row keeps its label. */
-  .pr-table-wrap { margin-top: 36px; overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r-lg); }
-  .pr-table { width: 100%; min-width: 640px; border-collapse: collapse; background: var(--canvas); }
-  .pr-table th, .pr-table td { text-align: left; padding: 13px 16px; border-bottom: 1px solid var(--line); font-size: 14px; }
+     a phone. */
+  .pr-table-wrap { margin-top: 40px; overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+  .pr-table { width: 100%; min-width: 680px; border-collapse: collapse; background: var(--canvas); }
+  .pr-table th, .pr-table td { text-align: left; padding: 15px 20px; border-bottom: 1px solid var(--line); font-size: 16px; }
   .pr-table tr:last-child th, .pr-table tr:last-child td { border-bottom: 0; }
-  .pr-table thead th {
-    position: sticky; top: 0; background: var(--canvas-1);
-    font-size: 12px; letter-spacing: .07em; text-transform: uppercase; font-weight: 600;
-    color: var(--ink-muted); white-space: nowrap;
-  }
-  .pr-table tbody th { font-weight: 500; color: var(--ink-secondary, var(--ink-muted)); white-space: nowrap; }
+  .pr-table thead th { background: var(--foot); font-weight: 600; color: var(--ink); white-space: nowrap; }
+  .pr-table thead th + th { text-align: center; }
+  .pr-table tbody th { font-weight: 500; color: var(--ink); }
   .pr-table td { text-align: center; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
-  .pr-table td svg { color: var(--iris); }
+  .pr-table td svg { color: var(--ink); vertical-align: middle; }
   .pr-table td[data-off="true"] svg { color: var(--ink-faint); }
-  .pr-table-note { margin-top: 14px; font-size: 13px; color: var(--ink-subtle); }
+  .pr-table-note { margin-top: 16px; font-size: 15px; color: var(--ink-muted); max-width: 62ch; }
 
-  /* ⚠ The table is 640px wide at its narrowest and a phone is 390px, so on a
-     phone it shows ONE column and reads as truncated rather than as
-     scrollable. Saying so is the fix: a horizontal scrollbar inside a
-     container is close to invisible on iOS, and the alternative — a fading
-     edge — is a gradient fill, which the design spec rules out. Hidden above
-     the width where the whole table fits. */
-  .pr-scroll-hint { display: none; margin-top: 10px; font-size: 12.5px; color: var(--ink-subtle); }
-  @media (max-width: 700px) { .pr-scroll-hint { display: block; } }
+  /* The table is 680px wide at its narrowest and a phone is 390px, so on a
+     phone it shows one column and reads as truncated rather than as
+     scrollable. A scrollbar inside a container is close to invisible on iOS,
+     so it says so. Hidden above the width where the whole table fits. */
+  .pr-scroll-hint { display: none; font-size: 15px; color: var(--ink-muted); }
+  @media (max-width: 760px) { .pr-scroll-hint { display: block; } }
 
-  /* ── FAQ ── */
-  .pr-faq { margin-top: 32px; }
-  @media (min-width: 820px) { .pr-faq { grid-template-columns: 1fr 1fr; } }
-  .pr-faq-item { padding: 22px 22px 24px; display: flex; flex-direction: column; gap: 8px; }
-  /* ⚠ An ODD number of questions leaves the second column of the last row
-     empty, and .lp-grid paints its 1px gap background through the hole — so
-     it renders as a grey slab beside the last answer, which reads as a
-     component that failed to load. There were nine.
-
-     The fix is a rule rather than a tenth question: adding or removing one
-     later would silently re-open it, and nobody writes an FAQ entry to
-     satisfy a layout. The last item spans the row when it is odd one out. */
-  @media (min-width: 820px) {
-    .pr-faq-item:last-child:nth-child(odd) { grid-column: 1 / -1; }
-  }
-  .pr-faq-q { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; color: var(--ink); }
-  .pr-faq-a { font-size: 14px; line-height: 1.6; color: var(--ink-muted); }
-  .pr-faq-a a { color: var(--iris); text-decoration: none; }
+  /* ── questions: plain blocks under a thin rule, no box around them ── */
+  .pr-faq { display: grid; gap: 40px 56px; margin-top: 48px; }
+  @media (min-width: 880px) { .pr-faq { grid-template-columns: 1fr 1fr; } }
+  .pr-faq-item { border-top: 1px solid var(--line); padding-top: 22px; display: flex; flex-direction: column; gap: 10px; }
+  .pr-faq-q { font-size: 18px; font-weight: 600; line-height: 1.4; color: var(--ink); }
+  .pr-faq-a { font-size: 16px; line-height: 1.65; color: var(--ink-muted); max-width: 60ch; }
 `;
 
 type Plan = {
   key: string;
   name: string;
-  tag?: string;
   fig: string;
   unit: string;
   allowance: string;
@@ -153,7 +138,7 @@ const PLANS: Plan[] = [
     key: "trial",
     name: "Trial",
     fig: "Free",
-    unit: " · 14 days",
+    unit: "14 days",
     allowance: "Standard usage",
     // ⚠ Leasing is FALSE on the trial and the reason is arithmetic, not
     // packaging (founder call, 2026-09-04). Carrier approval for texting runs
@@ -164,48 +149,46 @@ const PLANS: Plan[] = [
     // file's feature set, so a tick here that disagrees is a promise the
     // product breaks on click.
     forWho:
-      "The everyday work for two weeks — Buildium, the Inbox, reporting and documents. Long enough to connect your account and watch it handle real work.",
+      "Two weeks of the everyday work: Buildium, the Inbox, reporting and documents. Long enough to connect your account and watch it handle real work.",
     leasing: false,
     leasingLabel: "Leasing opens on Pro",
-    cta: "Start free",
+    cta: "Start free trial",
   },
   {
     key: "starter",
     name: "Starter",
     fig: "$50",
-    unit: " / month",
+    unit: "per month",
     allowance: "Standard usage, every month",
-    forWho:
-      "One person running a small book. The trial's usage, kept — every month, without a card expiring on you.",
+    forWho: "For one person running a small book. The trial's usage, every month.",
     leasing: false,
     leasingLabel: "No Leasing pipeline",
-    cta: "Start free",
+    cta: "Start free trial",
   },
   {
     key: "pro",
     name: "Pro",
-    tag: "Most teams",
     fig: "$199",
-    unit: " / person / month",
+    unit: "per person, per month",
     allowance: "3× more usage, per person",
     forWho:
-      "A team working the whole portfolio. Room to work it all day, and the headroom grows as you hire.",
+      "For a team working the whole portfolio. Usage is counted per person, so it grows as you hire.",
     leasing: true,
     leasingLabel: "Leasing included",
     featured: true,
-    cta: "Start free",
+    cta: "Start free trial",
   },
   {
     key: "scale",
     name: "Scale",
     fig: "$500",
-    unit: " / month",
+    unit: "per month",
     allowance: "8× more usage, pooled",
     forWho:
-      "Put everyone on it for one predictable bill. No per-person charge, and the usage is shared across the team.",
+      "For putting the whole team on one bill. No per-person charge, and the usage is shared across the team.",
     leasing: true,
     leasingLabel: "Leasing included",
-    cta: "Start free",
+    cta: "Start free trial",
   },
 ];
 
@@ -226,7 +209,9 @@ const ROWS: Row[] = [
   { label: "People", values: ["Your team", "Your team", "Priced per person", "Your team"] },
   { label: "Buildium sync and history", values: [true, true, true, true] },
   { label: "Inbox with drafted replies", values: [true, true, true, true] },
-  { label: "Approval gates on every write", values: [true, true, true, true] },
+  // TODO(brandon): confirm autonomous notes flag is off. The row "Approval
+  // gates on every write" is held back until HELIXIS_NOTES__AUTONOMOUS_ENABLED
+  // is confirmed off in Render; with it on, notes reach Buildium unapproved.
   // ⚠ "Reports and tables", NOT "and charts". The chart card is built, wired
   // and has never once been produced by a real question — a tick beside the
   // word charts is a claim a buyer can falsify on their first afternoon.
@@ -246,12 +231,12 @@ const FAQ: { q: string; a: React.ReactNode }[] = [
     q: "How much can I use?",
     a: (
       <>
-        Enough to work the way you already work. Usage counts the things you ask Occupella that
-        produce an answer — a question that fails or comes back empty costs nothing, and neither
-        does anything Occupella does on its own: the Inbox drafting a reply to a work order, a
-        nightly sweep, a reminder. Reading the Inbox, approving a draft and browsing your
-        portfolio are free. If you get near your plan's ceiling we tell you before you hit it,
-        and the exact fair-use figures are in the <a href="/terms">terms</a>.
+        Usage counts the things you ask Occupella that produce an answer. A question that fails
+        or comes back empty costs nothing, and neither does anything Occupella does on its own,
+        such as the Inbox drafting a reply to a work order, a nightly sweep or a reminder.
+        Reading the Inbox, approving a draft and browsing your portfolio are free. If you get
+        near your plan&rsquo;s limit we tell you before you reach it. The exact fair-use figures
+        are in the <a href="/terms">terms</a>.
       </>
     ),
   },
@@ -261,22 +246,26 @@ const FAQ: { q: string; a: React.ReactNode }[] = [
       <>
         Asking pauses until the month resets, or until you move up a plan. Nothing is deleted,
         the Inbox keeps working, and your Buildium account is untouched. Your usage for the
-        period is on the billing page, so it should not be a surprise.
+        period is on the billing page in the app.
       </>
     ),
   },
   {
     q: "Do I need a card to start?",
-    a: <>No. The fourteen days need no card, and nothing is charged when the trial ends — you
-      pick a plan then, or you do not.</>,
+    a: (
+      <>
+        No. The 14-day trial needs no card, and nothing is charged when it ends. You pick a plan
+        then, or you don&rsquo;t.
+      </>
+    ),
   },
   {
     q: "Why is Leasing not in Starter?",
     a: (
       <>
         Leasing runs on a phone number registered to your business and a carrier campaign that
-        costs money every month, per customer. At $50 that does not cover itself. Everything else
-        Occupella does is on Starter.
+        costs money every month, per customer. $50 a month doesn&rsquo;t cover it. Everything
+        else Occupella does is on Starter.
       </>
     ),
   },
@@ -284,10 +273,9 @@ const FAQ: { q: string; a: React.ReactNode }[] = [
     q: "Why is Leasing not in the trial?",
     a: (
       <>
-        Because you could not use it inside two weeks. Texting a lead needs carrier approval,
-        that review runs about ten to fifteen days, and the trial is fourteen — so it would be a
-        setup checklist you never got to finish. Everything else is in the trial, and Leasing
-        turns on when you pick Pro or Scale.
+        Because you couldn&rsquo;t use it inside two weeks. Texting a lead needs carrier
+        approval, which takes about ten to fifteen days, and the trial is fourteen. Everything
+        else is in the trial, and Leasing turns on when you pick Pro or Scale.
       </>
     ),
   },
@@ -297,7 +285,7 @@ const FAQ: { q: string; a: React.ReactNode }[] = [
       <>
         After the carriers approve your business, which takes about ten to fifteen days. We file
         it for you and there is nothing to chase. Until it clears, nobody on any plan can text a
-        lead — us included. The rest of the product works from day one.
+        lead, including us. The rest of Occupella works from day one.
       </>
     ),
   },
@@ -315,8 +303,10 @@ const FAQ: { q: string; a: React.ReactNode }[] = [
     q: "Is Buildium still the system of record?",
     a: (
       <>
-        Yes. Occupella mirrors your account so it can answer quickly, and writes back only what
-        you approve. There is no migration and nothing to move.
+        {/* TODO(brandon): confirm autonomous notes flag is off. This answer
+            said "and writes back only what you approve"; restore it then. */}
+        Yes. Occupella keeps a copy of your account so it can answer quickly. There is no
+        migration and nothing to move.
       </>
     ),
   },
@@ -324,8 +314,8 @@ const FAQ: { q: string; a: React.ReactNode }[] = [
     q: "What happens to my data if I leave?",
     a: (
       <>
-        Disconnecting Buildium deletes the mirror of your data. That is a requirement of
-        Buildium&rsquo;s API terms, not a favour — reconnecting simply syncs it again.
+        Disconnecting Buildium deletes Occupella&rsquo;s copy of your data, as Buildium&rsquo;s
+        API terms require. If you reconnect, it syncs again.
       </>
     ),
   },
@@ -345,8 +335,7 @@ export default function Pricing() {
   return (
     <SitePageShell
       active="pricing"
-      eyebrow="Pricing"
-      title="Start free for two weeks."
+      title="Start free for two weeks"
       lede={
         <>
           No card to begin. Plans differ on two things: how much usage is included, and
@@ -355,34 +344,31 @@ export default function Pricing() {
       }
       css={css}
       close={{
-        title: "Fourteen days, no card.",
-        body: "Connect Buildium, watch it handle a real work order, and pick a plan after — or do not, and nothing is charged.",
+        title: "Try Occupella free for 14 days",
+        body: "Connect Buildium, watch it handle a real work order, then pick a plan. If you don't, nothing is charged.",
       }}
     >
-      <section className="lp-section">
+      <section>
         <div className="lp-wrap">
           <Reveal>
-            <div className="lp-grid pr-cards">
+            <div className="pr-plans">
               {PLANS.map((p) => (
-                <div className="pr-card" key={p.key} data-featured={p.featured || undefined}>
-                  <div className="pr-name">
-                    {p.name}
-                    {p.tag ? <span className="pr-tag">{p.tag}</span> : null}
-                  </div>
-                  <div className="pr-fig">
-                    {p.fig}
-                    <span>{p.unit}</span>
+                <div className="pr-plan" key={p.key} data-featured={p.featured || undefined}>
+                  <h2 className="pr-name">{p.name}</h2>
+                  <div>
+                    <div className="pr-fig">{p.fig}</div>
+                    <div className="pr-unit">{p.unit}</div>
                   </div>
                   <div className="pr-allow">{p.allowance}</div>
                   <p className="pr-for">{p.forWho}</p>
                   {/* ⚠ The two no-Leasing plans get DIFFERENT wording, because
                       they are different facts. Starter does not buy it. The
-                      trial cannot use it — carrier approval outlasts fourteen
-                      days — and labelling that "no Leasing" would read as the
+                      trial cannot use it (carrier approval outlasts fourteen
+                      days), and labelling that "no Leasing" would read as the
                       free plan being crippled rather than as a timing limit
                       that applies to everyone. */}
                   <div className="pr-leasing" data-has={p.leasing}>
-                    <Icon d={p.leasing ? CHECK : MINUS} size={14} />
+                    <Icon d={p.leasing ? CHECK : MINUS} size={15} />
                     <span>{p.leasingLabel}</span>
                   </div>
                   <div className="pr-cta">
@@ -395,11 +381,11 @@ export default function Pricing() {
             </div>
           </Reveal>
           {/* Every card starts the same trial, because you cannot buy before
-              you have an account — saying so beats four buttons that look
+              you have an account. Saying so beats four buttons that look
               like four different purchases. */}
-          <p className="lp-note" style={{ marginTop: 18, textAlign: "center" }}>
-            Every plan starts with the same fourteen-day trial. You choose which one when it
-            ends, inside the app.
+          <p className="pr-note">
+            Every plan starts with the same 14-day trial. You choose a plan when it ends, inside
+            the app.
           </p>
         </div>
       </section>
@@ -408,8 +394,7 @@ export default function Pricing() {
         <div className="lp-wrap">
           <Reveal>
             <div className="lp-section-head">
-              <div className="lp-eyebrow">Compared</div>
-              <h2 className="lp-h2">What you get on each.</h2>
+              <h2 className="lp-h2">Compare plans</h2>
               <p className="pr-scroll-hint">Scroll the table sideways to see every plan.</p>
             </div>
           </Reveal>
@@ -453,6 +438,9 @@ export default function Pricing() {
               </table>
             </div>
           </Reveal>
+          {/* Leasing is on in production (HELIXIS_CRM__ENABLED, founder
+              confirmation 2026-09-29), so Pro and Scale sell it. Texting a
+              lead still waits on carrier approval, which this note says. */}
           <p className="pr-table-note">
             Texting and calling leads begins once the carriers approve your business, which takes
             about ten to fifteen days on any plan.
@@ -463,21 +451,16 @@ export default function Pricing() {
       <section className="lp-section">
         <div className="lp-wrap">
           <Reveal>
-            <div className="lp-section-head">
-              <div className="lp-eyebrow">Questions</div>
-              <h2 className="lp-h2">The things people ask before signing up.</h2>
-            </div>
+            <h2 className="lp-h2">Questions before you sign up</h2>
           </Reveal>
-          <Reveal delay={60}>
-            <div className="lp-grid pr-faq">
-              {FAQ.map((f) => (
-                <div className="pr-faq-item" key={f.q}>
-                  <div className="pr-faq-q">{f.q}</div>
-                  <div className="pr-faq-a">{f.a}</div>
-                </div>
-              ))}
-            </div>
-          </Reveal>
+          <div className="pr-faq">
+            {FAQ.map((f) => (
+              <div className="pr-faq-item" key={f.q}>
+                <h3 className="pr-faq-q">{f.q}</h3>
+                <div className="pr-faq-a">{f.a}</div>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
     </SitePageShell>
