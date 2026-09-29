@@ -438,10 +438,9 @@ export default function Pricing() {
               </table>
             </div>
           </Reveal>
-          {/* TODO(brandon): Leasing and "your own number" are sold here as
-              included on Pro and Scale. Confirm carrier approval status and
-              that HELIXIS_CRM__ENABLED is on in Render; with it off the
-              Leasing section does not open on any plan. */}
+          {/* Leasing is on in production (HELIXIS_CRM__ENABLED, founder
+              confirmation 2026-09-29), so Pro and Scale sell it. Texting a
+              lead still waits on carrier approval, which this note says. */}
           <p className="pr-table-note">
             Texting and calling leads begins once the carriers approve your business, which takes
             about ten to fifteen days on any plan.

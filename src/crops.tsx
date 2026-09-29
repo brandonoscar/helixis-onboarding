@@ -141,6 +141,25 @@ export const cropCss = `
     .cr-stack > :last-child { width: auto; margin-top: 14px; }
   }
   .cr-note { margin-top: 12px; font-size: 14px; color: var(--ink-muted); }
+
+  /* numbered markers placed on parts of a crop (home, "How it works") */
+  .cr.cr-marked { position: relative; overflow: visible; }
+  .cr-marked .cr-detail-next { border-radius: 0 0 8px 8px; }
+  .cr-mark {
+    position: absolute; left: -13px; top: 14px; z-index: 2;
+    width: 26px; height: 26px; border-radius: 50%;
+    display: grid; place-items: center;
+    background: #1957A0; color: #fff; font-size: 13px; font-weight: 600;
+    box-shadow: 0 0 0 3px #fff;
+  }
+  .cr-detail-next { padding: 16px 22px 20px; background: var(--app-raised); border-top: 1px solid var(--app-line); }
+  .cr-detail-next .cr-text { background: #fff; min-height: 0; }
+  .cr-detail-next .cr-btn { margin-top: 12px; }
+
+  /* a Today row: the reminders strip at the top of the Inbox */
+  .cr-today { padding: 12px 16px; }
+  .cr-today-t { font-weight: 600; font-size: 15px; }
+  .cr-today-s { font-size: 14px; color: var(--ink-muted); }
 `;
 
 /** A crop is a picture of the app. Screen readers get its label, not its rows. */
@@ -304,6 +323,57 @@ export function DelinquencyCrop() {
           </tbody>
         </table>
       </div>
+    </Crop>
+  );
+}
+
+/**
+ * The work order opened, top to bottom: the Buildium event, what Occupella
+ * gathered, and the drafted next step with its button. The numbers are the
+ * home page's three steps, placed on the part of the screen each one is.
+ */
+export function WorkOrderDetailCrop() {
+  return (
+    <Crop
+      label="A work order in Occupella: (1) the Buildium event, AC not cooling in unit 4B; (2) what Occupella noticed around it; (3) a drafted reply to the tenant with a send button."
+      className="cr-marked"
+    >
+      <div className="cr-head" style={{ position: "relative" }}>
+        <span className="cr-mark">1</span>
+        <div className="cr-head-t">
+          AC not cooling — unit 4B <span className="cr-pill" data-k="new">New</span>
+        </div>
+        <div className="cr-head-m">Reported by Maria Alvarez · 6/27/2026 · 128 Lexington Ave #4B</div>
+      </div>
+      <div className="cr-noticed" style={{ position: "relative", paddingTop: 4 }}>
+        <span className="cr-mark" style={{ top: 2 }}>2</span>
+        <div className="cr-cap">What Occupella noticed</div>
+        <ul>
+          <li data-k="caution">Third HVAC ticket at unit 4B in the last 90 days.</li>
+          <li>The lease owes $1,240. No rent has posted this month.</li>
+          <li>The lease ends in 41 days.</li>
+        </ul>
+      </div>
+      <div className="cr-detail-next" style={{ position: "relative" }}>
+        <span className="cr-mark">3</span>
+        <div className="cr-next-h">Message Maria with an ETA</div>
+        <div className="cr-text">
+          Hi Maria — sorry about the AC. I&rsquo;m getting a technician scheduled and will
+          confirm a window shortly.
+        </div>
+        <span className="cr-btn" data-k="soft">Send to Maria</span>
+      </div>
+    </Crop>
+  );
+}
+
+/** One row of the Inbox's Today strip. Titles are the reminder producers'
+ *  own formats (AgenticHelixis reminders/producers.py). */
+export function TodayRow({ title, sub, label }: { title: string; sub?: string; label: string }) {
+  return (
+    <Crop label={label} className="cr-today">
+      <div className="cr-today-t">{title}</div>
+      {sub ? <div className="cr-today-s">{sub}</div> : null}
     </Crop>
   );
 }

@@ -441,7 +441,7 @@ export default function Features() {
   return (
     <SitePageShell
       active="features"
-      title="What Occupella does, in detail"
+      title="What Occupella does for leasing and operations"
       lede={
         <>
           {/* TODO(brandon): confirm autonomous notes flag is off. This lede
@@ -458,15 +458,13 @@ export default function Features() {
       }}
     >
       {/* The page's one full-width visual. Somebody who lands on /features
-          from the nav has not seen the product at all.
-          TODO(brandon): the tour shows the Leasing board, and Leasing is in
-          carrier review. Re-cut it without Leasing, or confirm it can stay. */}
+          from the nav has not seen the product at all. */}
       <section className="lp-section" style={{ paddingTop: 56 }}>
         <div className="lp-wrap">
           <DemoPanel
             src="/demo/product-tour.mp4"
             poster="/demo/product-tour-poster.jpg"
-            caption="The Inbox and Operations pages, in under twenty seconds."
+            caption="The Inbox, Operations and Leasing pages, in under twenty seconds."
             width={1440}
             height={900}
           />
@@ -605,17 +603,16 @@ export default function Features() {
             <div className="lp-section-head">
               <span className="ft-status">
                 <Icon d={MINUS} size={12} />
-                In carrier review
+                Texting: in carrier review
               </span>
-              <h2 className="lp-h2">Leasing, once carriers approve you</h2>
-              {/* ⚠ THE STATUS SENTENCE LEADS. Leasing is code-complete and
-                  reachable by nobody: no company on the deployment has a
+              <h2 className="lp-h2">Leasing on your own number</h2>
+              {/* ⚠ THE STATUS SENTENCE LEADS. Texting a lead is
+                  reachable by nobody yet: no company on the deployment has a
                   provisioned number, and no A2P registration has completed.
                   Describing the pipeline first and disclosing at the bottom
                   would be selling a section a new customer cannot open.
-                  TODO(brandon): the two "Working today" blocks also need
-                  HELIXIS_CRM__ENABLED on in Render. Confirm it, or say
-                  they open later too. */}
+                  Leasing itself is on (HELIXIS_CRM__ENABLED, founder
+                  confirmation 2026-09-29); what waits is the carrier. */}
               <p className="lp-body">
                 US carriers vet every business that sends application-to-person texts, and the
                 review takes about ten to fifteen days. Nobody on any plan can text a lead before

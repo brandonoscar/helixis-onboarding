@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { CloseBand, Reveal, useStartLabel, SiteFooter, SiteNav, siteCss, DemoPanel } from "./Site";
-import { DelinquencyCrop, DraftCrop, cropCss } from "./crops";
+import {
+  ApprovalCrop,
+  DelinquencyCrop,
+  DraftCrop,
+  TodayRow,
+  WorkOrderDetailCrop,
+  cropCss,
+} from "./crops";
 
 // ─────────────────────────────────────────────────────────────────────
 // LANDING — the front door.
@@ -28,15 +35,14 @@ import { DelinquencyCrop, DraftCrop, cropCss } from "./crops";
 // ─────────────────────────────────────────────────────────────────────
 
 const css = `
-  .lp { position: relative; overflow-x: clip; }
-  .lp-wrap { max-width: 1120px; margin: 0 auto; padding: 0 32px; }
-
   /* ── type scale ── */
   .lp-h1 {
-    font-size: clamp(38px, 6.2vw, 76px);
-    font-weight: 600;
-    line-height: 1.05;
-    letter-spacing: -0.036em;
+    font-family: var(--font-display);
+    font-optical-sizing: auto;
+    font-size: clamp(44px, 6.4vw, 72px);
+    font-weight: 560;
+    line-height: 1.02;
+    letter-spacing: -0.02em;
     text-wrap: balance;
     max-width: 17ch;
     /* Solid ink. It used to paint a grey fade through background-clip:
@@ -116,6 +122,46 @@ const css = `
   .lp-hero { padding: clamp(56px, 9vw, 104px) 0 0; }
   .lp-hero-ctas { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
   .lp-hero .lp-video { margin-top: clamp(40px, 6vw, 72px); }
+
+  /* ── works with: names in grey text, not logos. A logo needs the
+     company's permission; a name does not. ── */
+  .lp-works { margin-top: 40px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 32px; }
+  .lp-works-h { font-size: 15px; color: var(--ink-muted); }
+  .lp-works-n { font-size: 18px; font-weight: 600; color: var(--ink-subtle); }
+
+  /* ── how it works: steps left, one large marked crop right ── */
+  .lp-how { display: grid; gap: 48px; margin-top: 48px; align-items: start; }
+  @media (min-width: 1024px) { .lp-how { grid-template-columns: 5fr 6fr; gap: 72px; } }
+  .lp-how .lp-steps { grid-template-columns: 1fr !important; margin-top: 0; gap: 28px; }
+  .lp-how-vis { padding-left: 14px; }
+  .lp .lp-step-n {
+    display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
+    background: var(--iris); color: #fff; font-size: 13px;
+  }
+
+  /* ── a weekday: a vertical line, times on the left ── */
+  .lp-day { margin-top: 48px; display: flex; flex-direction: column; max-width: 860px; }
+  .lp-day-row { display: grid; grid-template-columns: 92px 1fr; gap: 20px; position: relative; padding-bottom: 32px; }
+  .lp-day-row::before {
+    content: ""; position: absolute; left: 123px; top: 20px; bottom: -4px; width: 1px; background: var(--line-strong);
+  }
+  .lp-day-row:last-child::before { display: none; }
+  .lp-day-t { font-size: 15px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; padding-top: 2px; }
+  .lp-day-b { padding-left: 26px; position: relative; }
+  .lp-day-b::before {
+    content: ""; position: absolute; left: 0; top: 7px; width: 9px; height: 9px; border-radius: 50%;
+    background: var(--canvas); border: 2px solid var(--iris);
+  }
+  .lp-day-b p { font-size: 17px; line-height: 1.55; color: var(--ink); max-width: 56ch; }
+  .lp-day-b .cr { margin-top: 12px; max-width: 460px; }
+  @media (max-width: 640px) {
+    .lp-day-row { grid-template-columns: 1fr; gap: 6px; }
+    .lp-day-row::before { left: 6px; top: 44px; }
+  }
+
+  /* ── controls: text left, the approval card right ── */
+  .lp-ctl { display: grid; gap: 40px; align-items: center; }
+  @media (min-width: 1024px) { .lp-ctl { grid-template-columns: 5fr 6fr; gap: 72px; } }
 
   /* ── steps and trust: plain blocks under a thin rule, no box. The steps
      are a real sequence, so they keep their numbers. ── */
@@ -256,19 +302,58 @@ function RotatingWord() {
 
 const STEPS = [
   {
-    n: "01",
+    n: "1",
     t: "Connect Buildium.",
     b: "One API key, ten minutes. Occupella mirrors your properties, leases, work orders, and contacts — Buildium stays the system of record.",
   },
   {
-    n: "02",
-    t: "It reads every event.",
+    n: "2",
+    t: "It reads the event and its history.",
     b: "New work order, late payment, lease expiring. Occupella pulls the history around it and tells you what it noticed.",
   },
   {
-    n: "03",
-    t: "You approve the work.",
-    b: "It drafts the reply, the work order, the owner update — and holds. Nothing reaches a tenant, an owner, or Buildium until you say so.",
+    // TODO(brandon): confirm autonomous notes flag is off. This step was
+    // "You approve the work. It drafts the reply, the work order, the owner
+    // update — and holds. Nothing reaches a tenant, an owner, or Buildium
+    // until you say so." Restore it then.
+    n: "3",
+    t: "It drafts the next step.",
+    b: "The reply, the work order or the owner update, written out for you to edit.",
+  },
+];
+
+/**
+ * An example weekday. The times are when YOU look, not when anything
+ * runs; every entry is something the product produces today. The Today
+ * titles are the reminder producers' own formats (AgenticHelixis
+ * reminders/producers.py), with the demo account's names. Before adding an
+ * entry, find the producer or tool that makes it.
+ */
+const DAY: { at: string; text: string; row: { title: string; sub?: string } }[] = [
+  {
+    at: "7:30 AM",
+    text: "You open the Inbox. The Today strip lists what is being neglected.",
+    row: { title: "4 overdue tasks at Garden Row" },
+  },
+  {
+    at: "9:15 AM",
+    text: "Maria Alvarez reports the AC in unit 4B. The card arrives with the unit's history and a drafted reply.",
+    row: { title: "AC not cooling — unit 4B — Maria Alvarez", sub: "3rd similar issue in 90 days" },
+  },
+  {
+    at: "11:40 AM",
+    text: "Two leases at Garden Row are close to ending and nobody has started a renewal offer.",
+    row: { title: "2 leases at Garden Row are in the renewal window", sub: "Soonest ends in 28 days. No renewal offer has been started." },
+  },
+  {
+    at: "2:05 PM",
+    text: "A move-out last month means a deposit is due back. The date is counted from the state's deadline.",
+    row: { title: "Deposit return due 2026-10-14 — 14 Garden Row #3" },
+  },
+  {
+    at: "4:40 PM",
+    text: "In Leasing, a lead has gone quiet.",
+    row: { title: "Jordan Reyes is going cold", sub: "No touch in 3+ days · interested in Maple Court" },
   },
 ];
 
@@ -276,12 +361,10 @@ const STEPS = [
 // features page is where somebody who wants to check it goes. Repeating the
 // full list on both is how a landing page swallows the site it is supposed to
 // be the door to.
-const TRUST = [
-  "Nothing auto-sends. Every draft waits for a person.",
-  "Every write to Buildium or Gmail passes a confirmation card you can edit before approving.",
-  "One company's data never reaches another's — not in files, not in what it remembers.",
-  "Credentials are encrypted at rest, entered once and never shown again.",
-];
+// TODO(brandon): confirm autonomous notes flag is off. The trust list led
+// with "Nothing auto-sends. Every draft waits for a person." and "Every
+// write to Buildium or Gmail passes a confirmation card you can edit before
+// approving." Both come back then.
 
 export default function Landing() {
   const start = useStartLabel();
@@ -304,9 +387,11 @@ export default function Landing() {
             <RotatingWord />
           </h1>
           <p className="lp-lede rise" style={{ "--d": "400ms", marginTop: 20 } as React.CSSProperties}>
-            Buildium keeps the records. Occupella does the work. It reads every Buildium
-            event, pulls the history around it, and drafts what comes next — the reply, the
-            work order, the owner update. Then it waits for you.
+            {/* TODO(brandon): confirm autonomous notes flag is off. This
+                ended "Then it waits for you."; restore it then. */}
+            Buildium keeps the records. Occupella does the work. It reads your Buildium
+            events, pulls the history around each one, and drafts what comes next — the reply,
+            the work order, the owner update.
           </p>
           <div className="lp-hero-ctas rise" style={{ "--d": "600ms", marginTop: 30 } as React.CSSProperties}>
             {/* ⚠ The "See it work" text link that sat here was REMOVED by
@@ -320,7 +405,9 @@ export default function Landing() {
             </a>
           </div>
           <div className="lp-note rise" style={{ "--d": "600ms", marginTop: 16 } as React.CSSProperties}>
-            Ten minutes to connect. Nothing sends without your approval.
+            {/* TODO(brandon): confirm autonomous notes flag is off; this line
+                continued "Nothing sends without your approval." */}
+            Ten minutes to connect.
           </div>
 
           {/* The stage is the walkthrough, and nothing else. It briefly held a
@@ -343,6 +430,17 @@ export default function Landing() {
             // the audio — without them the narration can never be heard.
             controls
           />
+
+          {/* TODO(brandon): Twilio joins this row once carrier approval for
+              texting is done. Rentvine joins it when you decide to show it
+              (held off on 2026-09-29). */}
+          <div className="lp-works">
+            <span className="lp-works-h">Works with</span>
+            <span className="lp-works-n">Buildium</span>
+            <span className="lp-works-n">Gmail</span>
+            <span className="lp-works-n">Google Calendar</span>
+            <span className="lp-works-n">Google Drive</span>
+          </div>
         </div>
       </header>
 
@@ -350,30 +448,38 @@ export default function Landing() {
         <div className="lp-wrap">
           <Reveal>
             <div className="lp-section-head">
-                            <h2 className="lp-h2">The part between the event and the reply.</h2>
+              <h2 className="lp-h2">The part between the event and the reply.</h2>
             </div>
           </Reveal>
-          <Reveal delay={60}>
-            <div className="lp-steps">
-              {STEPS.map((s) => (
-                <div className="lp-step" key={s.n}>
-                  <div className="lp-step-n">{s.n}</div>
-                  <div className="lp-step-t">{s.t}</div>
-                  <div className="lp-step-b">{s.b}</div>
-                </div>
-              ))}
-            </div>
-          </Reveal>
+          <div className="lp-how">
+            <Reveal delay={60}>
+              <div className="lp-steps">
+                {STEPS.map((s) => (
+                  <div className="lp-step" key={s.n}>
+                    <div className="lp-step-n">{s.n}</div>
+                    <h3 className="lp-step-t">{s.t}</h3>
+                    <p className="lp-step-b">{s.b}</p>
+                  </div>
+                ))}
+              </div>
+            </Reveal>
+            <Reveal delay={120}>
+              <div className="lp-how-vis">
+                <WorkOrderDetailCrop />
+                <p className="lp-crop-cap">One work order in Occupella, with example data.</p>
+              </div>
+            </Reveal>
+          </div>
         </div>
       </section>
 
       <section className="lp-section">
         <div className="lp-wrap">
-          <div className="lp-band">
+          <div className="lp-band" data-flip="true">
             <div>
               <Reveal>
                 <div className="lp-section-head">
-                                    <h2 className="lp-h2">It writes the email. You pick the tone.</h2>
+                  <h2 className="lp-h2">It writes the email. You pick the tone.</h2>
                   <p className="lp-body">
                     When there is more than one sensible way to answer a tenant, Occupella
                     drafts each one and names the approach. Slide through, edit any word,
@@ -392,11 +498,11 @@ export default function Landing() {
 
       <section className="lp-section">
         <div className="lp-wrap">
-          <div className="lp-band" data-flip="true">
+          <div className="lp-band">
             <div>
               <Reveal>
                 <div className="lp-section-head">
-                                    <h2 className="lp-h2">Ask it what you'd ask your bookkeeper.</h2>
+                  <h2 className="lp-h2">Ask it what you'd ask your bookkeeper.</h2>
                   <p className="lp-body">
                     Occupancy, rent roll, what is open and what is owed — read from a synced copy
                     of your account, not pasted into a paragraph. Every figure traces to Buildium.
@@ -421,27 +527,49 @@ export default function Landing() {
         <div className="lp-wrap">
           <Reveal>
             <div className="lp-section-head">
-                            <h2 className="lp-h2">It asks before it acts.</h2>
-              <p className="lp-body">
-                {/* ⚠ Do NOT put "and texts residents" back. Every SMS path in
-                    the product is behind carrier approval that no company has
-                    cleared yet, so it is a capability the reader cannot have
-                    on the day they read this. Email and the Buildium writes
-                    are both live and are enough to make the point. */}
-                Occupella changes records in your Buildium account and sends email from your
-                address. So the default everywhere is that it stops and shows you first.
-              </p>
+              <h2 className="lp-h2">An example weekday</h2>
+              <p className="lp-body">What the Inbox shows over one day, using the demo account.</p>
             </div>
           </Reveal>
-          <Reveal delay={60}>
-            <div className="lp-trust">
-              {TRUST.map((t) => (
-                <p className="lp-trust-item" key={t}>
-                  {t}
+          <div className="lp-day">
+            {DAY.map((d) => (
+              <div className="lp-day-row" key={d.at}>
+                <div className="lp-day-t">{d.at}</div>
+                <div className="lp-day-b">
+                  <p>{d.text}</p>
+                  <TodayRow title={d.row.title} sub={d.row.sub} label={d.row.title} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="lp-section">
+        <div className="lp-wrap">
+          <div className="lp-ctl">
+            <Reveal>
+              <div className="lp-section-head">
+                {/* TODO(brandon): confirm autonomous notes flag is off. The
+                    heading was "It asks before it acts." and the paragraph
+                    ended "So the default everywhere is that it stops and
+                    shows you first." Both come back then.
+                    ⚠ Do NOT add "and texts residents": every SMS path is
+                    behind carrier approval. */}
+                <h2 className="lp-h2">Controls on your Buildium account</h2>
+                <p className="lp-body">
+                  Occupella changes records in your Buildium account and sends email from your
+                  address. Payments, charges and closing a work order also need a manager or an
+                  admin. One company&rsquo;s data never reaches another&rsquo;s, and credentials
+                  are encrypted at rest, entered once and never shown again.
                 </p>
-              ))}
-            </div>
-          </Reveal>
+              </div>
+            </Reveal>
+            <Reveal delay={60}>
+              <ApprovalCrop />
+              <p className="lp-crop-cap">The approval card for a new work order, with example data.</p>
+            </Reveal>
+          </div>
         </div>
       </section>
 
@@ -455,7 +583,7 @@ export default function Landing() {
         <div className="lp-wrap">
           <Reveal>
             <div className="lp-section-head">
-                            <h2 className="lp-h2">Start free for two weeks.</h2>
+              <h2 className="lp-h2">Start free for two weeks.</h2>
               <p className="lp-body">
                 No card to begin. Plans start at $50 a month, and nothing is charged when the
                 trial ends — you pick one then, or you do not.
