@@ -490,9 +490,11 @@ export function useStartLabel(): string {
  * TODO(brandon): provide the lowercase Fraunces "occupella" SVG. Until then
  * this is live text set in Fraunces; swapping the SVG in is this one element.
  */
-export function Wordmark() {
+export function Wordmark({ className = "lp-wordmark" }: { className?: string }) {
+  // The wizard passes its own class (`.ob-word`), because its styles are
+  // scoped under `.ob` the way the marketing pages' are under `.lp`.
   return (
-    <a className="lp-wordmark" href="/" aria-label="Occupella home">
+    <a className={className} href="/" aria-label="Occupella home">
       occupella
     </a>
   );

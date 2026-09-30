@@ -1,7 +1,9 @@
 import { StrictMode, Suspense, lazy } from 'react'
 import { createRoot } from 'react-dom/client'
-import '@fontsource-variable/geist'
-import '@fontsource-variable/geist-mono'
+// The site's faces (the same as the app): Plex Sans for text, Plex Mono for
+// keys and IDs. Fraunces is imported by Site.tsx, which the headings use.
+import '@fontsource-variable/ibm-plex-sans'
+import '@fontsource/ibm-plex-mono/400.css'
 import { ConsentBar } from './ConsentBar'
 import { initAnalytics, watchStartClicks } from './lib/analytics'
 import { rescueAuthLanding } from './lib/authRescue'
@@ -57,7 +59,7 @@ if (rescueAuthLanding()) {
 else if (window.location.pathname.startsWith('/oauth/callback')) {
   document.body.style.background = '#0a0910'
   document.body.innerHTML =
-    '<div style="font: 14px \'Geist Variable\', system-ui, sans-serif; padding: 48px; text-align: center; color: #9a97ad">Connected. You can close this window.</div>'
+    '<div style="font: 14px \'IBM Plex Sans Variable\', system-ui, sans-serif; padding: 48px; text-align: center; color: #9a97ad">Connected. You can close this window.</div>'
   setTimeout(() => window.close(), 250)
 } else {
   // ⚠ INSIDE the else, deliberately. The branch above is the Composio OAuth

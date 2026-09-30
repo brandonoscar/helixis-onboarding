@@ -5,6 +5,7 @@ import { clearWizard, loadWizard, saveWizard } from "./lib/persist";
 import { firstUnmet, meetsRequirements, requirements } from "./lib/passwordStrength";
 import { DraftCrop, EmailDraftCrop, HistoryCrop, NoticedCrop, WorkOrderCard, cropCss } from "./crops";
 import { resumeAction } from "./lib/resume";
+import { Wordmark } from "./Site";
 import {
   asksForAccountCode,
   findingCards,
@@ -1104,7 +1105,7 @@ function StepBuildium({
           {showSample ? "Hide the sample data" : "Explore with sample data"}
         </button>{" "}
         or{" "}
-        <button type="button" className="ob-alt" onClick={onSkip} disabled={busy}>skip for now</button>.
+        <button type="button" className="ob-alt" onClick={onSkip} disabled={busy}>skip Buildium for now</button>.
       </p>
       {!showAdvanced ? (
         <div className="ob-alts" style={{ marginTop: 8 }}>
@@ -1310,7 +1311,7 @@ function StepRentvine({
             I know my Rentvine account code
           </button>
         ) : null}
-        <button type="button" className="ob-alt" onClick={onSkip} disabled={testing}>Skip for now</button>
+        <button type="button" className="ob-alt" onClick={onSkip} disabled={testing}>Skip Rentvine for now</button>
       </div>
     </div>
   );
@@ -1493,11 +1494,12 @@ function StepChannels({ onNext }: { onNext: (connected: boolean) => void }) {
           <button type="button" className="ob-alt" onClick={() => onNext(false)} disabled={googleConnecting}>Skip for now</button>
         ) : null}
       </div>
-      {/* ⚠ Outlook has no connect path (see /features). team@, not support@:
-          support@ is not confirmed to route (TODO(brandon) in Contact.tsx). */}
+      {/* ⚠ Outlook has no connect path (see /features).
+          TODO(brandon): confirm support@occupella.com receives mail. The rest
+          of the site uses team@ until it does (Contact.tsx). */}
       <p className="hint" style={{ marginTop: 20 }}>
-        Using Outlook? It isn&rsquo;t supported yet. Email{" "}
-        <a href="mailto:team@occupella.com?subject=Outlook">team@occupella.com</a> and tell us.
+        Using Outlook? Email{" "}
+        <a href="mailto:support@occupella.com?subject=Outlook">support@occupella.com</a>.
       </p>
     </div>
   );
@@ -2050,7 +2052,7 @@ export default function App() {
       <style>{css}</style>
       <style>{cropCss}</style>
       <header className="ob-head">
-        <a className="ob-word" href="/" aria-label="Occupella home">occupella</a>
+        <Wordmark className="ob-word" />
         {/* ⚠ The ONE thing that lets somebody set up a second account on the
             same machine: the Supabase session persists, so without this a
             returning visitor is carried back into the account they already
