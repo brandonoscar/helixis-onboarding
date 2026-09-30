@@ -96,8 +96,8 @@ export const tokensCss = `
     --r-panel: 16px;
     --r-pill: 9999px;
 
-    --font-sans: 'Geist Variable', 'Geist', Inter, system-ui, sans-serif;
-    --font-mono: 'Geist Mono Variable', 'Geist Mono', 'JetBrains Mono', monospace;
+    --font-sans: 'IBM Plex Sans Variable', 'IBM Plex Sans', system-ui, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 
     /* motion — expo-out for entrances/reveals, standard for state */
     --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
