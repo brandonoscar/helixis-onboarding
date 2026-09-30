@@ -104,6 +104,6 @@ export function routingProblems(
   }
   for (const path of marketingPaths) expect(path, 200, pageFile(path));
   expect("/this-page-does-not-exist", 404, "404.html");
-  for (const file of ["robots.txt", "sitemap.xml"]) expect(`/${file}`, 200, file);
+  for (const file of ["robots.txt", "sitemap.xml", "llms.txt"]) expect(`/${file}`, 200, file);
   return problems;
 }

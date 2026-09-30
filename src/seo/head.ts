@@ -4,6 +4,7 @@
  * seo.test.ts calls the same functions, so what is tested is what ships.
  */
 
+import { PLANS } from "../Pricing";
 import {
   MARKETING_ROUTES,
   NOT_FOUND_PAGE,
@@ -84,6 +85,41 @@ export function breadcrumbJsonLd(route: MarketingRoute): object | null {
   };
 }
 
+/**
+ * The product itself, on the pages that describe it and price it.
+ *
+ * ⚠ THE PRICES ARE THE PRICING PAGE'S PLANS, read from the same list the
+ * cards render (Pricing.tsx PLANS), so a price change cannot leave a stale
+ * number in what Google reads. No aggregateRating or review: there are no
+ * public reviews yet, and inventing one is the thing this site never does.
+ * Google's rich-result test calls that "ineligible for stars", which is true
+ * and harmless; the point here is telling search engines, and the assistants
+ * that read them, that Occupella is software and what it costs.
+ */
+export const SOFTWARE_PAGES = ["/", "/pricing"] as const;
+
+export function softwareJsonLd(): object {
+  return {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    name: "Occupella",
+    url: `${SITE_ORIGIN}/`,
+    description: ORGANIZATION_JSONLD.description,
+    applicationCategory: "BusinessApplication",
+    applicationSubCategory: "Property management",
+    operatingSystem: "Web",
+    publisher: { "@type": "Organization", name: "Occupella", legalName: ORGANIZATION_JSONLD.legalName },
+    offers: PLANS.map((p) => ({
+      "@type": "Offer",
+      name: p.name,
+      price: p.fig === "Free" ? "0" : p.fig.replace(/^\$/, ""),
+      priceCurrency: "USD",
+      description: `${p.name}: ${p.fig === "Free" ? "free for" : p.fig} ${p.unit}`,
+      url: `${SITE_ORIGIN}/pricing`,
+    })),
+  };
+}
+
 /** `<` escaped so no string inside can close the script tag. */
 function jsonLd(data: object): string {
   return `<script type="application/ld+json">${JSON.stringify(data).replace(/</g, "\\u003c")}</script>`;
@@ -99,6 +135,9 @@ export function headTags(route: MarketingRoute): string {
     `<title>${title}</title>`,
     `<meta name="description" content="${description}" />`,
     `<link rel="canonical" href="${url}" />`,
+    ...(route.lcpImage
+      ? [`<link rel="preload" as="image" href="${esc(route.lcpImage)}" fetchpriority="high" />`]
+      : []),
     `<meta property="og:type" content="website" />`,
     `<meta property="og:site_name" content="Occupella" />`,
     `<meta property="og:title" content="${title}" />`,
@@ -113,6 +152,7 @@ export function headTags(route: MarketingRoute): string {
     jsonLd(ORGANIZATION_JSONLD),
     jsonLd(WEBSITE_JSONLD),
     ...(crumbs ? [jsonLd(crumbs)] : []),
+    ...((SOFTWARE_PAGES as readonly string[]).includes(route.path) ? [jsonLd(softwareJsonLd())] : []),
     HEAD_END,
   ].join("\n    ");
 }
@@ -168,5 +208,35 @@ export function sitemapXml(
     ...urls,
     "</urlset>",
     "",
+  ].join("\n");
+}
+
+/**
+ * /llms.txt: a plain summary of the site for AI assistants (the llmstxt.org
+ * format), written by the build from the same route list as the sitemap.
+ *
+ * ⚠ It says only what the pages say: the Organization description, then each
+ * page's own title and description. The state pages are one line, not 51.
+ */
+export function llmsTxt(): string {
+  const main = MARKETING_ROUTES.filter((r) => r.inSitemap && r.name !== "state_law");
+  const line = (r: MarketingRoute) => `- [${r.title.split(" | ")[0]}](${canonicalFor(r)}): ${r.description}`;
+  const group = (label: string, test: (r: MarketingRoute) => boolean) => {
+    const rows = main.filter(test).map(line);
+    return rows.length ? [`## ${label}`, "", ...rows, ""] : [];
+  };
+  const isLegal = (r: MarketingRoute) => ["/terms", "/privacy", "/sms"].includes(r.path);
+  const isResource = (r: MarketingRoute) =>
+    r.path.startsWith("/tools/") || r.path.startsWith("/state-laws") || r.path.startsWith("/docs/") || r.path === "/changelog";
+  return [
+    "# Occupella",
+    "",
+    `> ${ORGANIZATION_JSONLD.description} It is operated by ${ORGANIZATION_JSONLD.legalName}. Occupella is not affiliated with Buildium.`,
+    "",
+    "Occupella connects to a property manager's Buildium account with an API key, keeps a synced copy of it, and drafts replies, work orders and owner updates. Every plan starts with a 14-day free trial, and no card is needed to start.",
+    "",
+    ...group("Product", (r) => !isLegal(r) && !isResource(r)),
+    ...group("Free resources", isResource),
+    ...group("Legal", isLegal),
   ].join("\n");
 }

@@ -33,6 +33,10 @@ export interface MarketingRoute {
   /** The page's name in a breadcrumb trail (head.ts). Defaults to the title
    *  up to " | ". */
   crumb?: string;
+  /** The page's largest image, preloaded at high priority (head.ts). Lighthouse
+   *  measured the home page's video poster as its largest paint, found late
+   *  and fetched at low priority. */
+  lcpImage?: string;
   changefreq: "weekly" | "monthly";
   priority: number;
 }
@@ -41,6 +45,7 @@ const STATIC_ROUTES: MarketingRoute[] = [
   {
     path: "/",
     name: "landing",
+    lcpImage: "/demo/walkthrough-poster.jpg",
     title: "Occupella | AI assistant for Buildium property managers",
     description:
       "Occupella connects to Buildium, reads your work orders, late payments and lease events, and drafts the reply for your approval. 14-day free trial.",
@@ -52,6 +57,7 @@ const STATIC_ROUTES: MarketingRoute[] = [
   {
     path: "/features",
     name: "features",
+    lcpImage: "/demo/product-tour-poster.jpg",
     title: "Features | Occupella",
     description:
       "Occupella reads your Buildium work orders and payments, drafts replies and owner updates, and answers questions from your own data.",

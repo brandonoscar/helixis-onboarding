@@ -1,8 +1,7 @@
-import { StrictMode } from 'react'
+import { StrictMode, Suspense, lazy } from 'react'
 import { createRoot } from 'react-dom/client'
 import '@fontsource-variable/geist'
 import '@fontsource-variable/geist-mono'
-import App from './App'
 import { ConsentBar } from './ConsentBar'
 import { initAnalytics, watchStartClicks } from './lib/analytics'
 import { rescueAuthLanding } from './lib/authRescue'
@@ -21,9 +20,21 @@ import { tokensCss } from './theme'
 // Marketing paths live in src/pages.tsx, matched exactly. Before 2026-09 every
 // URL got index.html and the homepage's canonical, which is why /features was
 // never indexed; see src/seo/routes.ts.
+//
+// ⚠ THE WIZARD IS LOADED ONLY ON /start. App.tsx brings the Supabase client
+// (about 500 KB of source), which no marketing page uses; importing it here
+// made every visitor download it before the home page could run.
+const App = lazy(() => import('./App'))
+
 function route() {
   const p = window.location.pathname
-  if (p.startsWith('/start')) return <App />
+  if (p.startsWith('/start')) {
+    return (
+      <Suspense fallback={null}>
+        <App />
+      </Suspense>
+    )
+  }
   return pageFor(p)
 }
 

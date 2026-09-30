@@ -79,7 +79,9 @@ describe('whether Rentvine can be offered', () => {
 describe('where the wizard goes after connecting', () => {
   it('shows live updates for Buildium and skips them for Rentvine', () => {
     expect(stepAfterConnect('buildium')).toBe('live');
-    expect(stepAfterConnect('rentvine')).toBe('channels');
+    // Re-pointed 2026-09-29: Scan now comes before Email, so Rentvine (no
+    // live-updates step) goes straight to the scan.
+    expect(stepAfterConnect('rentvine')).toBe('scan');
   });
 });
 
@@ -163,7 +165,8 @@ describe('App.tsx uses the rules', () => {
     expect(callsIn('handlePmsConnected')).toContain('stepAfterConnect');
   });
 
-  it('the launch screen builds its cards with findingCards', () => {
-    expect(callsIn('StepFinish')).toContain('findingCards');
+  it('the scan screen builds its cards with findingCards', () => {
+    // Re-pointed 2026-09-29 from StepFinish: the scan became its own step.
+    expect(callsIn('StepScan')).toContain('findingCards');
   });
 });

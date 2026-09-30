@@ -132,8 +132,9 @@ type Plan = {
   cta: string;
 };
 
-/** ⚠ Mirrors billing/plans.py. See the file header before editing a number. */
-const PLANS: Plan[] = [
+/** ⚠ Mirrors billing/plans.py. See the file header before editing a number.
+ *  Also read by seo/head.ts for the SoftwareApplication offers. */
+export const PLANS: Plan[] = [
   {
     key: "trial",
     name: "Trial",
