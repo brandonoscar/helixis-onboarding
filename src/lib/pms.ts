@@ -1,5 +1,6 @@
 /**
- * Step 2's property-management-system choice: Buildium or Rentvine.
+ * Step 2's property-management-system choice: Buildium or Rentvine, and Rent
+ * Manager or Propertyware where this deployment has switched them on.
  *
  * The rules live here rather than inline in App.tsx so they can be tested
  * without rendering the wizard.
@@ -14,11 +15,13 @@
  *  - A passing `POST /test` starts the first sync.
  */
 
-export type Pms = "buildium" | "rentvine";
+export type Pms = "buildium" | "rentvine" | "rentmanager" | "propertyware";
 
 export const PMS_NAME: Record<Pms, string> = {
   buildium: "Buildium",
   rentvine: "Rentvine",
+  rentmanager: "Rent Manager",
+  propertyware: "Propertyware",
 };
 
 /**
@@ -29,6 +32,10 @@ export const PMS_NAME: Record<Pms, string> = {
 export const PMS_READS: Record<Pms, string> = {
   buildium: "properties, units, leases, tenants, work orders and bills",
   rentvine: "properties, units, leases, tenants, owners, vendors and work orders",
+  rentmanager:
+    "properties, units, leases, tenants, owners, vendors, work orders, bills and rent balances",
+  propertyware:
+    "properties, units, leases, tenants, owners, vendors, work orders, bills and rent balances",
 };
 
 /** Where the wizard goes after a system is connected. */
@@ -37,8 +44,87 @@ export function stepAfterConnect(pms: Pms): "live" | "scan" {
   // delivery until its signature scheme is known, so the step would ask the
   // customer to wire up something that cannot work. Rentvine is re-read on a
   // schedule instead, and goes straight to the scan (Scan comes before Email
-  // since the 2026-09-29 restyle).
+  // since the 2026-09-29 restyle). Rent Manager and Propertyware send no
+  // webhooks at all: they are re-read on a schedule too.
   return pms === "buildium" ? "live" : "scan";
+}
+
+/**
+ * The systems the picker shows only where this deployment has switched them
+ * on, each asked through its own `GET /api/v1/<key>/credentials`.
+ */
+export const SWITCHED_PMS = ["rentmanager", "propertyware"] as const;
+export type SwitchedPms = (typeof SWITCHED_PMS)[number];
+
+/**
+ * Each switched system's routes on the backend, which owns them (ADR 0003).
+ * Written out, not built from the key, so a search for a route finds its
+ * caller.
+ */
+export const SWITCHED_PATHS: Record<SwitchedPms, { credentials: string; test: string }> = {
+  rentmanager: {
+    credentials: "/api/v1/rentmanager/credentials",
+    test: "/api/v1/rentmanager/test",
+  },
+  propertyware: {
+    credentials: "/api/v1/propertyware/credentials",
+    test: "/api/v1/propertyware/test",
+  },
+};
+
+/**
+ * Whether Rent Manager or Propertyware can be offered, from its GET's answer.
+ *
+ * ⚠ ONLY an explicit `connector_enabled: true` offers it, unlike Rentvine's
+ * rule above. These connectors are new: a backend from before them answers
+ * the GET with 404, and a deployment that has them switched off says `false`.
+ * Offering either would end the customer at an error after they had pasted
+ * their keys, so anything but a plain yes keeps the tile hidden.
+ */
+export function switchedPmsOffered(status: unknown): boolean {
+  if (!status || typeof status !== "object") return false;
+  return (status as { connector_enabled?: unknown }).connector_enabled === true;
+}
+
+/**
+ * Rent Manager's PUT body, or `null` while the location is not a location ID
+ * (a whole number above zero), so the form cannot send it.
+ *
+ * The password is sent exactly as typed: it is the one value here a person
+ * types rather than copies, and a space at either end may be part of it. A
+ * blank partner token is OMITTED, never sent as "": most customers have none.
+ */
+export function rentmanagerCredentialsBody(
+  corpId: string,
+  locationId: string,
+  username: string,
+  password: string,
+  partnerToken: string,
+): Record<string, string | number> | null {
+  const location = locationId.trim();
+  if (!/^[1-9][0-9]*$/.test(location)) return null;
+  const body: Record<string, string | number> = {
+    corp_id: corpId.trim(),
+    location_id: Number(location),
+    username: username.trim(),
+    password,
+  };
+  const token = partnerToken.trim();
+  if (token) body.partner_token = token;
+  return body;
+}
+
+/** Propertyware's PUT body: the organization (system) ID and the key pair. */
+export function propertywareCredentialsBody(
+  systemId: string,
+  clientId: string,
+  clientSecret: string,
+): Record<string, string> {
+  return {
+    system_id: systemId.trim(),
+    client_id: clientId.trim(),
+    client_secret: clientSecret.trim(),
+  };
 }
 
 /** Whether the Rentvine option can be offered, from the GET's answer. */
