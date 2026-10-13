@@ -549,6 +549,7 @@ export const MENU: MenuGroup[] = [
       { href: "/integrations", label: "Integrations", note: "What Occupella connects to" },
       { href: "/docs/buildium-api-setup", label: "Buildium setup guide", note: "Create the API key in two minutes" },
       { href: "/state-laws", label: "Landlord rules by state", note: "Deposits, late fees and notices" },
+      { href: "/blog", label: "Blog", note: "Notes from Occupella Engineering" },
       { href: "/tools/deposit-deadline", label: "Deposit deadline calculator", note: "The day a deposit is due back" },
       { href: "/tools/notice-period", label: "Notice period calculator", note: "Pay-or-quit and month-to-month" },
       { href: "/screenshots", label: "Screenshots", note: "What the app looks like" },

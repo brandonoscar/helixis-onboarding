@@ -20,6 +20,8 @@ import NoticePeriodTool from "./tools/NoticePeriodTool";
 import StateLawPage from "./stateLaws/StateLawPage";
 import StateLawsIndex from "./stateLaws/StateLawsIndex";
 import { STATES } from "./stateLaws/data";
+import { BlogIndex, BlogPost } from "./blog/Blog";
+import { BLOG_PATH, POSTS } from "./blog/posts";
 import { normalizePath } from "./seo/routes";
 
 /**
@@ -53,6 +55,8 @@ export const PAGES: Record<string, () => ReactElement> = {
   "/privacy": () => <Privacy />,
   "/state-laws": () => <StateLawsIndex />,
   ...Object.fromEntries(STATES.map((st) => [st.path, () => <StateLawPage state={st} />])),
+  [BLOG_PATH]: () => <BlogIndex />,
+  ...Object.fromEntries(POSTS.map((post) => [post.path, () => <BlogPost post={post} />])),
 };
 
 export function pageFor(path: string): ReactElement {

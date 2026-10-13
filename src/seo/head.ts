@@ -120,6 +120,42 @@ export function softwareJsonLd(): object {
   };
 }
 
+/** A post's own image as an absolute URL, or the site's default. */
+function imageFor(route: MarketingRoute): string {
+  const img = route.article?.image;
+  if (!img) return SOCIAL_IMAGE;
+  return img.startsWith("/") ? `${SITE_ORIGIN}${img}` : img;
+}
+
+/**
+ * A blog post (src/blog/posts.ts): headline, dates, author and publisher.
+ * The author is the frontmatter's name as an Organization ("Occupella
+ * Engineering"), never a made-up person. The publisher is the same
+ * organization ORGANIZATION_JSONLD describes, with its logo.
+ */
+export function blogPostingJsonLd(route: MarketingRoute): object | null {
+  const a = route.article;
+  if (!a) return null;
+  const url = canonicalFor(route);
+  return {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    headline: a.headline,
+    description: route.description,
+    datePublished: a.datePublished,
+    dateModified: a.dateModified,
+    author: { "@type": "Organization", name: a.author },
+    publisher: {
+      "@type": "Organization",
+      name: ORGANIZATION_JSONLD.name,
+      logo: { "@type": "ImageObject", url: ORGANIZATION_JSONLD.logo },
+    },
+    image: [imageFor(route)],
+    url,
+    mainEntityOfPage: { "@type": "WebPage", "@id": url },
+  };
+}
+
 /** `<` escaped so no string inside can close the script tag. */
 function jsonLd(data: object): string {
   return `<script type="application/ld+json">${JSON.stringify(data).replace(/</g, "\\u003c")}</script>`;
@@ -130,6 +166,13 @@ export function headTags(route: MarketingRoute): string {
   const title = esc(route.title);
   const description = esc(route.description);
   const crumbs = breadcrumbJsonLd(route);
+  const posting = blogPostingJsonLd(route);
+  const image = imageFor(route);
+  // The default image keeps its own description; a post's own image is
+  // described by the post's title.
+  const imageAlt = route.article?.image
+    ? esc(route.article.headline)
+    : "The Occupella chat surface answering a question about a property.";
   return [
     HEAD_START,
     `<title>${title}</title>`,
@@ -138,20 +181,27 @@ export function headTags(route: MarketingRoute): string {
     ...(route.lcpImage
       ? [`<link rel="preload" as="image" href="${esc(route.lcpImage)}" fetchpriority="high" />`]
       : []),
-    `<meta property="og:type" content="website" />`,
+    `<meta property="og:type" content="${route.article ? "article" : "website"}" />`,
     `<meta property="og:site_name" content="Occupella" />`,
     `<meta property="og:title" content="${title}" />`,
     `<meta property="og:description" content="${description}" />`,
     `<meta property="og:url" content="${url}" />`,
-    `<meta property="og:image" content="${SOCIAL_IMAGE}" />`,
-    `<meta property="og:image:alt" content="The Occupella chat surface answering a question about a property." />`,
+    `<meta property="og:image" content="${esc(image)}" />`,
+    `<meta property="og:image:alt" content="${imageAlt}" />`,
+    ...(route.article
+      ? [
+          `<meta property="article:published_time" content="${route.article.datePublished}" />`,
+          `<meta property="article:modified_time" content="${route.article.dateModified}" />`,
+        ]
+      : []),
     `<meta name="twitter:card" content="summary_large_image" />`,
     `<meta name="twitter:title" content="${title}" />`,
     `<meta name="twitter:description" content="${description}" />`,
-    `<meta name="twitter:image" content="${SOCIAL_IMAGE}" />`,
+    `<meta name="twitter:image" content="${esc(image)}" />`,
     jsonLd(ORGANIZATION_JSONLD),
     jsonLd(WEBSITE_JSONLD),
     ...(crumbs ? [jsonLd(crumbs)] : []),
+    ...(posting ? [jsonLd(posting)] : []),
     ...((SOFTWARE_PAGES as readonly string[]).includes(route.path) ? [jsonLd(softwareJsonLd())] : []),
     HEAD_END,
   ].join("\n    ");
@@ -227,7 +277,12 @@ export function llmsTxt(): string {
   };
   const isLegal = (r: MarketingRoute) => ["/terms", "/privacy", "/sms"].includes(r.path);
   const isResource = (r: MarketingRoute) =>
-    r.path.startsWith("/tools/") || r.path.startsWith("/state-laws") || r.path.startsWith("/docs/") || r.path === "/changelog";
+    r.path.startsWith("/tools/") ||
+    r.path.startsWith("/state-laws") ||
+    r.path.startsWith("/docs/") ||
+    r.path === "/changelog" ||
+    r.path === "/blog" ||
+    r.path.startsWith("/blog/");
   return [
     "# Occupella",
     "",

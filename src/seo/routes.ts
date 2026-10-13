@@ -17,6 +17,7 @@
  * the two agree.
  */
 
+import { BLOG_INDEX, BLOG_PATH, POSTS } from "../blog/posts";
 import { STATES, descriptionFor } from "../stateLaws/data";
 
 export const SITE_ORIGIN = "https://occupella.com";
@@ -39,6 +40,16 @@ export interface MarketingRoute {
   lcpImage?: string;
   changefreq: "weekly" | "monthly";
   priority: number;
+  /** A blog post: og:type article, its dates, and BlogPosting structured
+   *  data (head.ts). Only the blog's post routes set it. */
+  article?: {
+    headline: string;
+    author: string;
+    datePublished: string;
+    dateModified: string;
+    /** A path under public/ or an https URL; absent means the site's default image. */
+    image?: string;
+  };
 }
 
 const STATIC_ROUTES: MarketingRoute[] = [
@@ -288,7 +299,50 @@ const STATE_LAW_ROUTES: MarketingRoute[] = [
   ),
 ];
 
-export const MARKETING_ROUTES: readonly MarketingRoute[] = [...STATIC_ROUTES, ...STATE_LAW_ROUTES];
+/**
+ * The blog: an index and one page per Markdown file in content/blog/
+ * (src/blog/posts.ts). A post's `source` is its file, so the sitemap's
+ * lastmod is that file's last commit.
+ *
+ * ⚠ A post's description is the author's own words from its frontmatter,
+ * printed as written, and may run past the 155 characters the other routes
+ * keep to (seo.test.ts). docs/blog.md asks for 155 or fewer.
+ */
+const BLOG_ROUTES: MarketingRoute[] = [
+  {
+    path: BLOG_PATH,
+    name: "blog",
+    crumb: "Blog",
+    title: BLOG_INDEX.title,
+    description: BLOG_INDEX.description,
+    inSitemap: true,
+    source: "content/blog",
+    changefreq: "weekly",
+    priority: 0.6,
+  },
+  ...POSTS.map(
+    (p): MarketingRoute => ({
+      path: p.path,
+      name: "blog_post",
+      crumb: p.title,
+      title: `${p.title} | Occupella`,
+      description: p.description,
+      inSitemap: true,
+      source: p.source,
+      changefreq: "monthly",
+      priority: 0.6,
+      article: {
+        headline: p.title,
+        author: p.author,
+        datePublished: p.datePublished,
+        dateModified: p.dateModified,
+        ...(p.image ? { image: p.image } : {}),
+      },
+    }),
+  ),
+];
+
+export const MARKETING_ROUTES: readonly MarketingRoute[] = [...STATIC_ROUTES, ...STATE_LAW_ROUTES, ...BLOG_ROUTES];
 
 /** Served for any URL no route answers, with a real 404 status. */
 export const NOT_FOUND_PAGE = {
