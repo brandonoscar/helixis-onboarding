@@ -17,7 +17,7 @@
  * the two agree.
  */
 
-import { BLOG_INDEX, BLOG_PATH, POSTS } from "../blog/posts";
+import { BLOG_CARD, BLOG_INDEX, BLOG_PATH, POSTS } from "../blog/posts";
 import { STATES, descriptionFor } from "../stateLaws/data";
 
 export const SITE_ORIGIN = "https://occupella.com";
@@ -40,6 +40,10 @@ export interface MarketingRoute {
   lcpImage?: string;
   changefreq: "weekly" | "monthly";
   priority: number;
+  /** The share image LinkedIn and others show for this page (og:image).
+   *  Absent: the site's social-preview.png, a product screenshot, which is
+   *  right for product pages and wrong for the blog (head.ts). */
+  image?: { src: string; alt: string };
   /** A blog post: og:type article, its dates, and BlogPosting structured
    *  data (head.ts). Only the blog's post routes set it. */
   article?: {
@@ -47,8 +51,6 @@ export interface MarketingRoute {
     author: string;
     datePublished: string;
     dateModified: string;
-    /** A path under public/ or an https URL; absent means the site's default image. */
-    image?: string;
   };
 }
 
@@ -315,6 +317,7 @@ const BLOG_ROUTES: MarketingRoute[] = [
     crumb: "Blog",
     title: BLOG_INDEX.title,
     description: BLOG_INDEX.description,
+    image: BLOG_CARD,
     inSitemap: true,
     source: "content/blog",
     changefreq: "weekly",
@@ -331,12 +334,13 @@ const BLOG_ROUTES: MarketingRoute[] = [
       source: p.source,
       changefreq: "monthly",
       priority: 0.6,
+      // The post's own card (scripts/blog-card.mjs), else the blog's card.
+      image: p.image ? { src: p.image, alt: p.title } : BLOG_CARD,
       article: {
         headline: p.title,
         author: p.author,
         datePublished: p.datePublished,
         dateModified: p.dateModified,
-        ...(p.image ? { image: p.image } : {}),
       },
     }),
   ),

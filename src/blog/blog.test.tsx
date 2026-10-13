@@ -8,6 +8,8 @@
  * each line's words reach the server HTML, so a rendering change that drops
  * or rewords a sentence fails here instead of shipping.
  */
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import firstPostRaw from "../../content/blog/buildium-appliance-endpoints-410.md?raw";
@@ -15,7 +17,7 @@ import { render } from "../entry-server";
 import { MENU, TOP_LINKS } from "../Site";
 import { blogPostingJsonLd, headTags, llmsTxt, sitemapXml } from "../seo/head";
 import { MARKETING_ROUTES, canonicalFor, routeFor } from "../seo/routes";
-import { BLOG_PATH, POSTS, formatDate, parseFrontmatter, postFrom, renderMarkdown, sortPosts, type Post } from "./posts";
+import { BLOG_CARD, BLOG_PATH, POSTS, formatDate, parseFrontmatter, postFrom, renderMarkdown, sortPosts, type Post } from "./posts";
 
 const FIRST = "/blog/buildium-appliance-endpoints-410";
 
@@ -201,17 +203,46 @@ describe("what a search engine and LinkedIn read", () => {
     }
   });
 
-  it("marks a post as an article, with its dates and the default image", () => {
+  it("marks a post as an article, with its dates and its own card", () => {
+    const card = "https://occupella.com/blog/buildium-appliance-endpoints-410.png";
     expect(head).toContain('<meta property="og:type" content="article" />');
-    expect(head).toContain(
-      `<meta property="og:title" content="Buildium's appliance API endpoints stop working October 19, 2026 | Occupella" />`,
-    );
     expect(head).toContain(`<meta property="og:url" content="${canonicalFor(route)}" />`);
-    expect(head).toContain('<meta property="og:image" content="https://occupella.com/social-preview.png" />');
+    expect(head).toContain(`<meta property="og:image" content="${card}" />`);
+    expect(head).toContain(`<meta property="og:image:alt" content="${route.article!.headline}" />`);
     expect(head).toContain(`<meta property="article:published_time" content="${route.article!.datePublished}" />`);
     expect(head).toContain(`<meta property="article:modified_time" content="${route.article!.dateModified}" />`);
     expect(head).toContain('<meta name="twitter:card" content="summary_large_image" />');
-    expect(head).toContain('<meta name="twitter:image" content="https://occupella.com/social-preview.png" />');
+    expect(head).toContain(`<meta name="twitter:image" content="${card}" />`);
+  });
+
+  it("shares a post under its own title; the browser tab keeps the site name", () => {
+    const headline = "Buildium's appliance API endpoints stop working October 19, 2026";
+    expect(head).toContain(`<meta property="og:title" content="${headline}" />`);
+    expect(head).toContain(`<meta name="twitter:title" content="${headline}" />`);
+    expect(head).toContain(`<title>${headline} | Occupella</title>`);
+  });
+
+  it("never shares the product screenshot from the blog", () => {
+    // The site's default share image sells the product. A blog link pasted
+    // into LinkedIn shows the article's card, or the blog's text-only card.
+    const blog = MARKETING_ROUTES.filter((r) => r.path === BLOG_PATH || r.path.startsWith(`${BLOG_PATH}/`));
+    expect(blog.length).toBe(POSTS.length + 1);
+    for (const r of blog) {
+      expect(headTags(r), r.path).not.toContain("social-preview.png");
+      expect(r.image, r.path).toBeDefined();
+    }
+    expect(routeFor(BLOG_PATH)!.image).toEqual(BLOG_CARD);
+    for (const p of POSTS) {
+      expect(routeFor(p.path)!.image, p.path).toEqual(p.image ? { src: p.image, alt: p.title } : BLOG_CARD);
+    }
+  });
+
+  it("names only share images that are real files in public/", () => {
+    const srcs = [BLOG_CARD.src, ...POSTS.flatMap((p) => (p.image?.startsWith("/") ? [p.image] : []))];
+    expect(srcs.length).toBeGreaterThan(1);
+    for (const src of srcs) {
+      expect(existsSync(join(__dirname, "../../public", src)), `public${src} is missing; run scripts/blog-card.mjs`).toBe(true);
+    }
   });
 
   it("describes the post as a BlogPosting by Occupella Engineering, published by Occupella", () => {
@@ -233,10 +264,11 @@ describe("what a search engine and LinkedIn read", () => {
     expect(crumbs.itemListElement.map((i: { name: string }) => i.name)).toEqual(["Home", "Blog", route.article!.headline]);
   });
 
-  it("uses a post's own image when it names one", () => {
-    const withImage = { ...route, article: { ...route.article!, image: "/blog/cover.png" } };
-    expect(headTags(withImage)).toContain('<meta property="og:image" content="https://occupella.com/blog/cover.png" />');
-    expect(blogPostingJsonLd(withImage)).toMatchObject({ image: ["https://occupella.com/blog/cover.png"] });
+  it("puts the post's card in its structured data, and keeps an https image as given", () => {
+    expect(blogPostingJsonLd(route)).toMatchObject({ image: ["https://occupella.com/blog/buildium-appliance-endpoints-410.png"] });
+    const external = { ...route, image: { src: "https://cdn.example.test/cover.png", alt: "Cover" } };
+    expect(headTags(external)).toContain('<meta property="og:image" content="https://cdn.example.test/cover.png" />');
+    expect(blogPostingJsonLd(external)).toMatchObject({ image: ["https://cdn.example.test/cover.png"] });
   });
 
   it("leaves every other page's head as it was: website, no article tags, no BlogPosting", () => {
@@ -245,7 +277,10 @@ describe("what a search engine and LinkedIn read", () => {
       expect(h, r.path).toContain('<meta property="og:type" content="website" />');
       expect(h, r.path).not.toContain("article:published_time");
       expect(h, r.path).not.toContain('"@type":"BlogPosting"');
+      if (!r.image) expect(h, r.path).toContain('<meta property="og:image" content="https://occupella.com/social-preview.png" />');
     }
+    // Only the blog sets its own share image.
+    expect(MARKETING_ROUTES.filter((x) => x.image).every((x) => x.path.startsWith(BLOG_PATH))).toBe(true);
     expect(MARKETING_ROUTES.filter((x) => x.article).map((x) => x.path)).toEqual(POSTS.map((p) => p.path));
   });
 });
