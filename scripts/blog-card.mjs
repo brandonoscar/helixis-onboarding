@@ -26,8 +26,13 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+// Laid out at 1200x630, LinkedIn's shape, and written at twice that,
+// 2400x1260. At 1x the small type went soft once LinkedIn shrank and
+// recompressed it (2026-10-13). src/blog/posts.ts CARD_SIZE must match;
+// blog.test.tsx reads each card's real size.
 const W = 1200;
 const H = 630;
+const SCALE = 2;
 
 const arg = process.argv[2];
 if (!arg) {
@@ -63,7 +68,7 @@ const font = (pkg, file) =>
 
 function cardHtml({ title, foot }) {
   // Long titles step down so they stay on three lines at most.
-  const size = title.length > 90 ? 54 : title.length > 60 ? 62 : 72;
+  const size = title.length > 90 ? 58 : title.length > 60 ? 68 : 76;
   return `<!doctype html><html><head><meta charset="utf-8"><style>
     @font-face { font-family: "Fraunces"; src: ${font("@fontsource-variable/fraunces", "fraunces-latin-opsz-normal.woff2")}; font-weight: 100 900; }
     @font-face { font-family: "Plex"; src: ${font("@fontsource-variable/ibm-plex-sans", "ibm-plex-sans-latin-wght-normal.woff2")}; font-weight: 100 700; }
@@ -74,13 +79,13 @@ function cardHtml({ title, foot }) {
       display: flex; flex-direction: column; justify-content: space-between;
       border-top: 10px solid #1957A0; font-family: "Plex", sans-serif;
     }
-    .who { font-size: 28px; font-weight: 600; color: #55606E; letter-spacing: -0.005em; }
+    .who { font-size: 34px; font-weight: 600; color: #55606E; letter-spacing: -0.005em; }
     h1 {
       font-family: "Fraunces", serif; font-optical-sizing: auto; font-weight: 560;
       font-size: ${size}px; line-height: 1.08; letter-spacing: -0.02em; color: #0E1620;
       max-width: 1000px; text-wrap: balance;
     }
-    .foot { display: flex; justify-content: space-between; font-size: 26px; color: #55606E; }
+    .foot { display: flex; justify-content: space-between; font-size: 30px; color: #55606E; }
   </style></head><body><div class="card">
     <div class="who">Occupella Engineering</div>
     <h1>${esc(title)}</h1>
@@ -113,7 +118,7 @@ const { chromium } = loadPlaywright();
 const browser = await chromium
   .launch()
   .catch(() => chromium.launch({ executablePath: process.env.PW_CHROMIUM ?? "/opt/pw-browsers/chromium" }));
-const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
+const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: SCALE });
 await page.setContent(cardHtml(card));
 await page.evaluate(() => document.fonts.ready);
 const fonts = await page.evaluate(() => [...document.fonts].filter((f) => f.status === "loaded").map((f) => f.family));
@@ -125,5 +130,5 @@ const out = join(root, "public/blog", card.file);
 mkdirSync(dirname(out), { recursive: true });
 await page.screenshot({ path: out, clip: { x: 0, y: 0, width: W, height: H } });
 await browser.close();
-console.log(`blog-card: wrote public/blog/${card.file} (${W}x${H})`);
+console.log(`blog-card: wrote public/blog/${card.file} (${W * SCALE}x${H * SCALE})`);
 if (arg !== "--default") console.log(`Add to content/blog/${arg}.md frontmatter:  image: /blog/${card.file}`);

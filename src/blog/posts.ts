@@ -25,9 +25,14 @@ export const BLOG_PATH = "/blog";
  * The share image for /blog and for any post that has no card of its own:
  * text only, no product. scripts/blog-card.mjs --default draws it.
  */
+/** Every card scripts/blog-card.mjs draws: LinkedIn's 1.91:1 at twice
+ *  1200x630, so the type stays sharp after LinkedIn scales it down. */
+export const CARD_SIZE = { width: 2400, height: 1260 } as const;
+
 export const BLOG_CARD = {
   src: "/blog/card.png",
   alt: "Occupella Engineering: notes on property-management APIs",
+  ...CARD_SIZE,
 } as const;
 
 /** The /blog index's own words, read by its route and its page. */

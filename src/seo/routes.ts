@@ -17,7 +17,7 @@
  * the two agree.
  */
 
-import { BLOG_CARD, BLOG_INDEX, BLOG_PATH, POSTS } from "../blog/posts";
+import { BLOG_CARD, BLOG_INDEX, BLOG_PATH, CARD_SIZE, POSTS } from "../blog/posts";
 import { STATES, descriptionFor } from "../stateLaws/data";
 
 export const SITE_ORIGIN = "https://occupella.com";
@@ -43,7 +43,7 @@ export interface MarketingRoute {
   /** The share image LinkedIn and others show for this page (og:image).
    *  Absent: the site's social-preview.png, a product screenshot, which is
    *  right for product pages and wrong for the blog (head.ts). */
-  image?: { src: string; alt: string };
+  image?: { src: string; alt: string; width?: number; height?: number };
   /** A blog post: og:type article, its dates, and BlogPosting structured
    *  data (head.ts). Only the blog's post routes set it. */
   article?: {
@@ -335,7 +335,11 @@ const BLOG_ROUTES: MarketingRoute[] = [
       changefreq: "monthly",
       priority: 0.6,
       // The post's own card (scripts/blog-card.mjs), else the blog's card.
-      image: p.image ? { src: p.image, alt: p.title } : BLOG_CARD,
+      // A card under /blog/ is drawn at CARD_SIZE (blog.test.tsx checks the
+      // file); an image hosted elsewhere carries no size.
+      image: p.image
+        ? { src: p.image, alt: p.title, ...(p.image.startsWith(`${BLOG_PATH}/`) ? CARD_SIZE : {}) }
+        : BLOG_CARD,
       article: {
         headline: p.title,
         author: p.author,
