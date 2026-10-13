@@ -189,6 +189,14 @@ export function headTags(route: MarketingRoute): string {
     `<meta property="og:url" content="${url}" />`,
     `<meta property="og:image" content="${esc(image)}" />`,
     `<meta property="og:image:alt" content="${imageAlt}" />`,
+    // The size lets LinkedIn lay the card out large on the first share,
+    // before it has fetched the file. Only images whose size is known.
+    ...(route.image?.width && route.image?.height
+      ? [
+          `<meta property="og:image:width" content="${route.image.width}" />`,
+          `<meta property="og:image:height" content="${route.image.height}" />`,
+        ]
+      : []),
     ...(route.article
       ? [
           `<meta property="article:published_time" content="${route.article.datePublished}" />`,

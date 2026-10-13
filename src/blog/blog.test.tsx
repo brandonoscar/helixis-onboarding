@@ -8,7 +8,7 @@
  * each line's words reach the server HTML, so a rendering change that drops
  * or rewords a sentence fails here instead of shipping.
  */
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -17,7 +17,7 @@ import { render } from "../entry-server";
 import { MENU, TOP_LINKS } from "../Site";
 import { blogPostingJsonLd, headTags, llmsTxt, sitemapXml } from "../seo/head";
 import { MARKETING_ROUTES, canonicalFor, routeFor } from "../seo/routes";
-import { BLOG_CARD, BLOG_PATH, POSTS, formatDate, parseFrontmatter, postFrom, renderMarkdown, sortPosts, type Post } from "./posts";
+import { BLOG_CARD, BLOG_PATH, CARD_SIZE, POSTS, formatDate, parseFrontmatter, postFrom, renderMarkdown, sortPosts, type Post } from "./posts";
 
 const FIRST = "/blog/buildium-appliance-endpoints-410";
 
@@ -204,11 +204,13 @@ describe("what a search engine and LinkedIn read", () => {
   });
 
   it("marks a post as an article, with its dates and its own card", () => {
-    const card = "https://occupella.com/blog/buildium-appliance-endpoints-410.png";
+    const card = "https://occupella.com/blog/buildium-appliance-endpoints-410.png?v=2";
     expect(head).toContain('<meta property="og:type" content="article" />');
     expect(head).toContain(`<meta property="og:url" content="${canonicalFor(route)}" />`);
     expect(head).toContain(`<meta property="og:image" content="${card}" />`);
     expect(head).toContain(`<meta property="og:image:alt" content="${route.article!.headline}" />`);
+    expect(head).toContain('<meta property="og:image:width" content="2400" />');
+    expect(head).toContain('<meta property="og:image:height" content="1260" />');
     expect(head).toContain(`<meta property="article:published_time" content="${route.article!.datePublished}" />`);
     expect(head).toContain(`<meta property="article:modified_time" content="${route.article!.dateModified}" />`);
     expect(head).toContain('<meta name="twitter:card" content="summary_large_image" />');
@@ -233,16 +235,36 @@ describe("what a search engine and LinkedIn read", () => {
     }
     expect(routeFor(BLOG_PATH)!.image).toEqual(BLOG_CARD);
     for (const p of POSTS) {
-      expect(routeFor(p.path)!.image, p.path).toEqual(p.image ? { src: p.image, alt: p.title } : BLOG_CARD);
+      const own = p.image ? { src: p.image, alt: p.title, ...(p.image.startsWith(`${BLOG_PATH}/`) ? CARD_SIZE : {}) } : null;
+      expect(routeFor(p.path)!.image, p.path).toEqual(own ?? BLOG_CARD);
     }
   });
 
-  it("names only share images that are real files in public/", () => {
-    const srcs = [BLOG_CARD.src, ...POSTS.flatMap((p) => (p.image?.startsWith("/") ? [p.image] : []))];
+  it("names only share images that are real files in public/, each the size its tags declare", () => {
+    // ?v=2 on a redrawn card makes LinkedIn fetch it again; the file is the same.
+    const srcs = [BLOG_CARD.src, ...POSTS.flatMap((p) => (p.image?.startsWith("/") ? [p.image] : []))].map(
+      (s) => s.replace(/[?#].*$/, ""),
+    );
     expect(srcs.length).toBeGreaterThan(1);
     for (const src of srcs) {
-      expect(existsSync(join(__dirname, "../../public", src)), `public${src} is missing; run scripts/blog-card.mjs`).toBe(true);
+      const file = join(__dirname, "../../public", src);
+      expect(existsSync(file), `public${src} is missing; run scripts/blog-card.mjs`).toBe(true);
+      // A PNG's width and height are bytes 16-23 of its IHDR header. A card
+      // drawn at 1x was soft on LinkedIn; the head declares CARD_SIZE.
+      const png = readFileSync(file);
+      expect(png.subarray(1, 4).toString(), src).toBe("PNG");
+      expect({ width: png.readUInt32BE(16), height: png.readUInt32BE(20) }, src).toEqual(CARD_SIZE);
     }
+  });
+
+  it("declares a size only for cards whose size it knows", () => {
+    for (const r of MARKETING_ROUTES) {
+      const h = headTags(r);
+      const declared = h.includes('property="og:image:width"');
+      expect(declared, r.path).toBe(Boolean(r.image?.width));
+    }
+    const external = { ...routeFor(POSTS[0].path)!, image: { src: "https://cdn.example.test/cover.png", alt: "Cover" } };
+    expect(headTags(external)).not.toContain("og:image:width");
   });
 
   it("describes the post as a BlogPosting by Occupella Engineering, published by Occupella", () => {
@@ -265,7 +287,7 @@ describe("what a search engine and LinkedIn read", () => {
   });
 
   it("puts the post's card in its structured data, and keeps an https image as given", () => {
-    expect(blogPostingJsonLd(route)).toMatchObject({ image: ["https://occupella.com/blog/buildium-appliance-endpoints-410.png"] });
+    expect(blogPostingJsonLd(route)).toMatchObject({ image: ["https://occupella.com/blog/buildium-appliance-endpoints-410.png?v=2"] });
     const external = { ...route, image: { src: "https://cdn.example.test/cover.png", alt: "Cover" } };
     expect(headTags(external)).toContain('<meta property="og:image" content="https://cdn.example.test/cover.png" />');
     expect(blogPostingJsonLd(external)).toMatchObject({ image: ["https://cdn.example.test/cover.png"] });

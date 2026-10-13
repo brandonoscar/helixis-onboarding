@@ -5,7 +5,7 @@ slug: buildium-appliance-endpoints-410
 author: Occupella Engineering
 datePublished: 2026-10-13
 dateModified: 2026-10-13
-image: /blog/buildium-appliance-endpoints-410.png
+image: /blog/buildium-appliance-endpoints-410.png?v=2
 ---
 
 Buildium deprecated its appliance endpoints on July 21, 2026, in favor of its new Inventory & Assets API. Starting Monday, October 19, 2026, every deprecated appliance endpoint returns `410 Gone`.
