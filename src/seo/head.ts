@@ -120,9 +120,9 @@ export function softwareJsonLd(): object {
   };
 }
 
-/** A post's own image as an absolute URL, or the site's default. */
+/** The page's own share image as an absolute URL, or the site's default. */
 function imageFor(route: MarketingRoute): string {
-  const img = route.article?.image;
+  const img = route.image?.src;
   if (!img) return SOCIAL_IMAGE;
   return img.startsWith("/") ? `${SITE_ORIGIN}${img}` : img;
 }
@@ -168,11 +168,12 @@ export function headTags(route: MarketingRoute): string {
   const crumbs = breadcrumbJsonLd(route);
   const posting = blogPostingJsonLd(route);
   const image = imageFor(route);
-  // The default image keeps its own description; a post's own image is
-  // described by the post's title.
-  const imageAlt = route.article?.image
-    ? esc(route.article.headline)
+  const imageAlt = route.image
+    ? esc(route.image.alt)
     : "The Occupella chat surface answering a question about a property.";
+  // A post's card and preview show the article's own title, without the
+  // " | Occupella" the browser tab and search results get.
+  const shareTitle = route.article ? esc(route.article.headline) : title;
   return [
     HEAD_START,
     `<title>${title}</title>`,
@@ -183,7 +184,7 @@ export function headTags(route: MarketingRoute): string {
       : []),
     `<meta property="og:type" content="${route.article ? "article" : "website"}" />`,
     `<meta property="og:site_name" content="Occupella" />`,
-    `<meta property="og:title" content="${title}" />`,
+    `<meta property="og:title" content="${shareTitle}" />`,
     `<meta property="og:description" content="${description}" />`,
     `<meta property="og:url" content="${url}" />`,
     `<meta property="og:image" content="${esc(image)}" />`,
@@ -195,7 +196,7 @@ export function headTags(route: MarketingRoute): string {
         ]
       : []),
     `<meta name="twitter:card" content="summary_large_image" />`,
-    `<meta name="twitter:title" content="${title}" />`,
+    `<meta name="twitter:title" content="${shareTitle}" />`,
     `<meta name="twitter:description" content="${description}" />`,
     `<meta name="twitter:image" content="${esc(image)}" />`,
     jsonLd(ORGANIZATION_JSONLD),

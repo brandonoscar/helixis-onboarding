@@ -21,6 +21,15 @@ import { Marked } from "marked";
 
 export const BLOG_PATH = "/blog";
 
+/**
+ * The share image for /blog and for any post that has no card of its own:
+ * text only, no product. scripts/blog-card.mjs --default draws it.
+ */
+export const BLOG_CARD = {
+  src: "/blog/card.png",
+  alt: "Occupella Engineering: notes on property-management APIs",
+} as const;
+
 /** The /blog index's own words, read by its route and its page. */
 export const BLOG_INDEX = {
   title: "Blog | Occupella",
