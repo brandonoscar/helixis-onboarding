@@ -15,16 +15,9 @@ import appSource from '../App.tsx?raw';
 import {
   asksForAccountCode,
   findingCards,
-  PMS_NAME,
-  PMS_READS,
-  propertywareCredentialsBody,
-  rentmanagerCredentialsBody,
   rentvineAvailability,
   rentvineCredentialsBody,
   stepAfterConnect,
-  SWITCHED_PATHS,
-  SWITCHED_PMS,
-  switchedPmsOffered,
   type ScanData,
 } from './pms';
 
@@ -83,91 +76,7 @@ describe('whether Rentvine can be offered', () => {
   });
 });
 
-describe('Rent Manager and Propertyware', () => {
-  it('are offered only on an explicit yes from their GET', () => {
-    expect(switchedPmsOffered({ configured: false, connector_enabled: true })).toBe(true);
-    expect(switchedPmsOffered({ configured: false, connector_enabled: false })).toBe(false);
-  });
-
-  it('stay hidden when the backend predates them or the read fails', () => {
-    // Unlike Rentvine's rule, unknown is NOT offered: a backend from before
-    // these connectors has no such route, and offering one would end the
-    // customer at an error after they had pasted their keys.
-    expect(switchedPmsOffered({ configured: false })).toBe(false);
-    expect(switchedPmsOffered({ connector_enabled: 'true' })).toBe(false);
-    expect(switchedPmsOffered(null)).toBe(false);
-    expect(switchedPmsOffered('nope')).toBe(false);
-  });
-
-  it('call the backend routes ADR 0003 names', () => {
-    // The backend's route tests pin the same paths and field names; the two
-    // repos meet only through this contract.
-    expect(SWITCHED_PATHS).toEqual({
-      rentmanager: {
-        credentials: '/api/v1/rentmanager/credentials',
-        test: '/api/v1/rentmanager/test',
-      },
-      propertyware: {
-        credentials: '/api/v1/propertyware/credentials',
-        test: '/api/v1/propertyware/test',
-      },
-    });
-    expect([...SWITCHED_PMS]).toEqual(['rentmanager', 'propertyware']);
-  });
-
-  it("have a name and say what they read", () => {
-    for (const pms of SWITCHED_PMS) {
-      expect(PMS_NAME[pms]).toBeTruthy();
-      expect(PMS_READS[pms]).toBeTruthy();
-    }
-  });
-});
-
-describe("Rent Manager's PUT body", () => {
-  it('sends the contract fields, the location as a number', () => {
-    expect(rentmanagerCredentialsBody(' acme ', ' 3 ', ' occupella ', 'p@ss', '')).toEqual({
-      corp_id: 'acme',
-      location_id: 3,
-      username: 'occupella',
-      password: 'p@ss',
-    });
-  });
-
-  it('omits a blank partner token instead of sending ""', () => {
-    expect(rentmanagerCredentialsBody('acme', '1', 'u', 'p', '   ')).not.toHaveProperty('partner_token');
-    expect(rentmanagerCredentialsBody('acme', '1', 'u', 'p', ' tok ')).toMatchObject({ partner_token: 'tok' });
-  });
-
-  it('sends the password exactly as typed', () => {
-    // A person types it; a space at either end may be part of it.
-    expect(rentmanagerCredentialsBody('acme', '1', 'u', ' pass word ', '')).toMatchObject({
-      password: ' pass word ',
-    });
-  });
-
-  it('refuses a location that is not a whole number above zero', () => {
-    for (const bad of ['', '  ', '0', '-1', '1.5', '01', '1e3', 'one', '2 3']) {
-      expect(rentmanagerCredentialsBody('acme', bad, 'u', 'p', '')).toBeNull();
-    }
-  });
-});
-
-describe("Propertyware's PUT body", () => {
-  it('sends the contract fields, trimmed', () => {
-    expect(propertywareCredentialsBody(' 12345 ', ' cid ', ' secret ')).toEqual({
-      system_id: '12345',
-      client_id: 'cid',
-      client_secret: 'secret',
-    });
-  });
-});
-
 describe('where the wizard goes after connecting', () => {
-  it('goes straight to the scan for Rent Manager and Propertyware (no webhooks)', () => {
-    expect(stepAfterConnect('rentmanager')).toBe('scan');
-    expect(stepAfterConnect('propertyware')).toBe('scan');
-  });
-
   it('shows live updates for Buildium and skips them for Rentvine', () => {
     expect(stepAfterConnect('buildium')).toBe('live');
     // Re-pointed 2026-09-29: Scan now comes before Email, so Rentvine (no
@@ -250,23 +159,6 @@ describe('App.tsx uses the rules', () => {
   it('the Rentvine form builds its body with the helper', () => {
     expect(callsIn('StepRentvine')).toContain('rentvineCredentialsBody');
     expect(callsIn('StepRentvine')).toContain('asksForAccountCode');
-  });
-
-  it('the picker asks the backend before offering Rent Manager or Propertyware', () => {
-    expect(callsIn('StepPms')).toContain('switchedPmsOffered');
-  });
-
-  it('the Rent Manager and Propertyware forms build their bodies with the helpers', () => {
-    expect(callsIn('StepRentManager')).toContain('rentmanagerCredentialsBody');
-    expect(callsIn('StepRentManager')).toContain('saveAndTest');
-    expect(callsIn('StepPropertyware')).toContain('propertywareCredentialsBody');
-    expect(callsIn('StepPropertyware')).toContain('saveAndTest');
-  });
-
-  it('saving saves, then tests', () => {
-    const called = callsIn('saveAndTest');
-    expect(called).toContain('apiFetch');
-    expect(called).toContain('apiJson');
   });
 
   it('connecting routes through stepAfterConnect', () => {

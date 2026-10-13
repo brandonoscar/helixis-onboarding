@@ -11,30 +11,22 @@ import {
   findingCards,
   PMS_NAME,
   PMS_READS,
-  propertywareCredentialsBody,
-  rentmanagerCredentialsBody,
   rentvineAvailability,
   rentvineCredentialsBody,
   stepAfterConnect,
-  SWITCHED_PATHS,
-  SWITCHED_PMS,
-  switchedPmsOffered,
   type Pms,
   type RentvineAvailability,
   type ScanData,
-  type SwitchedPms,
 } from "./lib/pms";
 
 // ─────────────────────────────────────────────────────────
 // SETUP WIZARD — four steps as the visitor sees them, six internally:
 //   Account  identify  — email code, company, doors, then a password,
 //                        saved BEFORE any credential is asked for
-//   Connect  pms       — pick Buildium or Rentvine (or Rent Manager or
-//                        Propertyware where the backend has them switched
-//                        on), then its keys (admin handoff on request for
-//                        Buildium)
+//   Connect  pms       — pick Buildium or Rentvine, then its keys (admin
+//                        handoff on request for Buildium)
 //            live      — Buildium webhooks ("live updates"), skippable; not
-//                        shown for any other system (lib/pms.ts stepAfterConnect)
+//                        shown for Rentvine (lib/pms.ts stepAfterConnect)
 //   Scan     scan      — the first read of the portfolio, filling in as it
 //                        goes; skipped when no system was connected
 //   Email    channels  — Google OAuth, optional
@@ -486,7 +478,7 @@ function StepTitle({ title, onBack: explicitBack, children }: { title: string; o
  * logo is a trademark). Until then the name is set in type, so nothing on
  * the screen pretends to be a mark it isn't.
  */
-const PMS_LOGO: Record<Pms, string> = { buildium: "", rentvine: "", rentmanager: "", propertyware: "" };
+const PMS_LOGO: Record<Pms, string> = { buildium: "", rentvine: "" };
 
 function PmsMark({ pms }: { pms: Pms }) {
   return (
@@ -1125,8 +1117,7 @@ function StepBuildium({
 }
 
 // ─────────────────────────────────────────────────────────
-// STEP 2: WHICH SYSTEM? (Buildium or Rentvine; Rent Manager or Propertyware
-// where the backend has them switched on)
+// STEP 2: WHICH SYSTEM? (Buildium or Rentvine)
 // ─────────────────────────────────────────────────────────
 
 function StepPms({
@@ -1145,26 +1136,12 @@ function StepPms({
   // where the Rentvine connector is off is told so here, not after pasting
   // both keys and hitting the backend's 503.
   const [rentvine, setRentvine] = useState<RentvineAvailability>("unknown");
-  // Rent Manager and Propertyware are offered only where the backend says
-  // they are switched on (lib/pms.ts switchedPmsOffered). A 404 from a
-  // backend that predates them, a "switched off" or a failed read keeps
-  // each one hidden: nobody pastes keys into a system that cannot take them.
-  const [offered, setOffered] = useState<SwitchedPms[]>([]);
 
   useEffect(() => {
     let active = true;
     apiJson<unknown>("/api/v1/rentvine/credentials")
       .then((status) => active && setRentvine(rentvineAvailability(status)))
       .catch(() => active && setRentvine("unknown"));
-    Promise.all(
-      SWITCHED_PMS.map((pms) =>
-        apiJson<unknown>(SWITCHED_PATHS[pms].credentials)
-          .then((status) => (switchedPmsOffered(status) ? pms : null))
-          .catch(() => null),
-      ),
-    ).then((found) => {
-      if (active) setOffered(found.filter((pms): pms is SwitchedPms => pms !== null));
-    });
     return () => {
       active = false;
     };
@@ -1190,24 +1167,6 @@ function StepPms({
       />
     );
   }
-  if (choice === "rentmanager") {
-    return (
-      <StepRentManager
-        onNext={() => onConnected("rentmanager")}
-        onSkip={onSkip}
-        onChangePms={() => setChoice(null)}
-      />
-    );
-  }
-  if (choice === "propertyware") {
-    return (
-      <StepPropertyware
-        onNext={() => onConnected("propertyware")}
-        onSkip={onSkip}
-        onChangePms={() => setChoice(null)}
-      />
-    );
-  }
 
   return (
     <div className="panel" key="pms">
@@ -1217,7 +1176,7 @@ function StepPms({
       </p>
 
       <div className="ob-tiles">
-        {(["buildium", "rentvine", ...offered] as Pms[]).map((pms) => (
+        {(["buildium", "rentvine"] as const).map((pms) => (
           <button
             key={pms}
             type="button"
@@ -1353,201 +1312,6 @@ function StepRentvine({
           </button>
         ) : null}
         <button type="button" className="ob-alt" onClick={onSkip} disabled={testing}>Skip Rentvine for now</button>
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────
-// STEP 2c/2d: CONNECT RENT MANAGER OR PROPERTYWARE (details → test → continue)
-// ─────────────────────────────────────────────────────────
-
-/**
- * Saves the details, then tests them: the Rentvine step's two calls, in the
- * same order. The backend's refusals are sentences written for the customer
- * (switched off, the workspace is on another system, a value it cannot use),
- * so they are shown as written.
- */
-async function saveAndTest(pms: SwitchedPms, body: Record<string, unknown>): Promise<IntegrationState> {
-  const name = PMS_NAME[pms];
-  try {
-    await apiFetch(SWITCHED_PATHS[pms].credentials, { method: "PUT", body: JSON.stringify(body) });
-    const testData = await apiJson<{ ok: boolean; error?: string | null }>(SWITCHED_PATHS[pms].test, {
-      method: "POST",
-    });
-    if (testData.ok) {
-      return { status: "connected", testMessage: "Connected. Occupella has started reading your portfolio." };
-    }
-    return {
-      status: "error",
-      testMessage: testData.error || `${name} didn't accept those details. Check each one and try again.`,
-    };
-  } catch (e: any) {
-    return { status: "error", testMessage: e?.message || `Couldn't reach ${name} to test the details. Try again in a moment.` };
-  }
-}
-
-function StepRentManager({
-  onNext,
-  onSkip,
-  onChangePms,
-}: {
-  onNext: () => void;
-  onSkip: () => void;
-  onChangePms: () => void;
-}) {
-  const [corpId, setCorpId] = useState("");
-  const [locationId, setLocationId] = useState("");
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [partnerToken, setPartnerToken] = useState("");
-  // Hidden until asked for: a partner token comes only from Rent Manager's
-  // partner program, and most customers connect without one.
-  const [showPartner, setShowPartner] = useState(false);
-  const [integration, setIntegration] = useState<IntegrationState>({ status: "idle" });
-
-  // null while the location ID is not a whole number above zero.
-  const body = rentmanagerCredentialsBody(corpId, locationId, username, password, partnerToken);
-  const ready = body !== null && Boolean(corpId.trim() && username.trim() && password);
-  const testing = integration.status === "testing";
-
-  const connectAndScan = async () => {
-    if (!ready || body === null) return;
-    setIntegration({ status: "testing" });
-    const result = await saveAndTest("rentmanager", body);
-    setIntegration(result);
-    if (result.status === "connected") onNext();
-  };
-
-  return (
-    <div className="panel" key="rentmanager">
-      <StepTitle title="Connect Rent Manager" onBack={testing ? undefined : onChangePms}>
-        <span className="ob-title-mark"><PmsMark pms="rentmanager" /></span>
-      </StepTitle>
-      <p className="panel-desc" style={{ marginTop: -18, marginBottom: 24 }}>
-        Occupella reads your {PMS_READS.rentmanager}. It signs in as a Rent Manager user you make for it.
-      </p>
-
-      <div className="field">
-        <label htmlFor="ob-rm-corp">Corp ID</label>
-        <input id="ob-rm-corp" value={corpId} onChange={(e) => setCorpId(e.target.value)} autoComplete="off" spellCheck={false} />
-        <span className="hint">Your company&rsquo;s Rent Manager corp ID. Rent Manager support can tell you yours.</span>
-      </div>
-      <div className="field">
-        <label htmlFor="ob-rm-location">Location ID</label>
-        <input id="ob-rm-location" inputMode="numeric" value={locationId} onChange={(e) => setLocationId(e.target.value)} autoComplete="off" />
-        <span className="hint">The number of the one Rent Manager location this workspace reads.</span>
-        {locationId.trim() && body === null ? (
-          <span className="hint" role="alert">A location ID is a whole number, such as 1.</span>
-        ) : null}
-      </div>
-      <div className="field">
-        <label htmlFor="ob-rm-user">Username</label>
-        <input id="ob-rm-user" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="off" spellCheck={false} />
-        <span className="hint">
-          A Rent Manager user just for Occupella, allowed to read the records above, not your own login. If its
-          password changes, Occupella stops reading until the new one is entered in Settings &rarr; Connectors.
-        </span>
-      </div>
-      <div className="field">
-        <label htmlFor="ob-rm-password">Password</label>
-        <SecretInput id="ob-rm-password" value={password} onChange={setPassword} autoComplete="new-password" onEnter={connectAndScan} />
-      </div>
-      {showPartner ? (
-        <div className="field">
-          <label htmlFor="ob-rm-partner">Partner token</label>
-          <SecretInput id="ob-rm-partner" value={partnerToken} onChange={setPartnerToken} autoComplete="off" />
-          <span className="hint">Only if Rent Manager issued one for Occupella. Leave it blank otherwise.</span>
-        </div>
-      ) : null}
-
-      {testing && <div className="test-result info" role="status"><span className="spinner accent" /> Testing your details with Rent Manager</div>}
-      {integration.status === "connected" && <div className="test-result success" role="status">{integration.testMessage}</div>}
-      {integration.status === "error" && <div className="test-result error" role="alert">{integration.testMessage}</div>}
-
-      <button className="btn btn-primary wide" onClick={connectAndScan} disabled={!ready || testing}>
-        {testing ? <><span className="spinner" /> Connecting</> : "Connect and scan"}
-      </button>
-
-      <div className="ob-alts">
-        {!showPartner ? (
-          <button type="button" className="ob-alt" onClick={() => setShowPartner(true)}>
-            I have a Rent Manager partner token
-          </button>
-        ) : null}
-        <button type="button" className="ob-alt" onClick={onSkip} disabled={testing}>Skip Rent Manager for now</button>
-      </div>
-    </div>
-  );
-}
-
-function StepPropertyware({
-  onNext,
-  onSkip,
-  onChangePms,
-}: {
-  onNext: () => void;
-  onSkip: () => void;
-  onChangePms: () => void;
-}) {
-  const [systemId, setSystemId] = useState("");
-  const [clientId, setClientId] = useState("");
-  const [clientSecret, setClientSecret] = useState("");
-  const [integration, setIntegration] = useState<IntegrationState>({ status: "idle" });
-
-  const ready = Boolean(systemId.trim() && clientId.trim() && clientSecret.trim());
-  const testing = integration.status === "testing";
-
-  const connectAndScan = async () => {
-    if (!ready) return;
-    setIntegration({ status: "testing" });
-    const result = await saveAndTest("propertyware", propertywareCredentialsBody(systemId, clientId, clientSecret));
-    setIntegration(result);
-    if (result.status === "connected") onNext();
-  };
-
-  return (
-    <div className="panel" key="propertyware">
-      <StepTitle title="Connect Propertyware" onBack={testing ? undefined : onChangePms}>
-        <span className="ob-title-mark"><PmsMark pms="propertyware" /></span>
-      </StepTitle>
-      <p className="panel-desc" style={{ marginTop: -18, marginBottom: 24 }}>
-        Occupella reads your {PMS_READS.propertyware}. Create an API key in Propertyware and paste it below.
-      </p>
-
-      <div className="field">
-        <label htmlFor="ob-pw-client">Client ID</label>
-        <input id="ob-pw-client" value={clientId} onChange={(e) => setClientId(e.target.value)} autoComplete="off" spellCheck={false} />
-        <span className="hint">
-          A Propertyware admin creates the key under Setup &rarr; Administration Setup &rarr; API Keys. Give it Read
-          on Buildings, Units, Portfolios, Contacts, Vendors, Leases, Work Orders, Bills and GL Accounts, and
-          nothing else.
-        </span>
-      </div>
-      <div className="field">
-        <label htmlFor="ob-pw-secret">Client secret</label>
-        <SecretInput id="ob-pw-secret" value={clientSecret} onChange={setClientSecret} autoComplete="new-password" onEnter={connectAndScan} />
-        <span className="hint">
-          Propertyware shows the secret once, when the key is created. If you don&rsquo;t have it, create a new key
-          and use that pair.
-        </span>
-      </div>
-      <div className="field">
-        <label htmlFor="ob-pw-system">Organization ID</label>
-        <input id="ob-pw-system" value={systemId} onChange={(e) => setSystemId(e.target.value)} autoComplete="off" spellCheck={false} />
-        <span className="hint">Propertyware&rsquo;s ID for your account, also called the system ID. Propertyware support can tell you yours.</span>
-      </div>
-
-      {testing && <div className="test-result info" role="status"><span className="spinner accent" /> Testing your key with Propertyware</div>}
-      {integration.status === "connected" && <div className="test-result success" role="status">{integration.testMessage}</div>}
-      {integration.status === "error" && <div className="test-result error" role="alert">{integration.testMessage}</div>}
-
-      <button className="btn btn-primary wide" onClick={connectAndScan} disabled={!ready || testing}>
-        {testing ? <><span className="spinner" /> Connecting</> : "Connect and scan"}
-      </button>
-
-      <div className="ob-alts">
-        <button type="button" className="ob-alt" onClick={onSkip} disabled={testing}>Skip Propertyware for now</button>
       </div>
     </div>
   );
