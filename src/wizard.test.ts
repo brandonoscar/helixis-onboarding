@@ -119,6 +119,24 @@ describe('the email step connects Gmail, and says only that', () => {
   })
 })
 
+describe('the Buildium step when the keys do not work', () => {
+  const step = scopeOf('StepBuildium')
+
+  it('routes a failed test through the readable-sentence helper', () => {
+    // A bare `testData.error` here is the raw "Buildium 401 /rentals: ..."
+    // text on screen again (lib/buildium.test.ts pins the sentence).
+    expect(callsIn(step)).toContain('buildiumTestFailure')
+  })
+
+  it('says, hedged, that API access depends on the Buildium plan', () => {
+    const text = prose(step)
+    expect(text).toMatch(/only offers API keys on some of its plans/)
+    expect(text).toMatch(/may not include API access/)
+    // Not verified which plans, so none is named and no price is given.
+    expect(text).not.toMatch(/\$\d/)
+  })
+})
+
 describe('the addresses the wizard sends people to', () => {
   it('uses team@, the one address the site has confirmed', () => {
     // support@ is not confirmed to receive mail (the TODO in Contact.tsx).

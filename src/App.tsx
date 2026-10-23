@@ -6,6 +6,7 @@ import { firstUnmet, meetsRequirements, requirements } from "./lib/passwordStren
 import { DraftCrop, EmailDraftCrop, HistoryCrop, NoticedCrop, WorkOrderCard, cropCss } from "./crops";
 import { resumeAction } from "./lib/resume";
 import { gmailConnected } from "./lib/google";
+import { buildiumTestFailure } from "./lib/buildium";
 import { Wordmark } from "./Site";
 import {
   asksForAccountCode,
@@ -991,7 +992,11 @@ function StepBuildium({
         });
         return { ok: true, count: n ?? null };
       }
-      setIntegration({ status: "error", testMessage: testData.error || "Buildium didn't accept those keys." });
+      // ⚠ Through lib/buildium.ts: a 401 or 403 used to reach the screen as
+      // the vendor's raw response ("Buildium rejected the request: Buildium
+      // 401 /rentals: ..."). The wizard has no details pattern, so the raw
+      // text is not kept on screen; the backend logs it.
+      setIntegration({ status: "error", testMessage: buildiumTestFailure(testData.error) });
       return { ok: false, count: null };
     } catch (e: any) {
       setIntegration({ status: "error", testMessage: e.message || "Couldn't reach Buildium to test the keys." });
@@ -1040,6 +1045,12 @@ function StepBuildium({
         <li><span>Continue through Buildium&rsquo;s three steps.</span></li>
         <li><span>Copy the <b>Client ID</b> and <b>Client Secret</b> and paste them here.</span></li>
       </ol>
+      {/* ⚠ Hedged on purpose: which Buildium plans include the API is not
+          verified, so no plan name and no price. */}
+      <p className="hint" style={{ marginTop: -12, marginBottom: 24 }}>
+        Buildium only offers API keys on some of its plans. If you don&rsquo;t see Developer Tools
+        under Settings, your plan may not include API access.
+      </p>
       {BUILDIUM_KEY_SHOT ? <img className="ob-shot" src={BUILDIUM_KEY_SHOT} alt="The API Keys tab in Buildium's Developer Tools" /> : null}
       {BUILDIUM_KEY_CLIP ? (
         <video className="keys-clip" src={BUILDIUM_KEY_CLIP} autoPlay loop muted playsInline aria-label="Creating an API key in Buildium" />
