@@ -119,6 +119,73 @@ describe('the email step connects Gmail, and says only that', () => {
   })
 })
 
+describe('"My system isn\'t listed"', () => {
+  const form = scopeOf('NotListedForm')
+  const picker = scopeOf('StepPms')
+
+  it('is a tile on the system step that opens the form', () => {
+    // JSX text keeps entities as written, so `&rsquo;` is matched too.
+    expect(prose(picker)).toMatch(/My system isn(&rsquo;|’|')t listed/)
+    // The system step renders the form, and nothing else in the file does.
+    const rendersIn = (scope: ts.Node): number => {
+      let n = 0
+      const walk = (node: ts.Node): void => {
+        if (ts.isJsxSelfClosingElement(node) && node.tagName.getText(source) === 'NotListedForm') n += 1
+        ts.forEachChild(node, walk)
+      }
+      walk(scope)
+      return n
+    }
+    expect(rendersIn(picker)).toBe(1)
+    expect(rendersIn(source)).toBe(1)
+  })
+
+  it('sends through the shared fetch helper to the feedback route, with the helper-built body', () => {
+    const calls = callsIn(form)
+    expect(calls).toContain('apiFetch')
+    expect(calls).toContain('notListedBody')
+    expect(calls).toContain('notListedReady')
+    // The path is the constant matched to feedback.py, not a second copy.
+    expect(form.getText(source)).toContain('FEEDBACK_PATH')
+  })
+
+  it('passes step 1’s doors answer down, instead of dropping it', () => {
+    let passed = false
+    const walk = (n: ts.Node): void => {
+      if (ts.isJsxAttribute(n) && n.name.getText(source) === 'doors') {
+        const el = n.parent.parent
+        if ((ts.isJsxSelfClosingElement(el) || ts.isJsxOpeningElement(el)) && el.tagName.getText(source) === 'StepPms') passed = true
+      }
+      ts.forEachChild(n, walk)
+    }
+    walk(source)
+    expect(passed, '<StepPms doors={...}> is not passed the doors range').toBe(true)
+  })
+
+  it('shows the thank-you only from the success path', () => {
+    // `setSent(true)` must sit in the try, after the awaited POST, and
+    // never in the catch: a thank-you on a failed send is the defect the
+    // app's own feedback dialog shipped once.
+    const sets: { inTry: boolean; inCatch: boolean }[] = []
+    const walk = (n: ts.Node, inTry: boolean, inCatch: boolean): void => {
+      if (ts.isTryStatement(n)) {
+        walk(n.tryBlock, true, inCatch)
+        if (n.catchClause) walk(n.catchClause, inTry, true)
+        if (n.finallyBlock) walk(n.finallyBlock, inTry, inCatch)
+        return
+      }
+      if (ts.isCallExpression(n) && n.expression.getText(source) === 'setSent') sets.push({ inTry, inCatch })
+      ts.forEachChild(n, (c) => walk(c, inTry, inCatch))
+    }
+    walk(form, false, false)
+    expect(sets).toEqual([{ inTry: true, inCatch: false }])
+  })
+
+  it('promises nothing about adding support', () => {
+    expect(prose(form)).not.toMatch(/waitlist|coming soon|we will add|we(&rsquo;|’|')ll (add|let)|notify you/i)
+  })
+})
+
 describe('the Buildium step when the keys do not work', () => {
   const step = scopeOf('StepBuildium')
 

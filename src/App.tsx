@@ -7,6 +7,15 @@ import { DraftCrop, EmailDraftCrop, HistoryCrop, NoticedCrop, WorkOrderCard, cro
 import { resumeAction } from "./lib/resume";
 import { gmailConnected } from "./lib/google";
 import { buildiumTestFailure } from "./lib/buildium";
+import {
+  FEEDBACK_PATH,
+  NOTE_MAX_CHARS,
+  NOT_LISTED_SYSTEMS,
+  OTHER_MAX_CHARS,
+  notListedBody,
+  notListedReady,
+  type NotListedSystem,
+} from "./lib/notListed";
 import { Wordmark } from "./Site";
 import {
   asksForAccountCode,
@@ -120,9 +129,10 @@ const TOS_VERSION = "2026-07-05";
 const TERMS_URL = "/terms";
 const PRIVACY_URL = "/privacy";
 
-// ⚠ Kept in the browser's wizard state only; no request sends it (checked
-// 2026-09-29: bootstrap and the company PATCH carry the name alone), so the
-// labels can change without a backend change.
+// ⚠ Not stored on the company: bootstrap and the company PATCH carry the
+// name alone (checked 2026-09-29). Since 2026-10-23 the chosen label travels
+// as TEXT inside a "my system isn't listed" message (lib/notListed.ts). No
+// backend parses it, so the labels can still change without a backend change.
 const DOORS_OPTIONS = ["1–50", "51–200", "201–500", "501–2,000", "2,000+"];
 
 /**
@@ -315,6 +325,16 @@ const css = `
   .ob .ob-tile:focus-visible { outline: 2px solid var(--iris); outline-offset: 2px; }
   .ob .ob-tile:disabled { cursor: not-allowed; background: var(--canvas-1); color: var(--ink-subtle); }
   .ob-tile-reads { font-size: 14px; line-height: 1.5; color: var(--ink-muted); }
+  .ob .ob-tile-other { grid-column: 1 / -1; min-height: 0; gap: 6px; }
+  .ob .ob-tile[aria-expanded="true"] { border-color: var(--iris); }
+  .ob-tile-name { font-size: 17px; font-weight: 600; color: var(--ink); }
+  .ob-notlisted { margin-top: 20px; }
+  .ob textarea {
+    width: 100%; min-height: 88px; padding: 10px 14px; resize: vertical;
+    font-family: var(--font-sans); font-size: 16px; line-height: 1.5; color: var(--ink);
+    background: var(--canvas); border: 1px solid var(--line); border-radius: var(--r-sm); outline: none;
+  }
+  .ob textarea:focus { border-color: var(--iris); box-shadow: 0 0 0 3px var(--iris-soft); }
   .ob-mark { display: inline-flex; align-items: center; }
   .ob-mark img { display: block; height: 28px; width: auto; }
   .ob-mark-text { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; color: var(--ink); }
@@ -1146,21 +1166,120 @@ function StepBuildium({
 }
 
 // ─────────────────────────────────────────────────────────
-// STEP 2: WHICH SYSTEM? (Buildium or Rentvine)
+// STEP 2: WHICH SYSTEM? (Buildium or Rentvine, or "not listed")
 // ─────────────────────────────────────────────────────────
+
+/**
+ * "My system isn't listed": which system, an optional note, sent to the
+ * backend's feedback route. The contract and the reasons for `idea` + a view
+ * tag are in lib/notListed.ts.
+ *
+ * ⚠ THE THANK-YOU APPEARS ONLY AFTER THE POST RESOLVED. `apiFetch` throws on
+ * any non-2xx and on a request that never arrived, so every failure lands in
+ * the catch and stays on the form with the reason. (The app's own feedback
+ * dialog once showed "Sent" for reports that never arrived, because its fetch
+ * resolved on a 422.) Skip stays available either way.
+ *
+ * ⚠ The thank-you promises nothing: nobody has decided to support any of
+ * these systems, and the row gets no automatic reply.
+ */
+export function NotListedForm({ doors, onContinue }: { doors: string; onContinue: () => void }) {
+  const [system, setSystem] = useState<NotListedSystem | "">("");
+  const [otherName, setOtherName] = useState("");
+  const [note, setNote] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState("");
+
+  const answer = { system, otherName, note, doors };
+  const ready = notListedReady(answer);
+
+  const send = async () => {
+    if (!ready || sending) return;
+    setSending(true);
+    setError("");
+    try {
+      await apiFetch(FEEDBACK_PATH, { method: "POST", body: JSON.stringify(notListedBody(answer)) });
+      setSent(true);
+    } catch (e: any) {
+      setError(e?.message || "That didn't send. Try again, or skip this step for now.");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  if (sent) {
+    return (
+      <div className="ob-notlisted" id="ob-notlisted">
+        <div className="test-result success" role="status">Thanks. That&rsquo;s with the Occupella team now.</div>
+        <button className="btn btn-primary wide" onClick={onContinue}>Continue</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="ob-notlisted" id="ob-notlisted">
+      <div className="field">
+        <label htmlFor="ob-nl-system">Which system do you use?</label>
+        <select
+          id="ob-nl-system"
+          value={system}
+          onChange={(e) => { setSystem(e.target.value as NotListedSystem | ""); setError(""); }}
+        >
+          <option value="">Choose one</option>
+          {NOT_LISTED_SYSTEMS.map((s) => (
+            <option key={s} value={s}>{s}</option>
+          ))}
+        </select>
+      </div>
+      {system === "Other" ? (
+        <div className="field">
+          <label htmlFor="ob-nl-other">Which one?</label>
+          <input
+            id="ob-nl-other"
+            type="text"
+            value={otherName}
+            maxLength={OTHER_MAX_CHARS}
+            onChange={(e) => { setOtherName(e.target.value); setError(""); }}
+            autoComplete="off"
+            autoFocus
+          />
+        </div>
+      ) : null}
+      <div className="field">
+        <label htmlFor="ob-nl-note">Anything else we should know? (optional)</label>
+        <textarea
+          id="ob-nl-note"
+          rows={3}
+          value={note}
+          maxLength={NOTE_MAX_CHARS}
+          onChange={(e) => setNote(e.target.value)}
+        />
+      </div>
+      {error && <div className="test-result error" role="alert">{error}</div>}
+      <button className="btn btn-primary wide" onClick={send} disabled={!ready || sending}>
+        {sending ? <><span className="spinner" /> Sending</> : "Send"}
+      </button>
+    </div>
+  );
+}
 
 function StepPms({
   userEmail,
   workspaceName,
+  doors,
   onConnected,
   onSkip,
 }: {
   userEmail: string;
   workspaceName: string;
+  /** Step 1's "Doors under management" range, sent with a not-listed answer. */
+  doors: string;
   onConnected: (pms: Pms) => void;
   onSkip: () => void;
 }) {
   const [choice, setChoice] = useState<Pms | null>(null);
+  const [notListed, setNotListed] = useState(false);
   // Asked once, before any keys are collected: a customer on a deployment
   // where the Rentvine connector is off is told so here, not after pasting
   // both keys and hitting the backend's 503.
@@ -1218,7 +1337,21 @@ function StepPms({
             <span className="ob-tile-reads">Reads your {PMS_READS[pms]}.</span>
           </button>
         ))}
+        {/* ⚠ This step was a dead end for anyone on another system: two
+            tiles and Skip. One tile, not one per system: Rent Manager,
+            Propertyware and DoorLoop are not offered as tiles. */}
+        <button
+          type="button"
+          className="ob-tile ob-tile-other"
+          onClick={() => setNotListed((v) => !v)}
+          aria-expanded={notListed}
+          aria-controls="ob-notlisted"
+        >
+          <span className="ob-tile-name">My system isn&rsquo;t listed</span>
+          <span className="ob-tile-reads">Tell us which one you use.</span>
+        </button>
       </div>
+      {notListed ? <NotListedForm doors={doors} onContinue={onSkip} /> : null}
       {rentvine === "off" && (
         <p className="hint" style={{ marginTop: 12 }}>
           Rentvine isn&rsquo;t switched on for new workspaces yet. Email{" "}
@@ -2146,6 +2279,7 @@ export default function App() {
               <StepPms
                 userEmail={userEmail}
                 workspaceName={workspace.name}
+                doors={doors}
                 onConnected={handlePmsConnected}
                 onSkip={handlePmsSkip}
               />
