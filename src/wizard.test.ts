@@ -87,6 +87,38 @@ describe('reading App.tsx at all', () => {
   })
 })
 
+/** Names called inside `node` (bare identifiers only, like `foo(...)`). */
+function callsIn(node: ts.Node): Set<string> {
+  const called = new Set<string>()
+  const walk = (n: ts.Node): void => {
+    if (ts.isCallExpression(n) && ts.isIdentifier(n.expression)) called.add(n.expression.text)
+    ts.forEachChild(n, walk)
+  }
+  walk(node)
+  return called
+}
+
+describe('the email step connects Gmail, and says only that', () => {
+  const step = scopeOf('StepChannels')
+
+  it('starts the Gmail grant and reads back Gmail alone', () => {
+    expect(visibleText(step)).toContain('/api/v1/connectors/gmail/connect')
+    // The Connected tick is decided by the helper that ignores Calendar and
+    // Drive (lib/google.test.ts), not by an inline any-of-three check.
+    expect(callsIn(step)).toContain('gmailConnected')
+    const otherGrants = visibleText(step).filter((t) => t === 'google_calendar' || t === 'google_drive')
+    expect(otherGrants).toEqual([])
+  })
+
+  it('does not promise Calendar or Drive from this button', () => {
+    const text = prose(step)
+    expect(text).not.toMatch(/Gmail, Calendar and Drive/)
+    expect(text).toMatch(/Connect Gmail/)
+    // Calendar and Drive are named only as separate connections.
+    expect(text).toMatch(/Google Calendar and Google Drive are separate connections/)
+  })
+})
+
 describe('the admin hand-off email', () => {
   const email = scopeOf('handoffInstructions')
 
