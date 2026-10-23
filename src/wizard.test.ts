@@ -119,6 +119,18 @@ describe('the email step connects Gmail, and says only that', () => {
   })
 })
 
+describe('the addresses the wizard sends people to', () => {
+  it('uses team@, the one address the site has confirmed', () => {
+    // support@ is not confirmed to receive mail (the TODO in Contact.tsx).
+    // `mailto:?subject=` is the admin hand-off: no address, the person picks
+    // their admin. Every mailto that NAMES an address must be team@.
+    const mailtos = visibleText(source).filter((t) => t.startsWith('mailto:') && !t.startsWith('mailto:?'))
+    expect(mailtos.length).toBeGreaterThan(2)
+    expect(mailtos.filter((m) => !m.startsWith('mailto:team@occupella.com'))).toEqual([])
+    expect(prose(source)).not.toMatch(/support@occupella\.com/)
+  })
+})
+
 describe('the admin hand-off email', () => {
   const email = scopeOf('handoffInstructions')
 

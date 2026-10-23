@@ -1516,11 +1516,12 @@ function StepChannels({ onNext }: { onNext: (connected: boolean) => void }) {
         ) : null}
       </div>
       {/* ⚠ Outlook has no connect path (see /features).
-          TODO(brandon): confirm support@occupella.com receives mail. The rest
-          of the site uses team@ until it does (Contact.tsx). */}
+          ⚠ team@, like the rest of the site. support@ is not confirmed to
+          receive mail (the open question is the TODO in Contact.tsx), so it
+          is not offered here until that is settled. */}
       <p className="hint" style={{ marginTop: 20 }}>
         Using Outlook? Email{" "}
-        <a href="mailto:support@occupella.com?subject=Outlook">support@occupella.com</a>.
+        <a href="mailto:team@occupella.com?subject=Outlook">team@occupella.com</a>.
       </p>
     </div>
   );
