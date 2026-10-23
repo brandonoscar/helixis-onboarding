@@ -1,0 +1,112 @@
+// @vitest-environment node
+/**
+ * The setup wizard's copy and wiring, read from App.tsx with the TypeScript
+ * parser.
+ *
+ * ⚠ AST, never a substring search of the source. The comment beside each
+ * guarded line quotes the defect it replaced ("or finish the setup here",
+ * "Gmail, Calendar and Drive"), so a text scan would fire on the explanation
+ * rather than on the code. Only string literals, template pieces and JSX text
+ * are read here, which is what a person actually sees.
+ *
+ * The logic each step calls lives in `lib/` and is tested there; this file
+ * pins that App.tsx calls it, and that the words on screen match what the
+ * backend does.
+ */
+
+import ts from 'typescript'
+import { describe, expect, it } from 'vitest'
+
+import appSource from './App.tsx?raw'
+
+const source = ts.createSourceFile('App.tsx', appSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+
+/** The function or const declared as `name`, anywhere in the file. */
+function scopeOf(name: string): ts.Node {
+  let scope: ts.Node | undefined
+  const find = (node: ts.Node): void => {
+    if (scope) return
+    if (
+      (ts.isFunctionDeclaration(node) || ts.isVariableDeclaration(node)) &&
+      node.name &&
+      ts.isIdentifier(node.name) &&
+      node.name.text === name
+    ) {
+      scope = node
+      return
+    }
+    ts.forEachChild(node, find)
+  }
+  find(source)
+  if (!scope) throw new Error(`${name} not found in App.tsx`)
+  return scope
+}
+
+/** Every piece of text a person can see inside `node`: string literals,
+ *  template pieces and JSX text, whitespace collapsed. Comments are not
+ *  nodes, so they are never read. */
+function visibleText(node: ts.Node): string[] {
+  const out: string[] = []
+  const walk = (n: ts.Node): void => {
+    if (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) out.push(n.text)
+    else if (ts.isTemplateHead(n) || ts.isTemplateMiddle(n) || ts.isTemplateTail(n)) out.push(n.text)
+    else if (ts.isJsxText(n)) {
+      const t = n.text.replace(/\s+/g, ' ').trim()
+      if (t) out.push(t)
+    }
+    ts.forEachChild(n, walk)
+  }
+  walk(node)
+  return out
+}
+
+/** The JSX text of `node` joined into running prose, so a sentence split
+ *  across source lines (or around an entity) reads as one. */
+function prose(node: ts.Node): string {
+  return visibleText(node).join(' ').replace(/\s+/g, ' ')
+}
+
+/** `a.b.c` property-access chains used inside `node`, as text. */
+function propertyChains(node: ts.Node): string[] {
+  const out: string[] = []
+  const walk = (n: ts.Node): void => {
+    if (ts.isPropertyAccessExpression(n)) out.push(n.getText(source))
+    ts.forEachChild(n, walk)
+  }
+  walk(node)
+  return out
+}
+
+describe('reading App.tsx at all', () => {
+  it('finds the steps it guards', () => {
+    // A scan that finds nothing is a claim to check, not a result.
+    for (const name of ['StepBuildium', 'StepPms', 'StepChannels', 'handoffInstructions']) {
+      expect(() => scopeOf(name)).not.toThrow()
+    }
+    expect(visibleText(scopeOf('handoffInstructions')).length).toBeGreaterThan(5)
+  })
+})
+
+describe('the admin hand-off email', () => {
+  const email = scopeOf('handoffInstructions')
+
+  it('never sends the admin to /start, which would create a second workspace', () => {
+    // /start always bootstraps a NEW user and company. An admin who finished
+    // setup there connected Buildium to a workspace of their own, and the
+    // requester's connect was then refused as already connected elsewhere.
+    expect(visibleText(email).filter((t) => t.includes('/start'))).toEqual([])
+    expect(propertyChains(email).filter((c) => c.startsWith('window.location'))).toEqual([])
+  })
+
+  it('ends with the keys going back to the person who asked', () => {
+    const text = visibleText(email).join('')
+    expect(text).toMatch(/Send both back to me securely/)
+    expect(text).toMatch(/no need to sign up yourself/)
+  })
+
+  it('the panel promises neither a link back nor saved progress', () => {
+    const panel = prose(scopeOf('StepBuildium'))
+    expect(panel).not.toMatch(/link back here/i)
+    expect(panel).not.toMatch(/progress is saved/i)
+  })
+})

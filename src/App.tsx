@@ -919,6 +919,14 @@ function StepBuildium({
   // without a person approving the change first"). TODO(brandon): confirm
   // the autonomous notes flag is off; then it can come back here and in the
   // step's description.
+  //
+  // ⚠ THE KEYS COME BACK TO THE REQUESTER; THE ADMIN NEVER SIGNS UP. This
+  // email used to end "or finish the setup here: <origin>/start", and /start
+  // always creates a NEW user and company (POST /auth/bootstrap). An admin who
+  // followed it connected Buildium in a second workspace, and the requester's
+  // own connect was then refused as "already connected to a different
+  // Occupella workspace" (one Buildium account maps to one workspace). Do not
+  // add a link back to /start here.
   const handoffInstructions =
     `Hi,\n\n` +
     `We're setting up Occupella for ${workspaceName || "our company"}. It reads our Buildium data ` +
@@ -927,7 +935,8 @@ function StepBuildium({
     `1. In Buildium, open Settings, then Developer Tools, and pick the API Keys tab\n` +
     `2. Click Create API Key, name it Occupella and continue through the three steps\n` +
     `3. Copy the Client ID and Client Secret\n` +
-    `4. Send them to me securely, or finish the setup here: ${window.location.origin}/start\n\n` +
+    `4. Send both back to me securely, for example through a password manager, not in a plain ` +
+    `email. I'll add them to our Occupella workspace, so there's no need to sign up yourself.\n\n` +
     `Security: the credentials are encrypted at rest and not shown again after setup, and you can ` +
     `revoke the key from Buildium at any time.\n\n` +
     `Requested by ${userEmail}`;
@@ -1085,9 +1094,16 @@ function StepBuildium({
       {isAdmin === false ? (
         <div className="handoff">
           <div className="handoff-title">Send the steps to your Buildium admin</div>
+          {/* ⚠ No "link back here" and no "your progress is saved": the email
+              asks the admin to send the keys back to you (see
+              handoffInstructions), and the wizard does not save its step. What
+              IS saved is the account, so the keys can go in later from the
+              app's Settings, which is the one path that is always open. */}
           <div className="handoff-body">
-            An email saying why Occupella needs a key, where to create it and what gets stored, with a
-            link back here. Your progress is saved.
+            An email saying why Occupella needs a key, where to create it and what gets stored. It asks
+            your admin to send the Client ID and Client Secret back to you. Your account is already set
+            up, so paste them here when they arrive, or later in Occupella under Settings, then
+            Connectors.
           </div>
           <div className="btn-row">
             <a className="btn btn-secondary" href={mailtoHref} style={{ flex: 1 }}>Email my admin</a>
