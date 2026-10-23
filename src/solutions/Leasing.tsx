@@ -211,7 +211,7 @@ export default function Leasing() {
             <div className="lp-section-head">
               <span className="ls-status">
                 <Icon d={MINUS} size={12} />
-                Texting: in carrier review
+                Texting: not available yet
               </span>
               <h2 className="lp-h2">Texting and calls on your own number</h2>
               <p className="lp-body">
