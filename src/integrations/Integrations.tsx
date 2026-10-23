@@ -6,8 +6,12 @@ import { Reveal, SitePageShell } from "../Site";
 //
 // ⚠ THREE STATUSES, AND EACH MEANS ONE THING.
 //   · Live: a customer can connect it today from the setup page.
-//   · In carrier review: built, and waiting on the carrier's A2P approval.
-//     Nobody on any plan can text before it clears (see /features).
+//   · Not available yet (the "review" key): built, and not usable by anyone.
+//     ⚠ The label said "In carrier review" until 2026-10-23, and no carrier
+//     registration had ever been filed (a 2026-10-23 audit found every SMS
+//     table in production empty), so nothing was in review. Each customer's registration is filed
+//     after they sign up; until one clears, nobody can text (see /features).
+//     The key stays "review" so the chip colour and data-s hook don't move.
 //   · Planned: not built. No date is given, because none is set.
 // The Live descriptions are the /features "Works with" blocks, imported, so
 // the two pages can't describe the same connection two ways.
@@ -41,7 +45,7 @@ const css = `
 `;
 
 type Status = "live" | "review" | "planned";
-const LABEL: Record<Status, string> = { live: "Live", review: "In carrier review", planned: "Planned" };
+const LABEL: Record<Status, string> = { live: "Live", review: "Not available yet", planned: "Planned" };
 
 type Card = { name: string; status: Status; body?: string; href?: string; link?: string };
 

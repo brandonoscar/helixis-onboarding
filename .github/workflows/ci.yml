@@ -1,0 +1,38 @@
+# Build and test every pull request, and every push to main.
+#
+# `npm run build` on main IS the production deploy (Vercel builds occupella.com
+# from it), and a failed build there freezes the site on the previous one
+# without saying so. Until this file, nothing ran the build before a merge:
+# the only other workflow is indexnow.yml, which runs after a deploy.
+#
+# No secrets: the build reads none (the Supabase anon key is a public default
+# in src/lib/supabase.ts, and analytics stays off without its key).
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Its own step so a failing test is named as one. `npm run build` runs
+      # vitest again; the suite takes seconds.
+      - run: npm test
+      - run: npm run build

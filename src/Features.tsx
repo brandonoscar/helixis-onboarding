@@ -612,7 +612,7 @@ export default function Features() {
             <div className="lp-section-head">
               <span className="ft-status">
                 <Icon d={MINUS} size={12} />
-                Texting: in carrier review
+                Texting: not available yet
               </span>
               <h2 className="lp-h2">Leasing on your own number</h2>
               {/* ⚠ THE STATUS SENTENCE LEADS. Texting a lead is

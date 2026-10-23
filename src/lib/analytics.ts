@@ -1,12 +1,19 @@
 /**
- * Marketing-site analytics — how many people land, and how many start setup.
+ * Site and wizard analytics — how many people land, how many start setup, and
+ * where inside the setup wizard they stop.
  *
- * The APP (AgenticHelixis/frontend) has been thoroughly instrumented since it
- * shipped: `signup_started`, `signup_completed`, `connector connected`,
- * `api_key_added`, and eleven more. This file is the half that was missing.
- * Without it those events are counts with no denominator — you know people
- * signed up, and not what fraction of visitors that is, or whether the pricing
- * page is where they stop.
+ * The APP (AgenticHelixis/frontend) instruments its own product events
+ * (`connector connected`, `api_key_added`, task events and more).
+ *
+ * ⚠ THIS LINE USED TO SAY THE APP SENDS `signup_started` AND
+ * `signup_completed`, AND NOTHING SENDS EITHER. The app defines
+ * `captureSignupStarted` / `captureSignupCompleted` (frontend/src/services/
+ * analytics.ts) and the backend defines `capture_signup_*`
+ * (analytics/posthog_client.py), and none of the four has a caller (checked on
+ * AgenticHelixis origin/main, 2026-10-23). So signup itself was invisible:
+ * the site counted clicks on Start, and nothing counted what happened after.
+ * The `wizard_*` events below (`captureWizard`) are that funnel now. Do not
+ * build a dashboard on the two app event names expecting rows.
  *
  * ⚠ THIS DOES NOT JOIN TO THE APP'S EVENTS, AND THAT IS NOT AN OVERSIGHT.
  * The app inits PostHog with `persistence: 'localStorage'`, which is strictly
@@ -44,13 +51,27 @@
  *   - `respect_dnt` — the standard courtesy for an anonymous public page. The
  *     app does not set it (a signed-in customer has a Settings toggle
  *     instead); a visitor has no other way to say no.
+ *   - NO URL QUERY AND NO URL FRAGMENT LEAVES THE BROWSER (`before_send:
+ *     scrubCapturedUrls`, plus `disable_capture_url_hashes`). posthog-js
+ *     builds `$current_url` from `location.href`, fragment included, and the
+ *     emailed sign-in link returns to `/start#access_token=...&refresh_token=
+ *     ...`. `lib/authRescue` forwards only invite and recovery landings, so on
+ *     that return the pageview below, and any wizard event fired before
+ *     supabase-js clears the hash, could carry a live session to a third
+ *     party. The hook cuts `?` and `#` off every absolute URL in an event's
+ *     properties, `$set` and `$set_once`, whichever key it sits under.
+ *   - NO PERSON DATA IN EVENTS, and no `identify()`. Every `wizard_*`
+ *     property is an enum, a doors range picked from a list, or a status
+ *     number (see `WizardEvents`). Never an email, a company name or a key.
  *
  * Everything degrades to a no-op when `VITE_PUBLIC_POSTHOG_KEY` is unset, so a
  * local `npm run dev` and a preview deploy send nothing.
  */
 
-import type { PostHog } from 'posthog-js'
+import type { CaptureResult, PostHog } from 'posthog-js'
 import { routeFor } from '../seo/routes'
+import type { NotListedSystem } from './notListed'
+import type { Pms } from './pms'
 
 const KEY = import.meta.env.VITE_PUBLIC_POSTHOG_KEY as string | undefined
 const HOST =
@@ -99,7 +120,7 @@ export function initAnalytics(): Promise<void> {
   if (!KEY) return Promise.resolve()
   const key = KEY
 
-  return client().then((posthog) => {
+  started ??= client().then((posthog) => {
     posthog.init(key, {
       api_host: HOST,
       persistence: 'localStorage',
@@ -112,10 +133,69 @@ export function initAnalytics(): Promise<void> {
       // We emit the pageview ourselves below so it carries `page`, which is the
       // field every funnel question here is grouped by.
       capture_pageview: false,
+      // No query string or fragment reaches PostHog (privacy posture above).
+      // Both, because the option covers only the URLs posthog-js builds and
+      // the hook covers every property, including any added later.
+      disable_capture_url_hashes: true,
+      before_send: scrubCapturedUrls,
     })
 
     posthog.capture('marketing_page_viewed', { page: pageName() })
+    return posthog
   })
+  return started.then(() => undefined)
+}
+
+/**
+ * Resolves once PostHog is loaded AND initialised; null until `initAnalytics`
+ * runs. The wizard's events wait on this rather than on the bare import, so
+ * none of them can reach a client that has not been told the privacy posture.
+ */
+let started: Promise<PostHog> | null = null
+
+const ABSOLUTE_URL = /^https?:\/\//i
+
+/**
+ * `url` without its query string or fragment; anything that is not an
+ * absolute http(s) URL comes back unchanged.
+ *
+ * ⚠ Cut by position, not parsed with `new URL`, so a malformed URL that still
+ * carries `#access_token=` is cut as well instead of throwing and going out
+ * untouched.
+ */
+export function withoutQueryOrHash(value: string): string {
+  if (!ABSOLUTE_URL.test(value)) return value
+  const cut = value.search(/[?#]/)
+  return cut === -1 ? value : value.slice(0, cut)
+}
+
+function scrub(value: unknown, depth: number): unknown {
+  if (typeof value === 'string') return withoutQueryOrHash(value)
+  // Event properties are shallow; the cap is only there so a cyclic object
+  // can never hang the send.
+  if (depth >= 5 || !value || typeof value !== 'object') return value
+  if (Array.isArray(value)) return value.map((v) => scrub(v, depth + 1))
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(value)) out[k] = scrub(v, depth + 1)
+  return out
+}
+
+/**
+ * The `before_send` hook: every absolute URL in the event loses its `?...`
+ * and `#...`, wherever it sits (`$current_url`, `$referrer`,
+ * `$initial_current_url` under `$set_once`, or a key nobody has added yet).
+ *
+ * ⚠ The whole URL is cut rather than only known token names, because the
+ * question "which parameters are secret" has a different answer for every
+ * auth flow, and a pathname is all any breakdown here reads. UTM values are
+ * not lost: posthog-js records them as their own properties.
+ */
+export function scrubCapturedUrls(event: CaptureResult | null): CaptureResult | null {
+  if (!event) return event
+  const out: CaptureResult = { ...event, properties: scrub(event.properties, 0) as CaptureResult['properties'] }
+  if (event.$set) out.$set = scrub(event.$set, 0) as CaptureResult['properties']
+  if (event.$set_once) out.$set_once = scrub(event.$set_once, 0) as CaptureResult['properties']
+  return out
 }
 
 /**
@@ -193,4 +273,68 @@ export function watchStartClicks(): void {
     },
     true,
   )
+}
+
+// ── The setup wizard's funnel ───────────────────────────────────────
+
+/** The wizard's internal steps, as App.tsx names them. */
+export type WizardStep = 'identify' | 'pms' | 'live' | 'scan' | 'channels' | 'finish'
+
+/** Where a person left the connect step without connecting anything. */
+export type PmsSkippedFrom = 'pms' | 'buildium' | 'rentvine' | 'not_listed'
+
+/**
+ * Every wizard event and the ONLY properties each may carry.
+ *
+ * ⚠ The types are the privacy rule. Each property is a fixed set of values
+ * or a number, except `doors`, which is a range label the person picked from
+ * a list (DOORS_OPTIONS in App.tsx). A property that can hold free text, an
+ * email, a company name or a key does not belong here, and widening one of
+ * these to `string` is how it would get in.
+ */
+export interface WizardEvents {
+  /** A step came on screen. */
+  wizard_step_viewed: { step: WizardStep }
+  /** Step 1 finished: password set and the workspace bootstrapped. */
+  wizard_account_created: { doors: string }
+  /** A system tile was picked. */
+  wizard_pms_chosen: { pms: Pms }
+  /** The connect step was left without connecting, and from which screen. */
+  wizard_pms_skipped: { step: PmsSkippedFrom }
+  /** A "my system isn't listed" answer was received by the backend. The
+   *  system only: an "Other" name is the person's own words and stays in
+   *  the feedback row. */
+  wizard_pms_not_listed: { system: NotListedSystem }
+  /**
+   * A connection attempt failed. `status` is the vendor's HTTP status when
+   * the vendor refused the keys (read from the test's error, Buildium only),
+   * else the Occupella API's status for a request that failed (0 = it never
+   * reached a server), else null when neither is known. Null is "unknown",
+   * never "fine".
+   */
+  wizard_connect_failed: { pms: Pms; status: number | null }
+  /** The keys passed the test. */
+  wizard_pms_connected: { pms: Pms }
+  /** "Send these steps to my admin" was opened. */
+  wizard_handoff_started: Record<string, never>
+}
+
+/**
+ * Record one wizard event.
+ *
+ * Same posture as everything above, by construction rather than by copy:
+ *   - no key configured: nothing at all;
+ *   - sent through the ONE client `initAnalytics` started, so the opt-out,
+ *     Do Not Track, autocapture-off and URL scrubbing it was given apply
+ *     here unchanged; before `initAnalytics` has run there is no such client
+ *     and nothing is sent;
+ *   - never `identify()`: the wizard knows the person's email, and this is
+ *     the line that keeps it out of a third party.
+ *
+ * Fire-and-forget: a wizard step never waits on analytics.
+ */
+export function captureWizard<E extends keyof WizardEvents>(event: E, props: WizardEvents[E]): void {
+  if (!KEY || !started) return
+  const properties = { ...props }
+  void started.then((posthog) => posthog.capture(event, properties)).catch(() => undefined)
 }

@@ -5,6 +5,18 @@ import { clearWizard, loadWizard, saveWizard } from "./lib/persist";
 import { firstUnmet, meetsRequirements, requirements } from "./lib/passwordStrength";
 import { DraftCrop, EmailDraftCrop, HistoryCrop, NoticedCrop, WorkOrderCard, cropCss } from "./crops";
 import { resumeAction } from "./lib/resume";
+import { gmailConnected } from "./lib/google";
+import { buildiumRefusalStatus, buildiumTestFailure } from "./lib/buildium";
+import { captureWizard, type PmsSkippedFrom } from "./lib/analytics";
+import {
+  FEEDBACK_PATH,
+  NOTE_MAX_CHARS,
+  NOT_LISTED_SYSTEMS,
+  OTHER_MAX_CHARS,
+  notListedBody,
+  notListedReady,
+  type NotListedSystem,
+} from "./lib/notListed";
 import { Wordmark } from "./Site";
 import {
   asksForAccountCode,
@@ -29,7 +41,8 @@ import {
 //                        shown for Rentvine (lib/pms.ts stepAfterConnect)
 //   Scan     scan      — the first read of the portfolio, filling in as it
 //                        goes; skipped when no system was connected
-//   Email    channels  — Google OAuth, optional
+//   Email    channels  — Gmail OAuth, optional (Calendar and Drive are
+//                        separate grants, connected in the app)
 //            finish    — the hand-off into the app, signed in
 // Team invites live in the in-app Getting Started checklist.
 //
@@ -117,9 +130,13 @@ const TOS_VERSION = "2026-07-05";
 const TERMS_URL = "/terms";
 const PRIVACY_URL = "/privacy";
 
-// ⚠ Kept in the browser's wizard state only; no request sends it (checked
-// 2026-09-29: bootstrap and the company PATCH carry the name alone), so the
-// labels can change without a backend change.
+// ⚠ Not stored on the company: bootstrap and the company PATCH carry the
+// name alone (checked 2026-09-29). Since 2026-10-23 the chosen label travels
+// as TEXT in two places: inside a "my system isn't listed" message
+// (lib/notListed.ts), and as the `doors` property of wizard_account_created
+// (lib/analytics.ts). No backend parses it, so the labels can still change
+// without a backend change; a renamed label only splits the analytics
+// breakdown at the date it changed.
 const DOORS_OPTIONS = ["1–50", "51–200", "201–500", "501–2,000", "2,000+"];
 
 /**
@@ -312,6 +329,16 @@ const css = `
   .ob .ob-tile:focus-visible { outline: 2px solid var(--iris); outline-offset: 2px; }
   .ob .ob-tile:disabled { cursor: not-allowed; background: var(--canvas-1); color: var(--ink-subtle); }
   .ob-tile-reads { font-size: 14px; line-height: 1.5; color: var(--ink-muted); }
+  .ob .ob-tile-other { grid-column: 1 / -1; min-height: 0; gap: 6px; }
+  .ob .ob-tile[aria-expanded="true"] { border-color: var(--iris); }
+  .ob-tile-name { font-size: 17px; font-weight: 600; color: var(--ink); }
+  .ob-notlisted { margin-top: 20px; }
+  .ob textarea {
+    width: 100%; min-height: 88px; padding: 10px 14px; resize: vertical;
+    font-family: var(--font-sans); font-size: 16px; line-height: 1.5; color: var(--ink);
+    background: var(--canvas); border: 1px solid var(--line); border-radius: var(--r-sm); outline: none;
+  }
+  .ob textarea:focus { border-color: var(--iris); box-shadow: 0 0 0 3px var(--iris-soft); }
   .ob-mark { display: inline-flex; align-items: center; }
   .ob-mark img { display: block; height: 28px; width: auto; }
   .ob-mark-text { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; color: var(--ink); }
@@ -892,6 +919,19 @@ function StepIdentify({
 // STEP 2: CONNECT BUILDIUM (credentials → test → reveal; handoff on request)
 // ─────────────────────────────────────────────────────────
 
+/** The Occupella API's status on a thrown request (0 = never reached a
+ *  server), or null when the error carries none. */
+function apiStatus(e: unknown): number | null {
+  const status = (e as { status?: unknown } | null)?.status;
+  return typeof status === "number" ? status : null;
+}
+
+/** The one place a failed connection attempt is recorded, for both systems.
+ *  What `status` means is on `WizardEvents.wizard_connect_failed`. */
+function reportConnectFailed(pms: Pms, status: number | null): void {
+  captureWizard("wizard_connect_failed", { pms, status });
+}
+
 function StepBuildium({
   userEmail,
   workspaceName,
@@ -919,6 +959,14 @@ function StepBuildium({
   // without a person approving the change first"). TODO(brandon): confirm
   // the autonomous notes flag is off; then it can come back here and in the
   // step's description.
+  //
+  // ⚠ THE KEYS COME BACK TO THE REQUESTER; THE ADMIN NEVER SIGNS UP. This
+  // email used to end "or finish the setup here: <origin>/start", and /start
+  // always creates a NEW user and company (POST /auth/bootstrap). An admin who
+  // followed it connected Buildium in a second workspace, and the requester's
+  // own connect was then refused as "already connected to a different
+  // Occupella workspace" (one Buildium account maps to one workspace). Do not
+  // add a link back to /start here.
   const handoffInstructions =
     `Hi,\n\n` +
     `We're setting up Occupella for ${workspaceName || "our company"}. It reads our Buildium data ` +
@@ -927,7 +975,8 @@ function StepBuildium({
     `1. In Buildium, open Settings, then Developer Tools, and pick the API Keys tab\n` +
     `2. Click Create API Key, name it Occupella and continue through the three steps\n` +
     `3. Copy the Client ID and Client Secret\n` +
-    `4. Send them to me securely, or finish the setup here: ${window.location.origin}/start\n\n` +
+    `4. Send both back to me securely, for example through a password manager, not in a plain ` +
+    `email. I'll add them to our Occupella workspace, so there's no need to sign up yourself.\n\n` +
     `Security: the credentials are encrypted at rest and not shown again after setup, and you can ` +
     `revoke the key from Buildium at any time.\n\n` +
     `Requested by ${userEmail}`;
@@ -935,6 +984,12 @@ function StepBuildium({
   const mailtoHref =
     `mailto:?subject=${encodeURIComponent("Occupella needs a Buildium API key")}` +
     `&body=${encodeURIComponent(handoffInstructions)}`;
+
+  /** Opens or closes the admin hand-off. Recorded on OPENING only. */
+  const toggleHandoff = () => {
+    if (isAdmin !== false) captureWizard("wizard_handoff_started", {});
+    setIsAdmin((v) => (v === false ? null : false));
+  };
 
   const copyInstructions = async () => {
     await navigator.clipboard.writeText(handoffInstructions);
@@ -980,10 +1035,16 @@ function StepBuildium({
         });
         return { ok: true, count: n ?? null };
       }
-      setIntegration({ status: "error", testMessage: testData.error || "Buildium didn't accept those keys." });
+      // ⚠ Through lib/buildium.ts: a 401 or 403 used to reach the screen as
+      // the vendor's raw response ("Buildium rejected the request: Buildium
+      // 401 /rentals: ..."). The wizard has no details pattern, so the raw
+      // text is not kept on screen; the backend logs it.
+      setIntegration({ status: "error", testMessage: buildiumTestFailure(testData.error) });
+      reportConnectFailed("buildium", buildiumRefusalStatus(testData.error));
       return { ok: false, count: null };
     } catch (e: any) {
       setIntegration({ status: "error", testMessage: e.message || "Couldn't reach Buildium to test the keys." });
+      reportConnectFailed("buildium", apiStatus(e));
       return { ok: false, count: null };
     }
   };
@@ -1029,6 +1090,12 @@ function StepBuildium({
         <li><span>Continue through Buildium&rsquo;s three steps.</span></li>
         <li><span>Copy the <b>Client ID</b> and <b>Client Secret</b> and paste them here.</span></li>
       </ol>
+      {/* ⚠ Hedged on purpose: which Buildium plans include the API is not
+          verified, so no plan name and no price. */}
+      <p className="hint" style={{ marginTop: -12, marginBottom: 24 }}>
+        Buildium only offers API keys on some of its plans. If you don&rsquo;t see Developer Tools
+        under Settings, your plan may not include API access.
+      </p>
       {BUILDIUM_KEY_SHOT ? <img className="ob-shot" src={BUILDIUM_KEY_SHOT} alt="The API Keys tab in Buildium's Developer Tools" /> : null}
       {BUILDIUM_KEY_CLIP ? (
         <video className="keys-clip" src={BUILDIUM_KEY_CLIP} autoPlay loop muted playsInline aria-label="Creating an API key in Buildium" />
@@ -1078,16 +1145,23 @@ function StepBuildium({
       <button className="btn btn-primary wide" onClick={connectAndScan} disabled={!apiKey || !apiSecret || busy}>
         {busy ? <><span className="spinner" /> Connecting</> : "Connect and scan"}
       </button>
-      <button className="btn btn-secondary wide" onClick={() => setIsAdmin((v) => (v === false ? null : false))} disabled={busy}>
+      <button className="btn btn-secondary wide" onClick={toggleHandoff} disabled={busy}>
         Send these steps to my admin
       </button>
 
       {isAdmin === false ? (
         <div className="handoff">
           <div className="handoff-title">Send the steps to your Buildium admin</div>
+          {/* ⚠ No "link back here" and no "your progress is saved": the email
+              asks the admin to send the keys back to you (see
+              handoffInstructions), and the wizard does not save its step. What
+              IS saved is the account, so the keys can go in later from the
+              app's Settings, which is the one path that is always open. */}
           <div className="handoff-body">
-            An email saying why Occupella needs a key, where to create it and what gets stored, with a
-            link back here. Your progress is saved.
+            An email saying why Occupella needs a key, where to create it and what gets stored. It asks
+            your admin to send the Client ID and Client Secret back to you. Your account is already set
+            up, so paste them here when they arrive, or later in Occupella under Settings, then
+            Connectors.
           </div>
           <div className="btn-row">
             <a className="btn btn-secondary" href={mailtoHref} style={{ flex: 1 }}>Email my admin</a>
@@ -1117,21 +1191,135 @@ function StepBuildium({
 }
 
 // ─────────────────────────────────────────────────────────
-// STEP 2: WHICH SYSTEM? (Buildium or Rentvine)
+// STEP 2: WHICH SYSTEM? (Buildium or Rentvine, or "not listed")
 // ─────────────────────────────────────────────────────────
+
+/**
+ * "My system isn't listed": which system, an optional note, sent to the
+ * backend's feedback route. The contract and the reasons for `idea` + a view
+ * tag are in lib/notListed.ts.
+ *
+ * ⚠ THE THANK-YOU APPEARS ONLY AFTER THE POST RESOLVED. `apiFetch` throws on
+ * any non-2xx and on a request that never arrived, so every failure lands in
+ * the catch and stays on the form with the reason. (The app's own feedback
+ * dialog once showed "Sent" for reports that never arrived, because its fetch
+ * resolved on a 422.) Skip stays available either way.
+ *
+ * ⚠ The thank-you promises nothing: nobody has decided to support any of
+ * these systems, and the row gets no automatic reply.
+ */
+export function NotListedForm({ doors, onContinue }: { doors: string; onContinue: () => void }) {
+  const [system, setSystem] = useState<NotListedSystem | "">("");
+  const [otherName, setOtherName] = useState("");
+  const [note, setNote] = useState("");
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState("");
+
+  const answer = { system, otherName, note, doors };
+  const ready = notListedReady(answer);
+
+  const send = async () => {
+    if (!ready || sending) return;
+    setSending(true);
+    setError("");
+    try {
+      await apiFetch(FEEDBACK_PATH, { method: "POST", body: JSON.stringify(notListedBody(answer)) });
+      setSent(true);
+      // After the backend has it, and the system only: an "Other" name is the
+      // person's own words and stays in the feedback row.
+      if (system) captureWizard("wizard_pms_not_listed", { system });
+    } catch (e: any) {
+      setError(e?.message || "That didn't send. Try again, or skip this step for now.");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  if (sent) {
+    return (
+      <div className="ob-notlisted" id="ob-notlisted">
+        <div className="test-result success" role="status">Thanks. That&rsquo;s with the Occupella team now.</div>
+        <button className="btn btn-primary wide" onClick={onContinue}>Continue</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="ob-notlisted" id="ob-notlisted">
+      <div className="field">
+        <label htmlFor="ob-nl-system">Which system do you use?</label>
+        <select
+          id="ob-nl-system"
+          value={system}
+          onChange={(e) => { setSystem(e.target.value as NotListedSystem | ""); setError(""); }}
+        >
+          <option value="">Choose one</option>
+          {NOT_LISTED_SYSTEMS.map((s) => (
+            <option key={s} value={s}>{s}</option>
+          ))}
+        </select>
+      </div>
+      {system === "Other" ? (
+        <div className="field">
+          <label htmlFor="ob-nl-other">Which one?</label>
+          <input
+            id="ob-nl-other"
+            type="text"
+            value={otherName}
+            maxLength={OTHER_MAX_CHARS}
+            onChange={(e) => { setOtherName(e.target.value); setError(""); }}
+            autoComplete="off"
+            autoFocus
+          />
+        </div>
+      ) : null}
+      <div className="field">
+        <label htmlFor="ob-nl-note">Anything else we should know? (optional)</label>
+        <textarea
+          id="ob-nl-note"
+          rows={3}
+          value={note}
+          maxLength={NOTE_MAX_CHARS}
+          onChange={(e) => setNote(e.target.value)}
+        />
+      </div>
+      {error && <div className="test-result error" role="alert">{error}</div>}
+      <button className="btn btn-primary wide" onClick={send} disabled={!ready || sending}>
+        {sending ? <><span className="spinner" /> Sending</> : "Send"}
+      </button>
+    </div>
+  );
+}
 
 function StepPms({
   userEmail,
   workspaceName,
+  doors,
   onConnected,
   onSkip,
 }: {
   userEmail: string;
   workspaceName: string;
+  /** Step 1's "Doors under management" range, sent with a not-listed answer. */
+  doors: string;
   onConnected: (pms: Pms) => void;
   onSkip: () => void;
 }) {
   const [choice, setChoice] = useState<Pms | null>(null);
+  const [notListed, setNotListed] = useState(false);
+
+  const choose = (pms: Pms) => {
+    captureWizard("wizard_pms_chosen", { pms });
+    setChoice(pms);
+  };
+
+  /** Every way out of this step without a connection goes through here, so
+   *  the skip is recorded once, with the screen it was taken from. */
+  const skip = (from: PmsSkippedFrom) => {
+    captureWizard("wizard_pms_skipped", { step: from });
+    onSkip();
+  };
   // Asked once, before any keys are collected: a customer on a deployment
   // where the Rentvine connector is off is told so here, not after pasting
   // both keys and hitting the backend's 503.
@@ -1153,7 +1341,7 @@ function StepPms({
         userEmail={userEmail}
         workspaceName={workspaceName}
         onNext={() => onConnected("buildium")}
-        onSkip={onSkip}
+        onSkip={() => skip("buildium")}
         onChangePms={() => setChoice(null)}
       />
     );
@@ -1162,7 +1350,7 @@ function StepPms({
     return (
       <StepRentvine
         onNext={() => onConnected("rentvine")}
-        onSkip={onSkip}
+        onSkip={() => skip("rentvine")}
         onChangePms={() => setChoice(null)}
       />
     );
@@ -1181,7 +1369,7 @@ function StepPms({
             key={pms}
             type="button"
             className="ob-tile"
-            onClick={() => setChoice(pms)}
+            onClick={() => choose(pms)}
             disabled={pms === "rentvine" && rentvine === "off"}
             aria-label={`Connect ${PMS_NAME[pms]}`}
           >
@@ -1189,7 +1377,21 @@ function StepPms({
             <span className="ob-tile-reads">Reads your {PMS_READS[pms]}.</span>
           </button>
         ))}
+        {/* ⚠ This step was a dead end for anyone on another system: two
+            tiles and Skip. One tile, not one per system: Rent Manager,
+            Propertyware and DoorLoop are not offered as tiles. */}
+        <button
+          type="button"
+          className="ob-tile ob-tile-other"
+          onClick={() => setNotListed((v) => !v)}
+          aria-expanded={notListed}
+          aria-controls="ob-notlisted"
+        >
+          <span className="ob-tile-name">My system isn&rsquo;t listed</span>
+          <span className="ob-tile-reads">Tell us which one you use.</span>
+        </button>
       </div>
+      {notListed ? <NotListedForm doors={doors} onContinue={() => skip("not_listed")} /> : null}
       {rentvine === "off" && (
         <p className="hint" style={{ marginTop: 12 }}>
           Rentvine isn&rsquo;t switched on for new workspaces yet. Email{" "}
@@ -1199,7 +1401,7 @@ function StepPms({
       )}
 
       <p className="ob-alt-line">
-        <button type="button" className="ob-alt" onClick={onSkip}>Skip for now</button>
+        <button type="button" className="ob-alt" onClick={() => skip("pms")}>Skip for now</button>
       </p>
     </div>
   );
@@ -1248,12 +1450,15 @@ function StepRentvine({
         return true;
       }
       setIntegration({ status: "error", testMessage: testData.error || "Rentvine didn't accept those keys." });
+      // Rentvine's refusals are advice sentences with no status in them.
+      reportConnectFailed("rentvine", null);
       return false;
     } catch (e: any) {
       // The backend's refusals are sentences for the customer (connector off,
       // workspace already on Buildium, subdomain needed). Show them as written.
       if (asksForAccountCode(e?.status)) setShowAccountCode(true);
       setIntegration({ status: "error", testMessage: e?.message || "Couldn't reach Rentvine to test the keys." });
+      reportConnectFailed("rentvine", apiStatus(e));
       return false;
     }
   };
@@ -1401,7 +1606,7 @@ function StepLive({ onNext }: { onNext: (saved: boolean) => void }) {
 }
 
 // ─────────────────────────────────────────────────────────
-// STEP 4 (EMAIL): GOOGLE WORKSPACE (Composio OAuth, optional)
+// STEP 4 (EMAIL): GMAIL (Composio OAuth, optional)
 // ─────────────────────────────────────────────────────────
 
 function StepChannels({ onNext }: { onNext: (connected: boolean) => void }) {
@@ -1409,12 +1614,11 @@ function StepChannels({ onNext }: { onNext: (connected: boolean) => void }) {
   const [googleConnecting, setGoogleConnecting] = useState(false);
   const [error, setError] = useState("");
 
+  // ⚠ Gmail alone (lib/google.ts). Calendar and Drive are separate grants,
+  // so either one being connected says nothing about this step.
   const refreshGoogleState = useCallback(async () => {
     try {
-      const connectors = await apiJson<{ id: string; isConnected: boolean }[]>("/api/v1/connectors/");
-      return connectors.some(
-        (c) => ["gmail", "google_calendar", "google_drive"].includes(c.id) && c.isConnected,
-      );
+      return gmailConnected(await apiJson<unknown>("/api/v1/connectors/"));
     } catch {
       return false;
     }
@@ -1424,8 +1628,9 @@ function StepChannels({ onNext }: { onNext: (connected: boolean) => void }) {
     setGoogleConnecting(true);
     setError("");
     try {
-      // Composio-managed OAuth — the same connection the agent's Gmail /
-      // Calendar / Drive specialists use at tool time. callbackUrl sends the
+      // Composio-managed OAuth for GMAIL — the same connection the agent's
+      // Gmail specialist uses at tool time. Calendar and Drive are their own
+      // grants, connected from the app's Settings. callbackUrl sends the
       // popup back to our own /oauth/callback (which auto-closes) instead of
       // parking on Composio's hosted "Successfully connected" page.
       const data = await apiJson<{ redirectUrl: string }>("/api/v1/connectors/gmail/connect", {
@@ -1458,21 +1663,24 @@ function StepChannels({ onNext }: { onNext: (connected: boolean) => void }) {
 
   return (
     <div className="panel" key="channels">
-      <StepTitle title="Connect Google Workspace" />
+      <StepTitle title="Connect Gmail" />
       {/* ⚠ Describes what you can ASK for, not what arrives on its own:
           automatic email-to-Inbox ingest is gated and has produced one card
           across every company (measured 2026-09-02). And no approval claim:
-          it is held until the autonomous notes flag is confirmed off. */}
+          it is held until the autonomous notes flag is confirmed off.
+          ⚠ Gmail only: this button connects one grant (lib/google.ts). It
+          used to promise Calendar and Drive too, which it never connected. */}
       <ul className="ob-facts">
-        <li>Occupella can read a Gmail thread for context, check Google Calendar for open times and find documents in Google Drive.</li>
+        <li>Occupella can read a Gmail thread for context when you ask about one.</li>
         <li>Access goes through Google&rsquo;s own sign-in screen, and you can disconnect it at any time in Settings.</li>
+        <li>Google Calendar and Google Drive are separate connections. Add them later in Occupella under Settings, then Connectors.</li>
       </ul>
 
       <div className="ob-google">
         <svg width="28" height="28" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59A14.5 14.5 0 0 1 9.5 24c0-1.59.28-3.14.76-4.59l-7.98-6.19A23.99 23.99 0 0 0 0 24c0 3.77.9 7.35 2.56 10.53l7.97-5.94z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 5.94C6.51 42.62 14.62 48 24 48z"/></svg>
         <div>
-          <b>Google Workspace</b>
-          <span>Gmail, Calendar and Drive</span>
+          <b>Gmail</b>
+          <span>Signs in with your Google account</span>
         </div>
         {googleConnected ? (
           <span className="ob-connected"><CheckIcon size={14} /> Connected</span>
@@ -1486,7 +1694,7 @@ function StepChannels({ onNext }: { onNext: (connected: boolean) => void }) {
         <button className="btn btn-primary wide" onClick={() => onNext(true)}>Continue</button>
       ) : (
         <button className="btn btn-primary wide" onClick={connectGoogle} disabled={googleConnecting}>
-          {googleConnecting ? <><span className="spinner" /> Connecting</> : "Connect Google"}
+          {googleConnecting ? <><span className="spinner" /> Connecting</> : "Connect Gmail"}
         </button>
       )}
       <div className="ob-alts">
@@ -1495,11 +1703,12 @@ function StepChannels({ onNext }: { onNext: (connected: boolean) => void }) {
         ) : null}
       </div>
       {/* ⚠ Outlook has no connect path (see /features).
-          TODO(brandon): confirm support@occupella.com receives mail. The rest
-          of the site uses team@ until it does (Contact.tsx). */}
+          ⚠ team@, like the rest of the site. support@ is not confirmed to
+          receive mail (the open question is the TODO in Contact.tsx), so it
+          is not offered here until that is settled. */}
       <p className="hint" style={{ marginTop: 20 }}>
         Using Outlook? Email{" "}
-        <a href="mailto:support@occupella.com?subject=Outlook">support@occupella.com</a>.
+        <a href="mailto:team@occupella.com?subject=Outlook">team@occupella.com</a>.
       </p>
     </div>
   );
@@ -1730,7 +1939,7 @@ const SIDE: Record<Step, { crop: () => React.ReactElement; next: string }> = {
   },
   channels: {
     crop: () => <EmailDraftCrop />,
-    next: "With Google connected, you send drafted emails like this one from your own address.",
+    next: "With Gmail connected, you send drafted emails like this one from your own address.",
   },
   finish: {
     crop: () => <DraftCrop />,
@@ -1814,6 +2023,15 @@ export default function App() {
   };
 
   const complete = (s: Step) => setCompleted((prev) => new Set([...prev, s]));
+
+  // One wizard_step_viewed per step shown. The ref keeps StrictMode's
+  // double-run effect (dev only) and any re-render from counting twice.
+  const lastViewed = useRef<Step | null>(null);
+  useEffect(() => {
+    if (lastViewed.current === step) return;
+    lastViewed.current = step;
+    captureWizard("wizard_step_viewed", { step });
+  }, [step]);
 
   // ⚠ The in-flight profile only, so the magic-link reload can finish the
   // attempt it interrupted. Progress is deliberately NOT written — see
@@ -1995,6 +2213,8 @@ export default function App() {
       // opened, or it is just the old always-resume behaviour with a flag.
       setAwaitingLink(false);
       complete("identify");
+      // The range label only (DOORS_OPTIONS), never the email or the name.
+      captureWizard("wizard_account_created", { doors: doors || "not_given" });
       setWorkspace((prev) => ({ ...prev, id: companyId }));
       setStep("pms");
     } finally {
@@ -2003,6 +2223,7 @@ export default function App() {
   };
 
   const handlePmsConnected = (pms: Pms) => {
+    captureWizard("wizard_pms_connected", { pms });
     setConnectedPms(pms);
     complete("pms");
     const next = stepAfterConnect(pms);
@@ -2113,6 +2334,7 @@ export default function App() {
               <StepPms
                 userEmail={userEmail}
                 workspaceName={workspace.name}
+                doors={doors}
                 onConnected={handlePmsConnected}
                 onSkip={handlePmsSkip}
               />
