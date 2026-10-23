@@ -6,7 +6,8 @@ import { firstUnmet, meetsRequirements, requirements } from "./lib/passwordStren
 import { DraftCrop, EmailDraftCrop, HistoryCrop, NoticedCrop, WorkOrderCard, cropCss } from "./crops";
 import { resumeAction } from "./lib/resume";
 import { gmailConnected } from "./lib/google";
-import { buildiumTestFailure } from "./lib/buildium";
+import { buildiumRefusalStatus, buildiumTestFailure } from "./lib/buildium";
+import { captureWizard, type PmsSkippedFrom } from "./lib/analytics";
 import {
   FEEDBACK_PATH,
   NOTE_MAX_CHARS,
@@ -131,8 +132,11 @@ const PRIVACY_URL = "/privacy";
 
 // ⚠ Not stored on the company: bootstrap and the company PATCH carry the
 // name alone (checked 2026-09-29). Since 2026-10-23 the chosen label travels
-// as TEXT inside a "my system isn't listed" message (lib/notListed.ts). No
-// backend parses it, so the labels can still change without a backend change.
+// as TEXT in two places: inside a "my system isn't listed" message
+// (lib/notListed.ts), and as the `doors` property of wizard_account_created
+// (lib/analytics.ts). No backend parses it, so the labels can still change
+// without a backend change; a renamed label only splits the analytics
+// breakdown at the date it changed.
 const DOORS_OPTIONS = ["1–50", "51–200", "201–500", "501–2,000", "2,000+"];
 
 /**
@@ -915,6 +919,19 @@ function StepIdentify({
 // STEP 2: CONNECT BUILDIUM (credentials → test → reveal; handoff on request)
 // ─────────────────────────────────────────────────────────
 
+/** The Occupella API's status on a thrown request (0 = never reached a
+ *  server), or null when the error carries none. */
+function apiStatus(e: unknown): number | null {
+  const status = (e as { status?: unknown } | null)?.status;
+  return typeof status === "number" ? status : null;
+}
+
+/** The one place a failed connection attempt is recorded, for both systems.
+ *  What `status` means is on `WizardEvents.wizard_connect_failed`. */
+function reportConnectFailed(pms: Pms, status: number | null): void {
+  captureWizard("wizard_connect_failed", { pms, status });
+}
+
 function StepBuildium({
   userEmail,
   workspaceName,
@@ -968,6 +985,12 @@ function StepBuildium({
     `mailto:?subject=${encodeURIComponent("Occupella needs a Buildium API key")}` +
     `&body=${encodeURIComponent(handoffInstructions)}`;
 
+  /** Opens or closes the admin hand-off. Recorded on OPENING only. */
+  const toggleHandoff = () => {
+    if (isAdmin !== false) captureWizard("wizard_handoff_started", {});
+    setIsAdmin((v) => (v === false ? null : false));
+  };
+
   const copyInstructions = async () => {
     await navigator.clipboard.writeText(handoffInstructions);
     setCopied(true);
@@ -1017,9 +1040,11 @@ function StepBuildium({
       // 401 /rentals: ..."). The wizard has no details pattern, so the raw
       // text is not kept on screen; the backend logs it.
       setIntegration({ status: "error", testMessage: buildiumTestFailure(testData.error) });
+      reportConnectFailed("buildium", buildiumRefusalStatus(testData.error));
       return { ok: false, count: null };
     } catch (e: any) {
       setIntegration({ status: "error", testMessage: e.message || "Couldn't reach Buildium to test the keys." });
+      reportConnectFailed("buildium", apiStatus(e));
       return { ok: false, count: null };
     }
   };
@@ -1120,7 +1145,7 @@ function StepBuildium({
       <button className="btn btn-primary wide" onClick={connectAndScan} disabled={!apiKey || !apiSecret || busy}>
         {busy ? <><span className="spinner" /> Connecting</> : "Connect and scan"}
       </button>
-      <button className="btn btn-secondary wide" onClick={() => setIsAdmin((v) => (v === false ? null : false))} disabled={busy}>
+      <button className="btn btn-secondary wide" onClick={toggleHandoff} disabled={busy}>
         Send these steps to my admin
       </button>
 
@@ -1201,6 +1226,9 @@ export function NotListedForm({ doors, onContinue }: { doors: string; onContinue
     try {
       await apiFetch(FEEDBACK_PATH, { method: "POST", body: JSON.stringify(notListedBody(answer)) });
       setSent(true);
+      // After the backend has it, and the system only: an "Other" name is the
+      // person's own words and stays in the feedback row.
+      if (system) captureWizard("wizard_pms_not_listed", { system });
     } catch (e: any) {
       setError(e?.message || "That didn't send. Try again, or skip this step for now.");
     } finally {
@@ -1280,6 +1308,18 @@ function StepPms({
 }) {
   const [choice, setChoice] = useState<Pms | null>(null);
   const [notListed, setNotListed] = useState(false);
+
+  const choose = (pms: Pms) => {
+    captureWizard("wizard_pms_chosen", { pms });
+    setChoice(pms);
+  };
+
+  /** Every way out of this step without a connection goes through here, so
+   *  the skip is recorded once, with the screen it was taken from. */
+  const skip = (from: PmsSkippedFrom) => {
+    captureWizard("wizard_pms_skipped", { step: from });
+    onSkip();
+  };
   // Asked once, before any keys are collected: a customer on a deployment
   // where the Rentvine connector is off is told so here, not after pasting
   // both keys and hitting the backend's 503.
@@ -1301,7 +1341,7 @@ function StepPms({
         userEmail={userEmail}
         workspaceName={workspaceName}
         onNext={() => onConnected("buildium")}
-        onSkip={onSkip}
+        onSkip={() => skip("buildium")}
         onChangePms={() => setChoice(null)}
       />
     );
@@ -1310,7 +1350,7 @@ function StepPms({
     return (
       <StepRentvine
         onNext={() => onConnected("rentvine")}
-        onSkip={onSkip}
+        onSkip={() => skip("rentvine")}
         onChangePms={() => setChoice(null)}
       />
     );
@@ -1329,7 +1369,7 @@ function StepPms({
             key={pms}
             type="button"
             className="ob-tile"
-            onClick={() => setChoice(pms)}
+            onClick={() => choose(pms)}
             disabled={pms === "rentvine" && rentvine === "off"}
             aria-label={`Connect ${PMS_NAME[pms]}`}
           >
@@ -1351,7 +1391,7 @@ function StepPms({
           <span className="ob-tile-reads">Tell us which one you use.</span>
         </button>
       </div>
-      {notListed ? <NotListedForm doors={doors} onContinue={onSkip} /> : null}
+      {notListed ? <NotListedForm doors={doors} onContinue={() => skip("not_listed")} /> : null}
       {rentvine === "off" && (
         <p className="hint" style={{ marginTop: 12 }}>
           Rentvine isn&rsquo;t switched on for new workspaces yet. Email{" "}
@@ -1361,7 +1401,7 @@ function StepPms({
       )}
 
       <p className="ob-alt-line">
-        <button type="button" className="ob-alt" onClick={onSkip}>Skip for now</button>
+        <button type="button" className="ob-alt" onClick={() => skip("pms")}>Skip for now</button>
       </p>
     </div>
   );
@@ -1410,12 +1450,15 @@ function StepRentvine({
         return true;
       }
       setIntegration({ status: "error", testMessage: testData.error || "Rentvine didn't accept those keys." });
+      // Rentvine's refusals are advice sentences with no status in them.
+      reportConnectFailed("rentvine", null);
       return false;
     } catch (e: any) {
       // The backend's refusals are sentences for the customer (connector off,
       // workspace already on Buildium, subdomain needed). Show them as written.
       if (asksForAccountCode(e?.status)) setShowAccountCode(true);
       setIntegration({ status: "error", testMessage: e?.message || "Couldn't reach Rentvine to test the keys." });
+      reportConnectFailed("rentvine", apiStatus(e));
       return false;
     }
   };
@@ -1981,6 +2024,15 @@ export default function App() {
 
   const complete = (s: Step) => setCompleted((prev) => new Set([...prev, s]));
 
+  // One wizard_step_viewed per step shown. The ref keeps StrictMode's
+  // double-run effect (dev only) and any re-render from counting twice.
+  const lastViewed = useRef<Step | null>(null);
+  useEffect(() => {
+    if (lastViewed.current === step) return;
+    lastViewed.current = step;
+    captureWizard("wizard_step_viewed", { step });
+  }, [step]);
+
   // ⚠ The in-flight profile only, so the magic-link reload can finish the
   // attempt it interrupted. Progress is deliberately NOT written — see
   // persist.ts for why a five-minute flow should not be resumable.
@@ -2161,6 +2213,8 @@ export default function App() {
       // opened, or it is just the old always-resume behaviour with a flag.
       setAwaitingLink(false);
       complete("identify");
+      // The range label only (DOORS_OPTIONS), never the email or the name.
+      captureWizard("wizard_account_created", { doors: doors || "not_given" });
       setWorkspace((prev) => ({ ...prev, id: companyId }));
       setStep("pms");
     } finally {
@@ -2169,6 +2223,7 @@ export default function App() {
   };
 
   const handlePmsConnected = (pms: Pms) => {
+    captureWizard("wizard_pms_connected", { pms });
     setConnectedPms(pms);
     complete("pms");
     const next = stepAfterConnect(pms);

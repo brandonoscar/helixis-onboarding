@@ -18,6 +18,7 @@ import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
 
 import appSource from './App.tsx?raw'
+import analyticsSource from './lib/analytics.ts?raw'
 
 const source = ts.createSourceFile('App.tsx', appSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
 
@@ -237,5 +238,107 @@ describe('the admin hand-off email', () => {
     const panel = prose(scopeOf('StepBuildium'))
     expect(panel).not.toMatch(/link back here/i)
     expect(panel).not.toMatch(/progress is saved/i)
+  })
+})
+
+// ── The wizard funnel events ────────────────────────────────────────
+
+/** The event names `WizardEvents` declares, read from lib/analytics.ts. */
+function declaredEvents(): string[] {
+  const sf = ts.createSourceFile('analytics.ts', analyticsSource, ts.ScriptTarget.Latest, true)
+  const names: string[] = []
+  const walk = (n: ts.Node): void => {
+    if (ts.isInterfaceDeclaration(n) && n.name.text === 'WizardEvents') {
+      for (const m of n.members) if (m.name && ts.isIdentifier(m.name)) names.push(m.name.text)
+      return
+    }
+    ts.forEachChild(n, walk)
+  }
+  walk(sf)
+  return names
+}
+
+/** Every `captureWizard(...)` call in App.tsx. */
+function wizardCalls(): ts.CallExpression[] {
+  const out: ts.CallExpression[] = []
+  const walk = (n: ts.Node): void => {
+    if (ts.isCallExpression(n) && ts.isIdentifier(n.expression) && n.expression.text === 'captureWizard') out.push(n)
+    ts.forEachChild(n, walk)
+  }
+  walk(source)
+  return out
+}
+
+describe('where the wizard events are fired', () => {
+  const declared = declaredEvents()
+  const calls = wizardCalls()
+  const fired = calls.map((c) => (c.arguments[0] as ts.StringLiteral).text)
+
+  it('reads both sides at all', () => {
+    expect(declared).toEqual([
+      'wizard_step_viewed',
+      'wizard_account_created',
+      'wizard_pms_chosen',
+      'wizard_pms_skipped',
+      'wizard_pms_not_listed',
+      'wizard_connect_failed',
+      'wizard_pms_connected',
+      'wizard_handoff_started',
+    ])
+    expect(calls.length).toBeGreaterThan(0)
+  })
+
+  it('fires every declared event, each from exactly one place', () => {
+    // An event declared and never fired is a funnel step that reads as zero
+    // people; one fired from two places double-counts. Connection failures
+    // for both systems go through reportConnectFailed for that reason.
+    for (const name of declared) {
+      expect(fired.filter((f) => f === name), `${name} call sites`).toHaveLength(1)
+    }
+    expect(fired.filter((f) => !declared.includes(f))).toEqual([])
+  })
+
+  it('never passes person data, keys or free text', () => {
+    // The types already refuse most of this; this catches a cast.
+    const forbidden = new Set([
+      'email',
+      'userEmail',
+      'workspace',
+      'workspaceName',
+      'name',
+      'apiKey',
+      'apiSecret',
+      'secret',
+      'accountCode',
+      'otherName',
+      'note',
+      'password',
+      'returningAs',
+    ])
+    const used: string[] = []
+    for (const call of calls) {
+      const walk = (n: ts.Node): void => {
+        if (ts.isIdentifier(n) && forbidden.has(n.text)) used.push(`${n.text} in ${call.getText(source)}`)
+        if (ts.isShorthandPropertyAssignment(n) && forbidden.has(n.name.text)) used.push(n.name.text)
+        ts.forEachChild(n, walk)
+      }
+      call.arguments.forEach(walk)
+    }
+    expect(used).toEqual([])
+  })
+
+  it('records a skip from every way out of the connect step', () => {
+    // StepPms owns `skip`; a bare onSkip handed to a child skips unrecorded.
+    const picker = scopeOf('StepPms')
+    const bare: string[] = []
+    const walk = (n: ts.Node): void => {
+      if (ts.isJsxAttribute(n) && n.initializer && ts.isJsxExpression(n.initializer)) {
+        const value = n.initializer.expression?.getText(source)
+        if (value === 'onSkip') bare.push(n.getText(source))
+      }
+      ts.forEachChild(n, walk)
+    }
+    walk(picker)
+    expect(bare).toEqual([])
   })
 })

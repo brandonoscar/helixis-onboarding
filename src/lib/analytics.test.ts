@@ -36,6 +36,7 @@
  * imports. A top-level import would freeze whichever state ran first.
  */
 
+import ts from 'typescript'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { MARKETING_ROUTES } from '../seo/routes'
@@ -347,5 +348,127 @@ describe('where analytics is started', () => {
 
   it('watches for CTA clicks too — an init with no events measures arrivals only', () => {
     expect(ROUTER_SOURCE).toContain('watchStartClicks()')
+  })
+})
+
+// ── The wizard funnel ───────────────────────────────────────────────
+
+describe('the wizard events', () => {
+  it('sends nothing at all when no key is configured', async () => {
+    const { initAnalytics, captureWizard } = await loadWithKey(undefined)
+    await initAnalytics()
+    captureWizard('wizard_step_viewed', { step: 'pms' })
+    await settle()
+
+    expect(posthogMock.init).not.toHaveBeenCalled()
+    expect(posthogMock.capture).not.toHaveBeenCalled()
+  })
+
+  it('sends nothing before initAnalytics has given the client its posture', async () => {
+    const { captureWizard } = await loadWithKey('phc_test')
+    captureWizard('wizard_pms_chosen', { pms: 'buildium' })
+    await settle()
+
+    // A capture on a client that was never told about opt-out, Do Not Track
+    // or the URL scrubbing would be the one event that skips all three.
+    expect(posthogMock.capture).not.toHaveBeenCalled()
+  })
+
+  it('sends each event through the initialised client, with exactly its properties', async () => {
+    const { initAnalytics, captureWizard } = await loadWithKey('phc_test')
+    await initAnalytics()
+    posthogMock.capture.mockClear()
+
+    captureWizard('wizard_connect_failed', { pms: 'buildium', status: 401 })
+    captureWizard('wizard_handoff_started', {})
+    await settle()
+
+    expect(posthogMock.init).toHaveBeenCalledTimes(1)
+    expect(posthogMock.capture.mock.calls).toEqual([
+      ['wizard_connect_failed', { pms: 'buildium', status: 401 }],
+      ['wizard_handoff_started', {}],
+    ])
+  })
+
+  it('initialises once, however many times it is asked', async () => {
+    const { initAnalytics } = await loadWithKey('phc_test')
+    await initAnalytics()
+    await initAnalytics()
+    expect(posthogMock.init).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('nobody is identified', () => {
+  it('no source file calls identify()', () => {
+    // AST, not a text search: the comments that forbid identify() name it.
+    const offenders: string[] = []
+    for (const [path, src] of Object.entries(SOURCES)) {
+      if (path.includes('.test.')) continue
+      const sf = ts.createSourceFile(path, src, ts.ScriptTarget.Latest, true, path.endsWith('x') ? ts.ScriptKind.TSX : ts.ScriptKind.TS)
+      const walk = (n: ts.Node): void => {
+        if (ts.isCallExpression(n) && ts.isPropertyAccessExpression(n.expression) && n.expression.name.text === 'identify') {
+          offenders.push(path)
+        }
+        ts.forEachChild(n, walk)
+      }
+      walk(sf)
+    }
+    // The wizard knows the person's email; identify() is how it would leave.
+    expect(offenders).toEqual([])
+  })
+})
+
+// ── What URLs may leave the browser ─────────────────────────────────
+
+describe('URL secrets', () => {
+  const MAGIC_LINK_RETURN =
+    'https://occupella.com/start#access_token=eyJ.secret.sig&expires_in=3600&refresh_token=r3fr35h&type=magiclink'
+
+  it('the scrubbing hook and the hash option are both in the init config', async () => {
+    const { initAnalytics, scrubCapturedUrls } = await loadWithKey('phc_test')
+    await initAnalytics()
+    const config = posthogMock.init.mock.calls[0][1]
+    expect(config.before_send).toBe(scrubCapturedUrls)
+    expect(config.disable_capture_url_hashes).toBe(true)
+  })
+
+  it('cuts the fragment and the query off every absolute URL, wherever it sits', async () => {
+    const { scrubCapturedUrls } = await loadWithKey('phc_test')
+    const out = scrubCapturedUrls({
+      uuid: 'u1',
+      event: 'wizard_step_viewed',
+      properties: {
+        step: 'identify',
+        $current_url: MAGIC_LINK_RETURN,
+        $referrer: 'https://shwwcxkeewpotnigwvqp.supabase.co/auth/v1/verify?token=abc123&type=magiclink',
+        $pathname: '/start',
+        nested: { later_added_url: 'http://example.com/x?code=zzz', list: ['https://a.example/b#t=1'] },
+      },
+      $set_once: { $initial_current_url: MAGIC_LINK_RETURN },
+      $set: { $current_url: 'https://occupella.com/start?token_hash=th' },
+    })
+
+    const sent = JSON.stringify(out)
+    for (const secret of ['access_token', 'refresh_token', 'eyJ.secret', 'abc123', 'token_hash', 'code=zzz', '#t=1']) {
+      expect(sent, `${secret} would reach PostHog`).not.toContain(secret)
+    }
+    expect(out?.properties.$current_url).toBe('https://occupella.com/start')
+    expect(out?.properties.$referrer).toBe('https://shwwcxkeewpotnigwvqp.supabase.co/auth/v1/verify')
+    expect(out?.$set_once?.$initial_current_url).toBe('https://occupella.com/start')
+  })
+
+  it('leaves everything that is not a URL alone', async () => {
+    const { scrubCapturedUrls, withoutQueryOrHash } = await loadWithKey('phc_test')
+    const props = { step: 'pms', status: 401, doors: '51–200', $referrer: '$direct', flag: true, none: null }
+    expect(scrubCapturedUrls({ uuid: 'u', event: 'e', properties: props })?.properties).toEqual(props)
+    expect(withoutQueryOrHash('https://occupella.com/start')).toBe('https://occupella.com/start')
+    // A relative path or a sentence with a # in it is not a URL to cut.
+    expect(withoutQueryOrHash('/start#x')).toBe('/start#x')
+    expect(withoutQueryOrHash('item #4')).toBe('item #4')
+  })
+
+  it('passes a dropped event through as dropped', async () => {
+    const { scrubCapturedUrls } = await loadWithKey('phc_test')
+    expect(scrubCapturedUrls(null)).toBeNull()
   })
 })
