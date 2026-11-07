@@ -357,7 +357,7 @@ describe('the wizard events', () => {
   it('sends nothing at all when no key is configured', async () => {
     const { initAnalytics, captureWizard } = await loadWithKey(undefined)
     await initAnalytics()
-    captureWizard('wizard_step_viewed', { step: 'pms' })
+    captureWizard('wizard_step_viewed', { step: 'identify' })
     await settle()
 
     expect(posthogMock.init).not.toHaveBeenCalled()
@@ -366,7 +366,7 @@ describe('the wizard events', () => {
 
   it('sends nothing before initAnalytics has given the client its posture', async () => {
     const { captureWizard } = await loadWithKey('phc_test')
-    captureWizard('wizard_pms_chosen', { pms: 'buildium' })
+    captureWizard('wizard_account_created', {})
     await settle()
 
     // A capture on a client that was never told about opt-out, Do Not Track
@@ -379,14 +379,14 @@ describe('the wizard events', () => {
     await initAnalytics()
     posthogMock.capture.mockClear()
 
-    captureWizard('wizard_connect_failed', { pms: 'buildium', status: 401 })
-    captureWizard('wizard_handoff_started', {})
+    captureWizard('wizard_account_created', {})
+    captureWizard('wizard_step_viewed', { step: 'finish' })
     await settle()
 
     expect(posthogMock.init).toHaveBeenCalledTimes(1)
     expect(posthogMock.capture.mock.calls).toEqual([
-      ['wizard_connect_failed', { pms: 'buildium', status: 401 }],
-      ['wizard_handoff_started', {}],
+      ['wizard_account_created', {}],
+      ['wizard_step_viewed', { step: 'finish' }],
     ])
   })
 
@@ -459,7 +459,7 @@ describe('URL secrets', () => {
 
   it('leaves everything that is not a URL alone', async () => {
     const { scrubCapturedUrls, withoutQueryOrHash } = await loadWithKey('phc_test')
-    const props = { step: 'pms', status: 401, doors: '51–200', $referrer: '$direct', flag: true, none: null }
+    const props = { step: 'identify', status: 401, doors: '51–200', $referrer: '$direct', flag: true, none: null }
     expect(scrubCapturedUrls({ uuid: 'u', event: 'e', properties: props })?.properties).toEqual(props)
     expect(withoutQueryOrHash('https://occupella.com/start')).toBe('https://occupella.com/start')
     // A relative path or a sentence with a # in it is not a URL to cut.

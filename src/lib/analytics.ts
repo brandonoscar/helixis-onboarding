@@ -61,8 +61,8 @@
  *     party. The hook cuts `?` and `#` off every absolute URL in an event's
  *     properties, `$set` and `$set_once`, whichever key it sits under.
  *   - NO PERSON DATA IN EVENTS, and no `identify()`. Every `wizard_*`
- *     property is an enum, a doors range picked from a list, or a status
- *     number (see `WizardEvents`). Never an email, a company name or a key.
+ *     property is an enum (see `WizardEvents`). Never an email, a company
+ *     name or a key.
  *
  * Everything degrades to a no-op when `VITE_PUBLIC_POSTHOG_KEY` is unset, so a
  * local `npm run dev` and a preview deploy send nothing.
@@ -70,8 +70,6 @@
 
 import type { CaptureResult, PostHog } from 'posthog-js'
 import { routeFor } from '../seo/routes'
-import type { NotListedSystem } from './notListed'
-import type { Pms } from './pms'
 
 const KEY = import.meta.env.VITE_PUBLIC_POSTHOG_KEY as string | undefined
 const HOST =
@@ -278,45 +276,21 @@ export function watchStartClicks(): void {
 // ── The setup wizard's funnel ───────────────────────────────────────
 
 /** The wizard's internal steps, as App.tsx names them. */
-export type WizardStep = 'identify' | 'pms' | 'live' | 'scan' | 'channels' | 'finish'
-
-/** Where a person left the connect step without connecting anything. */
-export type PmsSkippedFrom = 'pms' | 'buildium' | 'rentvine' | 'not_listed'
+export type WizardStep = 'identify' | 'finish'
 
 /**
  * Every wizard event and the ONLY properties each may carry.
  *
- * ⚠ The types are the privacy rule. Each property is a fixed set of values
- * or a number, except `doors`, which is a range label the person picked from
- * a list (DOORS_OPTIONS in App.tsx). A property that can hold free text, an
- * email, a company name or a key does not belong here, and widening one of
- * these to `string` is how it would get in.
+ * ⚠ The types are the privacy rule. Each property is a fixed set of values.
+ * A property that can hold free text, an email, a company name or a key does
+ * not belong here, and widening one of these to `string` is how it would get
+ * in.
  */
 export interface WizardEvents {
   /** A step came on screen. */
   wizard_step_viewed: { step: WizardStep }
   /** Step 1 finished: password set and the workspace bootstrapped. */
-  wizard_account_created: { doors: string }
-  /** A system tile was picked. */
-  wizard_pms_chosen: { pms: Pms }
-  /** The connect step was left without connecting, and from which screen. */
-  wizard_pms_skipped: { step: PmsSkippedFrom }
-  /** A "my system isn't listed" answer was received by the backend. The
-   *  system only: an "Other" name is the person's own words and stays in
-   *  the feedback row. */
-  wizard_pms_not_listed: { system: NotListedSystem }
-  /**
-   * A connection attempt failed. `status` is the vendor's HTTP status when
-   * the vendor refused the keys (read from the test's error, Buildium only),
-   * else the Occupella API's status for a request that failed (0 = it never
-   * reached a server), else null when neither is known. Null is "unknown",
-   * never "fine".
-   */
-  wizard_connect_failed: { pms: Pms; status: number | null }
-  /** The keys passed the test. */
-  wizard_pms_connected: { pms: Pms }
-  /** "Send these steps to my admin" was opened. */
-  wizard_handoff_started: Record<string, never>
+  wizard_account_created: Record<string, never>
 }
 
 /**

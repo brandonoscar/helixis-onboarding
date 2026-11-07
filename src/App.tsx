@@ -1,74 +1,30 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { releaseSessionForHandOff, supabase } from "./lib/supabase";
-import { apiFetch, apiJson, APP_URL, BUILDIUM_WEBHOOK_URL } from "./lib/api";
+import { apiFetch, apiJson, APP_URL } from "./lib/api";
 import { clearWizard, loadWizard, saveWizard } from "./lib/persist";
 import { firstUnmet, meetsRequirements, requirements } from "./lib/passwordStrength";
-import { DraftCrop, EmailDraftCrop, HistoryCrop, NoticedCrop, WorkOrderCard, cropCss } from "./crops";
 import { resumeAction } from "./lib/resume";
-import { gmailConnected } from "./lib/google";
-import { buildiumRefusalStatus, buildiumTestFailure } from "./lib/buildium";
-import { captureWizard, type PmsSkippedFrom } from "./lib/analytics";
-import {
-  FEEDBACK_PATH,
-  NOTE_MAX_CHARS,
-  NOT_LISTED_SYSTEMS,
-  OTHER_MAX_CHARS,
-  notListedBody,
-  notListedReady,
-  type NotListedSystem,
-} from "./lib/notListed";
+import { captureWizard } from "./lib/analytics";
 import { Wordmark } from "./Site";
-import {
-  asksForAccountCode,
-  findingCards,
-  PMS_NAME,
-  PMS_READS,
-  rentvineAvailability,
-  rentvineCredentialsBody,
-  stepAfterConnect,
-  type Pms,
-  type RentvineAvailability,
-  type ScanData,
-} from "./lib/pms";
 
 // ─────────────────────────────────────────────────────────
-// SETUP WIZARD — four steps as the visitor sees them, six internally:
-//   Account  identify  — email code, company, doors, then a password,
-//                        saved BEFORE any credential is asked for
-//   Connect  pms       — pick Buildium or Rentvine, then its keys (admin
-//                        handoff on request for Buildium)
-//            live      — Buildium webhooks ("live updates"), skippable; not
-//                        shown for Rentvine (lib/pms.ts stepAfterConnect)
-//   Scan     scan      — the first read of the portfolio, filling in as it
-//                        goes; skipped when no system was connected
-//   Email    channels  — Gmail OAuth, optional (Calendar and Drive are
-//                        separate grants, connected in the app)
-//            finish    — the hand-off into the app, signed in
-// Team invites live in the in-app Getting Started checklist.
-//
-// ⚠ STYLED LIKE THE SITE since 2026-09-29 (founder brief): Fraunces for step
-// headings, IBM Plex Sans for everything else, #1957A0, no boxed cards. The
-// tokens are scoped to .ob the way the marketing pages scope theirs to .lp,
-// so nothing outside the wizard changes. Only markup and copy moved in that
-// pass; every backend call, and the order of calls inside each step, is the
-// one that was here before.
+// SETUP WIZARD — the account, then the hand-off into the app:
+//   Account  identify  — email code, company, then a password; the
+//                        company is made by /auth/bootstrap
+//   Open     finish    — the hand-off into the app, signed in
+// Since 2026-11-07 (founder; AgenticHelixis docs/decisions/ADR-one-product.md,
+// decision 5) the wizard stops at the account: the PMS connection, live
+// updates, the first scan and Gmail are gone with the connectors leaving the
+// release, and the rest of setup happens in the app's Getting started
+// checklist. Team invites live there too.
 // ─────────────────────────────────────────────────────────
 
-type Step = "identify" | "pms" | "live" | "scan" | "channels" | "finish";
+type Step = "identify" | "finish";
 
 interface WorkspaceData {
   name: string;
   slug: string;
   id?: string;
-}
-
-interface IntegrationState {
-  status: "idle" | "testing" | "connected" | "error" | "locked";
-  keyHint?: string;
-  lockedAt?: string;
-  lastTested?: string;
-  testMessage?: string;
-  count?: number | null;
 }
 
 // Versioned ToS/Privacy acceptance recorded at signup (the wizard is the
@@ -130,38 +86,6 @@ const TOS_VERSION = "2026-07-05";
 const TERMS_URL = "/terms";
 const PRIVACY_URL = "/privacy";
 
-// ⚠ Not stored on the company: bootstrap and the company PATCH carry the
-// name alone (checked 2026-09-29). Since 2026-10-23 the chosen label travels
-// as TEXT in two places: inside a "my system isn't listed" message
-// (lib/notListed.ts), and as the `doors` property of wizard_account_created
-// (lib/analytics.ts). No backend parses it, so the labels can still change
-// without a backend change; a renamed label only splits the analytics
-// breakdown at the date it changed.
-const DOORS_OPTIONS = ["1–50", "51–200", "201–500", "501–2,000", "2,000+"];
-
-/**
- * Screen recording of Buildium's own Create-API-Key flow, shown inside the
- * "Walk me through it" panel on the Buildium step.
- *
- * Empty = the panel renders the written steps only, which is the correct
- * behaviour until a file exists. Drop the clip at `public/<name>` and set
- * this to "/<name>" — no other change is needed, and a missing file can
- * never break the build the way a bare `import` of one would.
- *
- * ⚠ Record OUR OWN capture rather than lifting Buildium's marketing clip.
- * Their video is their copyrighted material; embedding it in a commercial
- * product that integrates with them is a permission question, not a
- * technical one. A screen capture of the console taken from our own
- * account carries no such problem.
- */
-const BUILDIUM_KEY_CLIP = "";
-
-/**
- * A screenshot of Buildium's API Keys tab, shown under the four steps.
- * TODO(brandon): capture it from our own account (no account name or key
- * visible), put it in public/ and set the path. Empty renders nothing.
- */
-const BUILDIUM_KEY_SHOT = "";
 
 // ─────────────────────────────────────────────────────────
 // WIZARD-SPECIFIC STYLES (tokens + primitives live in theme.ts)
@@ -177,7 +101,6 @@ const css = `
     --iris-press: #0F3B70;
     --iris-soft: rgba(25, 87, 160, 0.10);
     --iris-ring: rgba(25, 87, 160, 0.35);
-    --band: #E3EDF9;
     --line: #DCE3EC;
     --line-strong: #C5D0DD;
     --card-edge: #DCE3EC;
@@ -185,17 +108,22 @@ const css = `
     --font-display: 'Fraunces Variable', Georgia, 'Times New Roman', serif;
     --font-sans: 'IBM Plex Sans Variable', 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
     --font-mono: var(--font-sans);
-    min-height: 100vh; display: flex; flex-direction: column;
+    min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1fr);
     background: var(--canvas); color: var(--ink);
     font-family: var(--font-sans); font-size: 16px; line-height: 1.55;
     font-variant-numeric: normal;
   }
   .ob a { color: var(--iris); }
 
-  /* ── header: the site's bar ── */
+  /* ── the left column: wordmark, the form in the middle, the legal line at the foot ──
+     No rule runs across the page: the photo's column goes from top to bottom beside it. */
+  @media (min-width: 960px) { .ob { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+  .ob-left { display: flex; flex-direction: column; min-height: 100vh; min-width: 0; }
+
+  /* ── header: the wordmark, and who is signed in ── */
   .ob-head {
-    height: 64px; flex: none; display: flex; align-items: center; justify-content: space-between; gap: 16px;
-    padding: 0 32px; background: var(--canvas); border-bottom: 1px solid var(--line);
+    height: 80px; flex: none; display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 0 48px;
   }
   .ob .ob-word {
     font-family: var(--font-display); font-optical-sizing: auto;
@@ -205,31 +133,43 @@ const css = `
   .ob-who { font-size: 14px; color: var(--ink-muted); text-align: right; }
   .ob-who b { color: var(--ink); font-weight: 600; }
 
-  /* ── progress: four named steps ── */
-  .ob-prog { border-bottom: 1px solid var(--line); background: var(--canvas); }
-  .ob-prog ol { list-style: none; margin: 0; padding: 0 32px; display: flex; gap: 28px; height: 52px; align-items: center; }
-  .ob-prog li { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; color: var(--ink-subtle); white-space: nowrap; }
-  .ob-prog li .n {
-    width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
-    border: 1px solid var(--line-strong); font-size: 12px; font-weight: 600; color: var(--ink-subtle);
-  }
-  .ob-prog li[data-state="current"] { color: var(--iris); font-weight: 600; }
-  .ob-prog li[data-state="current"] .n { border-color: var(--iris); background: var(--iris); color: #fff; }
-  .ob-prog li[data-state="done"] { color: var(--ink); }
-  .ob-prog li[data-state="done"] .n { border-color: var(--iris); color: var(--iris); }
 
-  /* ── body: the form, and the pale blue panel on desktop ── */
-  .ob-main { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr); }
-  @media (min-width: 960px) { .ob-main { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
-  .ob-form { padding: 56px 32px 64px; display: flex; justify-content: center; }
-  @media (min-width: 960px) { .ob-form { justify-content: flex-end; padding-right: 64px; } }
-  .panel { width: 100%; max-width: 440px; animation: fadeUp 0.3s var(--ease-out) both; }
-  .ob-side { display: none; background: var(--band); }
+  /* ── body: the form, in the middle of its column ── */
+  .ob-form { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px 48px 56px; }
+  .ob-form-in { width: 100%; max-width: 420px; }
+  .panel { width: 100%; animation: fadeUp 0.3s var(--ease-out) both; }
+  /* The photo has no edge of its own: it fades out toward the form and toward the foot of
+     the page, into whatever the page's background is, so it belongs to the page rather
+     than sitting beside it (founder, 2026-11-07: "the photo needs to blend into whatever
+     design"). The fades are masks, not a white shade, so a new background follows. */
+  .ob-side { display: none; position: relative; overflow: hidden; }
   @media (min-width: 960px) {
-    .ob-side { display: flex; align-items: center; padding: 56px 64px; }
+    .ob-side { display: flex; align-items: flex-end; padding: 64px; position: sticky; top: 0; height: 100vh; }
   }
-  .ob-side-in { width: 100%; max-width: 440px; }
-  .ob-side-next { margin-top: 20px; font-size: 16px; line-height: 1.55; color: var(--ink); max-width: 38ch; }
+  .ob-side-photo {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; object-position: 45% 40%;
+    /* Mirrored, so the sunlit facade meets the form and the deep shade of the trees sits at
+       the far edge; lightened and softened to the page's quiet. A mask is drawn before the
+       flip, so the fade named "to left" lands on the form's side. */
+    transform: scaleX(-1);
+    filter: brightness(1.2) contrast(0.8) saturate(0.8);
+    -webkit-mask-image:
+      linear-gradient(to left, transparent 0%, rgba(0, 0, 0, 0.55) 22%, #000 55%),
+      linear-gradient(to top, transparent 0%, rgba(0, 0, 0, 0.12) 24%, #000 52%);
+    -webkit-mask-composite: source-in;
+    mask-image:
+      linear-gradient(to left, transparent 0%, rgba(0, 0, 0, 0.55) 22%, #000 55%),
+      linear-gradient(to top, transparent 0%, rgba(0, 0, 0, 0.12) 24%, #000 52%);
+    mask-composite: intersect;
+  }
+  .ob-side-in { position: relative; z-index: 1; width: 100%; max-width: 440px; }
+  .ob-side-next {
+    margin: 0; font-family: var(--font-display); font-optical-sizing: auto;
+    font-size: 22px; font-weight: 500; line-height: 1.35; letter-spacing: -0.01em;
+    color: var(--ink); max-width: 30ch; text-wrap: balance;
+  }
+  .ob-side-credit { margin: 14px 0 0; font-size: 12px; line-height: 1.4; color: var(--ink-muted); }
   @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
   @media (prefers-reduced-motion: reduce) { .panel { animation: none; } }
 
@@ -245,7 +185,7 @@ const css = `
   .ob .ob-back:focus-visible { outline: 2px solid var(--iris); outline-offset: 2px; }
   .panel-title {
     font-family: var(--font-display); font-optical-sizing: auto;
-    font-size: 32px; font-weight: 560; line-height: 1.15; letter-spacing: -0.015em;
+    font-size: 36px; font-weight: 560; line-height: 1.12; letter-spacing: -0.02em;
     color: var(--ink); text-wrap: balance;
   }
   .panel-desc { margin-top: 10px; font-size: 16px; line-height: 1.55; color: var(--ink-muted); }
@@ -255,7 +195,7 @@ const css = `
   /* ── fields: real labels above, sentence case ── */
   .ob .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 18px; }
   .ob label { font-size: 15px; font-weight: 600; color: var(--ink); letter-spacing: 0; }
-  .ob input, .ob select { height: 44px; font-size: 16px; padding: 0 14px; }
+  .ob input, .ob select { height: 46px; font-size: 16px; padding: 0 14px; border-radius: 8px; }
   .ob .hint { font-size: 14px; line-height: 1.5; color: var(--ink-muted); margin-top: 2px; }
   .ob-pw { position: relative; }
   .ob-pw input { padding-right: 72px; }
@@ -267,9 +207,10 @@ const css = `
   .ob .ob-pw-toggle:focus-visible { outline: 2px solid var(--iris); outline-offset: 1px; }
 
   /* ── buttons: the site's ── */
-  .ob .btn { height: 40px; padding: 0 18px; border-radius: 6px; font-family: var(--font-sans); font-size: 15px; font-weight: 600; box-shadow: none; }
+  .ob .btn { height: 46px; padding: 0 18px; border-radius: 8px; font-family: var(--font-sans); font-size: 15px; font-weight: 600; box-shadow: none; }
   .ob .btn-primary, .ob .btn-primary:hover { color: #fff; }
-  .ob .btn-primary:disabled, .ob .btn-secondary:disabled {
+  .ob .btn-primary:disabled { background: var(--iris); border-color: var(--iris); color: #fff; opacity: 0.45; cursor: not-allowed; }
+  .ob .btn-secondary:disabled {
     background: #E6EAF0; border-color: #E6EAF0; color: #8A94A3; opacity: 1; cursor: not-allowed;
   }
   .ob .btn-secondary { background: var(--canvas); border-color: var(--line-strong); color: var(--ink); }
@@ -402,10 +343,9 @@ const css = `
   }
   .ob .tos-row input[type="checkbox"]:focus-visible { outline: 2px solid var(--iris); outline-offset: 2px; }
   .tos-row a { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
-  .ob-works { margin: -4px 0 18px; font-size: 14px; color: var(--ink-muted); }
 
   /* ── footer line ── */
-  .ob-foot { border-top: 1px solid var(--line); padding: 18px 32px; display: flex; flex-wrap: wrap; gap: 6px 20px; font-size: 14px; color: var(--ink-muted); }
+  .ob-foot { padding: 20px 48px 28px; display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 13px; color: var(--ink-subtle); }
   .ob-foot a { color: var(--ink-muted); }
   .ob-foot a:hover { color: var(--ink); }
 
@@ -413,55 +353,14 @@ const css = `
     .ob-head { height: auto; min-height: 64px; padding-top: 10px; padding-bottom: 10px; flex-wrap: wrap; }
     .ob-who { font-size: 13px; text-align: left; }
     .ob-head, .ob-foot { padding-left: 20px; padding-right: 20px; }
-    .ob-prog ol { padding: 0 20px; gap: 14px; overflow-x: auto; }
-    .ob-prog li .t { display: none; }
-    .ob-prog li[data-state="current"] .t { display: inline; }
-    .ob-form { padding: 36px 20px 48px; }
-    .panel-title { font-size: 28px; }
+    .ob-form { align-items: flex-start; padding: 28px 20px 40px; }
+    .panel-title { font-size: 30px; }
   }
 `;
 
 // ─────────────────────────────────────────────────────────
 // UTILITY COMPONENTS
 // ─────────────────────────────────────────────────────────
-
-function CopyField({ label, value }: { label: string; value: string }) {
-  const [copied, setCopied] = useState(false);
-
-  const copy = async () => {
-    await navigator.clipboard.writeText(value);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  return (
-    <div className="field">
-      <label>{label}</label>
-      <div className="copy-field">
-        <span className="copy-value">{value}</span>
-        <button className="copy-btn" onClick={copy}>
-          {copied ? "Copied" : "Copy"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// "Explore with sample data": a preview, never an alternate activation path.
-// ⚠ Only things the product does today (no payment promises, no auto-sends).
-function SamplePreview() {
-  return (
-    <div className="sample">
-      <div className="sample-label">Sample data: what a first scan shows</div>
-      <ul>
-        <li>4 work orders open more than 7 days, 2 with no vendor assigned</li>
-        <li>3 leases ending in the next 90 days</li>
-        <li>$4,020 owed across 3 leases</li>
-      </ul>
-      <div className="sample-cta">Connect your system to see your own.</div>
-    </div>
-  );
-}
 
 function CheckIcon({ size = 12 }: { size?: number }) {
   return (
@@ -471,14 +370,8 @@ function CheckIcon({ size = 12 }: { size?: number }) {
   );
 }
 
-/** The wizard's own Back (its history stack), for headings that don't pass
- *  one. Undefined when there is nowhere to go back to. */
-const BackContext = createContext<(() => void) | undefined>(undefined);
-
 /** The step heading, with Back beside it rather than floating in a corner. */
-function StepTitle({ title, onBack: explicitBack, children }: { title: string; onBack?: () => void; children?: React.ReactNode }) {
-  const contextBack = useContext(BackContext);
-  const onBack = explicitBack ?? contextBack;
+function StepTitle({ title, onBack, children }: { title: string; onBack?: () => void; children?: React.ReactNode }) {
   return (
     <div className="panel-header">
       {children}
@@ -493,25 +386,6 @@ function StepTitle({ title, onBack: explicitBack, children }: { title: string; o
         <h1 className="panel-title">{title}</h1>
       </div>
     </div>
-  );
-}
-
-/**
- * Each system's logo.
- *
- * ⚠ TODO(brandon): the official Buildium and Rentvine logo files. Drop each
- * vendor's SVG in public/logos/ and set the path here, after checking its
- * brand guidelines (neither was readable from the build container, and a
- * logo is a trademark). Until then the name is set in type, so nothing on
- * the screen pretends to be a mark it isn't.
- */
-const PMS_LOGO: Record<Pms, string> = { buildium: "", rentvine: "" };
-
-function PmsMark({ pms }: { pms: Pms }) {
-  return (
-    <span className="ob-mark">
-      {PMS_LOGO[pms] ? <img src={PMS_LOGO[pms]} alt={PMS_NAME[pms]} /> : <span className="ob-mark-text">{PMS_NAME[pms]}</span>}
-    </span>
   );
 }
 
@@ -564,7 +438,6 @@ function SecretInput({
 interface Profile {
   email: string;
   name: string;
-  doors: string;
 }
 
 function StepIdentify({
@@ -598,7 +471,6 @@ function StepIdentify({
 }) {
   const [email, setEmail] = useState(initial.email);
   const [name, setName] = useState(initial.name);
-  const [doors, setDoors] = useState(initial.doors);
   const [sent, setSent] = useState(false);
   // ToS acceptance — REQUIRED here now: the wizard is the ONE front door
   // (founder decision 2026-08-20; the app's signup + its checkbox are
@@ -643,7 +515,7 @@ function StepIdentify({
     if (!ready) return;
     // Persist the profile BEFORE the OTP round-trip so a magic-link
     // redirect (full SPA reload) resumes with the company name intact.
-    onProfile({ email, name: name.trim(), doors });
+    onProfile({ email, name: name.trim() });
     setLoading(true);
     setError("");
     const { error: e } = await supabase.auth.signInWithOtp({
@@ -834,19 +706,6 @@ function StepIdentify({
               autoComplete="organization"
             />
           </div>
-          <div className="field">
-            <label htmlFor="ob-doors">Doors under management</label>
-            <select id="ob-doors" value={doors} onChange={(e) => setDoors(e.target.value)}>
-              <option value="">Choose a range</option>
-              {DOORS_OPTIONS.map((d) => (
-                <option key={d} value={d}>{d}</option>
-              ))}
-            </select>
-          </div>
-          <p className="ob-works">
-            Works with Buildium and Rentvine. On AppFolio or Yardi?{" "}
-            <a href="mailto:team@occupella.com?subject=AppFolio%2FYardi%20waitlist">Join the waitlist</a>.
-          </p>
           <label className="tos-row">
             <input
               type="checkbox"
@@ -916,917 +775,6 @@ function StepIdentify({
 }
 
 // ─────────────────────────────────────────────────────────
-// STEP 2: CONNECT BUILDIUM (credentials → test → reveal; handoff on request)
-// ─────────────────────────────────────────────────────────
-
-/** The Occupella API's status on a thrown request (0 = never reached a
- *  server), or null when the error carries none. */
-function apiStatus(e: unknown): number | null {
-  const status = (e as { status?: unknown } | null)?.status;
-  return typeof status === "number" ? status : null;
-}
-
-/** The one place a failed connection attempt is recorded, for both systems.
- *  What `status` means is on `WizardEvents.wizard_connect_failed`. */
-function reportConnectFailed(pms: Pms, status: number | null): void {
-  captureWizard("wizard_connect_failed", { pms, status });
-}
-
-function StepBuildium({
-  userEmail,
-  workspaceName,
-  onNext,
-  onSkip,
-  onChangePms,
-}: {
-  userEmail: string;
-  workspaceName: string;
-  onNext: (count: number | null) => void;
-  onSkip: () => void;
-  onChangePms: () => void;
-}) {
-  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
-  const [apiKey, setApiKey] = useState("");
-  const [apiSecret, setApiSecret] = useState("");
-  const [env, setEnv] = useState<"production" | "sandbox">("production");
-  const [integration, setIntegration] = useState<IntegrationState>({ status: "idle" });
-  const [locking, setLocking] = useState(false);
-  const [showSample, setShowSample] = useState(false);
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [copied, setCopied] = useState(false);
-
-  // ⚠ THE APPROVAL SENTENCE IS HELD ("Occupella never writes to Buildium
-  // without a person approving the change first"). TODO(brandon): confirm
-  // the autonomous notes flag is off; then it can come back here and in the
-  // step's description.
-  //
-  // ⚠ THE KEYS COME BACK TO THE REQUESTER; THE ADMIN NEVER SIGNS UP. This
-  // email used to end "or finish the setup here: <origin>/start", and /start
-  // always creates a NEW user and company (POST /auth/bootstrap). An admin who
-  // followed it connected Buildium in a second workspace, and the requester's
-  // own connect was then refused as "already connected to a different
-  // Occupella workspace" (one Buildium account maps to one workspace). Do not
-  // add a link back to /start here.
-  const handoffInstructions =
-    `Hi,\n\n` +
-    `We're setting up Occupella for ${workspaceName || "our company"}. It reads our Buildium data ` +
-    `(properties, units, leases, tenants, work orders and bills) and needs an API key to do it.\n\n` +
-    `Steps, about 2 minutes:\n` +
-    `1. In Buildium, open Settings, then Developer Tools, and pick the API Keys tab\n` +
-    `2. Click Create API Key, name it Occupella and continue through the three steps\n` +
-    `3. Copy the Client ID and Client Secret\n` +
-    `4. Send both back to me securely, for example through a password manager, not in a plain ` +
-    `email. I'll add them to our Occupella workspace, so there's no need to sign up yourself.\n\n` +
-    `Security: the credentials are encrypted at rest and not shown again after setup, and you can ` +
-    `revoke the key from Buildium at any time.\n\n` +
-    `Requested by ${userEmail}`;
-
-  const mailtoHref =
-    `mailto:?subject=${encodeURIComponent("Occupella needs a Buildium API key")}` +
-    `&body=${encodeURIComponent(handoffInstructions)}`;
-
-  /** Opens or closes the admin hand-off. Recorded on OPENING only. */
-  const toggleHandoff = () => {
-    if (isAdmin !== false) captureWizard("wizard_handoff_started", {});
-    setIsAdmin((v) => (v === false ? null : false));
-  };
-
-  const copyInstructions = async () => {
-    await navigator.clipboard.writeText(handoffInstructions);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  /** Saves the keys, then tests them: the same two calls, in the same order,
-   *  as before the 2026-09-29 restyle. Returns whether the test passed. */
-  const testConnection = async (): Promise<{ ok: boolean; count: number | null }> => {
-    if (!apiKey || !apiSecret) return { ok: false, count: null };
-    setIntegration((s) => ({ ...s, status: "testing" }));
-
-    try {
-      // Fernet-encrypt + upsert into company_buildium_credentials.
-      const savedRes = await apiFetch("/api/v1/buildium/credentials", {
-        method: "PUT",
-        body: JSON.stringify({ client_id: apiKey, client_secret: apiSecret, environment: env }),
-      });
-      const saved = (await savedRes.json()) as { client_id_last4?: string };
-
-      // Live test against Buildium. Side effect: backfills account_id,
-      // which is what routes inbound webhooks back to this company —
-      // this step is load-bearing, not cosmetic.
-      const testData = await apiJson<{
-        ok: boolean;
-        account_name?: string | null;
-        properties_count?: number | null;
-        error?: string | null;
-      }>("/api/v1/buildium/test", { method: "POST" });
-
-      if (testData.ok) {
-        const n = testData.properties_count;
-        setIntegration({
-          status: "connected",
-          keyHint: saved.client_id_last4 ? `...${saved.client_id_last4}` : undefined,
-          lastTested: new Date().toLocaleTimeString(),
-          count: n ?? null,
-          // Deliberately no count here — /buildium/test's properties_count
-          // is a shallow probe that can undercount, and a wrong number at
-          // the moment of connection reads as a broken product.
-          testMessage: "Connected. Starting the first scan.",
-        });
-        return { ok: true, count: n ?? null };
-      }
-      // ⚠ Through lib/buildium.ts: a 401 or 403 used to reach the screen as
-      // the vendor's raw response ("Buildium rejected the request: Buildium
-      // 401 /rentals: ..."). The wizard has no details pattern, so the raw
-      // text is not kept on screen; the backend logs it.
-      setIntegration({ status: "error", testMessage: buildiumTestFailure(testData.error) });
-      reportConnectFailed("buildium", buildiumRefusalStatus(testData.error));
-      return { ok: false, count: null };
-    } catch (e: any) {
-      setIntegration({ status: "error", testMessage: e.message || "Couldn't reach Buildium to test the keys." });
-      reportConnectFailed("buildium", apiStatus(e));
-      return { ok: false, count: null };
-    }
-  };
-
-  const lockAndContinue = async (count: number | null) => {
-    // Credentials are already encrypted server-side; this acknowledges and
-    // advances. A backend lock/immutability endpoint doesn't exist yet —
-    // when it does, call it here.
-    setLocking(true);
-    setIntegration((s) => ({ ...s, status: "locked", lockedAt: new Date().toLocaleString() }));
-    setLocking(false);
-    onNext(count);
-  };
-
-  /** One button: test the keys, and only if Buildium accepts them, go on to
-   *  the scan. A failure stays on this screen with the reason inline. */
-  const connectAndScan = async () => {
-    const result = await testConnection();
-    if (result.ok) await lockAndContinue(result.count);
-  };
-
-  const busy = integration.status === "testing" || locking;
-
-  return (
-    <div className="panel" key="buildium">
-      <StepTitle title="Connect Buildium" onBack={busy ? undefined : onChangePms}>
-        <span className="ob-title-mark"><PmsMark pms="buildium" /></span>
-      </StepTitle>
-      {/* ⚠ Do not restore a claim about what happens BEFORE the scan: the
-          scan starts on its own once the keys pass. The approval sentence
-          that ended this line is held (see handoffInstructions). */}
-      <p className="panel-desc" style={{ marginTop: -18, marginBottom: 24 }}>
-        Occupella reads your {PMS_READS.buildium}. Create an API key in Buildium and paste it below.
-      </p>
-
-      {/* ⚠ The path is Developer Tools, not "API Settings" (corrected
-          2026-09-02 from a screenshot of the live console, where API Keys is
-          a tab on the Developer Tools page). Same four steps as
-          occupella.com/docs/buildium-api-setup. */}
-      <ol className="ob-steps">
-        <li><span>In Buildium, open <b>Settings</b>, then <b>Developer Tools</b>, and pick the <b>API Keys</b> tab.</span></li>
-        <li><span>Click <b>Create API Key</b> and name it <b>Occupella</b>.</span></li>
-        <li><span>Continue through Buildium&rsquo;s three steps.</span></li>
-        <li><span>Copy the <b>Client ID</b> and <b>Client Secret</b> and paste them here.</span></li>
-      </ol>
-      {/* ⚠ Hedged on purpose: which Buildium plans include the API is not
-          verified, so no plan name and no price. */}
-      <p className="hint" style={{ marginTop: -12, marginBottom: 24 }}>
-        Buildium only offers API keys on some of its plans. If you don&rsquo;t see Developer Tools
-        under Settings, your plan may not include API access.
-      </p>
-      {BUILDIUM_KEY_SHOT ? <img className="ob-shot" src={BUILDIUM_KEY_SHOT} alt="The API Keys tab in Buildium's Developer Tools" /> : null}
-      {BUILDIUM_KEY_CLIP ? (
-        <video className="keys-clip" src={BUILDIUM_KEY_CLIP} autoPlay loop muted playsInline aria-label="Creating an API key in Buildium" />
-      ) : null}
-
-      <div className="field">
-        <label htmlFor="ob-client-id">Client ID</label>
-        {/* Plain text: the ID is not the secret, and seeing it is how
-            somebody checks they pasted the right one. */}
-        <input
-          id="ob-client-id"
-          type="text"
-          value={apiKey}
-          onChange={(e) => setApiKey(e.target.value)}
-          autoComplete="off"
-          spellCheck={false}
-        />
-      </div>
-      <div className="field">
-        <label htmlFor="ob-client-secret">Client secret</label>
-        <SecretInput id="ob-client-secret" value={apiSecret} onChange={setApiSecret} autoComplete="new-password" onEnter={connectAndScan} />
-      </div>
-
-      {showAdvanced ? (
-        <div className="ob-radio" role="radiogroup" aria-label="Buildium environment">
-          <label>
-            <input type="radio" name="ob-env" checked={env === "production"} onChange={() => setEnv("production")} />
-            Production
-          </label>
-          <label>
-            <input type="radio" name="ob-env" checked={env === "sandbox"} onChange={() => setEnv("sandbox")} />
-            Sandbox (a key from Buildium&rsquo;s API sandbox)
-          </label>
-        </div>
-      ) : null}
-
-      {integration.status === "testing" && (
-        <div className="test-result info" role="status"><span className="spinner accent" /> Testing your keys with Buildium</div>
-      )}
-      {integration.status === "error" && (
-        <div className="test-result error" role="alert">{integration.testMessage}</div>
-      )}
-      {(integration.status === "connected" || integration.status === "locked") && (
-        <div className="test-result success" role="status">{integration.testMessage}</div>
-      )}
-
-      <button className="btn btn-primary wide" onClick={connectAndScan} disabled={!apiKey || !apiSecret || busy}>
-        {busy ? <><span className="spinner" /> Connecting</> : "Connect and scan"}
-      </button>
-      <button className="btn btn-secondary wide" onClick={toggleHandoff} disabled={busy}>
-        Send these steps to my admin
-      </button>
-
-      {isAdmin === false ? (
-        <div className="handoff">
-          <div className="handoff-title">Send the steps to your Buildium admin</div>
-          {/* ⚠ No "link back here" and no "your progress is saved": the email
-              asks the admin to send the keys back to you (see
-              handoffInstructions), and the wizard does not save its step. What
-              IS saved is the account, so the keys can go in later from the
-              app's Settings, which is the one path that is always open. */}
-          <div className="handoff-body">
-            An email saying why Occupella needs a key, where to create it and what gets stored. It asks
-            your admin to send the Client ID and Client Secret back to you. Your account is already set
-            up, so paste them here when they arrive, or later in Occupella under Settings, then
-            Connectors.
-          </div>
-          <div className="btn-row">
-            <a className="btn btn-secondary" href={mailtoHref} style={{ flex: 1 }}>Email my admin</a>
-            <button className="btn btn-secondary" onClick={copyInstructions} style={{ flex: 1 }}>
-              {copied ? "Copied" : "Copy the steps"}
-            </button>
-          </div>
-        </div>
-      ) : null}
-
-      {showSample && <SamplePreview />}
-
-      <p className="ob-alt-line">
-        <button type="button" className="ob-alt" onClick={() => setShowSample((v) => !v)} disabled={busy}>
-          {showSample ? "Hide the sample data" : "Explore with sample data"}
-        </button>{" "}
-        or{" "}
-        <button type="button" className="ob-alt" onClick={onSkip} disabled={busy}>skip Buildium for now</button>.
-      </p>
-      {!showAdvanced ? (
-        <div className="ob-alts" style={{ marginTop: 8 }}>
-          <button type="button" className="ob-alt" onClick={() => setShowAdvanced(true)}>Advanced</button>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────
-// STEP 2: WHICH SYSTEM? (Buildium or Rentvine, or "not listed")
-// ─────────────────────────────────────────────────────────
-
-/**
- * "My system isn't listed": which system, an optional note, sent to the
- * backend's feedback route. The contract and the reasons for `idea` + a view
- * tag are in lib/notListed.ts.
- *
- * ⚠ THE THANK-YOU APPEARS ONLY AFTER THE POST RESOLVED. `apiFetch` throws on
- * any non-2xx and on a request that never arrived, so every failure lands in
- * the catch and stays on the form with the reason. (The app's own feedback
- * dialog once showed "Sent" for reports that never arrived, because its fetch
- * resolved on a 422.) Skip stays available either way.
- *
- * ⚠ The thank-you promises nothing: nobody has decided to support any of
- * these systems, and the row gets no automatic reply.
- */
-export function NotListedForm({ doors, onContinue }: { doors: string; onContinue: () => void }) {
-  const [system, setSystem] = useState<NotListedSystem | "">("");
-  const [otherName, setOtherName] = useState("");
-  const [note, setNote] = useState("");
-  const [sending, setSending] = useState(false);
-  const [sent, setSent] = useState(false);
-  const [error, setError] = useState("");
-
-  const answer = { system, otherName, note, doors };
-  const ready = notListedReady(answer);
-
-  const send = async () => {
-    if (!ready || sending) return;
-    setSending(true);
-    setError("");
-    try {
-      await apiFetch(FEEDBACK_PATH, { method: "POST", body: JSON.stringify(notListedBody(answer)) });
-      setSent(true);
-      // After the backend has it, and the system only: an "Other" name is the
-      // person's own words and stays in the feedback row.
-      if (system) captureWizard("wizard_pms_not_listed", { system });
-    } catch (e: any) {
-      setError(e?.message || "That didn't send. Try again, or skip this step for now.");
-    } finally {
-      setSending(false);
-    }
-  };
-
-  if (sent) {
-    return (
-      <div className="ob-notlisted" id="ob-notlisted">
-        <div className="test-result success" role="status">Thanks. That&rsquo;s with the Occupella team now.</div>
-        <button className="btn btn-primary wide" onClick={onContinue}>Continue</button>
-      </div>
-    );
-  }
-
-  return (
-    <div className="ob-notlisted" id="ob-notlisted">
-      <div className="field">
-        <label htmlFor="ob-nl-system">Which system do you use?</label>
-        <select
-          id="ob-nl-system"
-          value={system}
-          onChange={(e) => { setSystem(e.target.value as NotListedSystem | ""); setError(""); }}
-        >
-          <option value="">Choose one</option>
-          {NOT_LISTED_SYSTEMS.map((s) => (
-            <option key={s} value={s}>{s}</option>
-          ))}
-        </select>
-      </div>
-      {system === "Other" ? (
-        <div className="field">
-          <label htmlFor="ob-nl-other">Which one?</label>
-          <input
-            id="ob-nl-other"
-            type="text"
-            value={otherName}
-            maxLength={OTHER_MAX_CHARS}
-            onChange={(e) => { setOtherName(e.target.value); setError(""); }}
-            autoComplete="off"
-            autoFocus
-          />
-        </div>
-      ) : null}
-      <div className="field">
-        <label htmlFor="ob-nl-note">Anything else we should know? (optional)</label>
-        <textarea
-          id="ob-nl-note"
-          rows={3}
-          value={note}
-          maxLength={NOTE_MAX_CHARS}
-          onChange={(e) => setNote(e.target.value)}
-        />
-      </div>
-      {error && <div className="test-result error" role="alert">{error}</div>}
-      <button className="btn btn-primary wide" onClick={send} disabled={!ready || sending}>
-        {sending ? <><span className="spinner" /> Sending</> : "Send"}
-      </button>
-    </div>
-  );
-}
-
-function StepPms({
-  userEmail,
-  workspaceName,
-  doors,
-  onConnected,
-  onSkip,
-}: {
-  userEmail: string;
-  workspaceName: string;
-  /** Step 1's "Doors under management" range, sent with a not-listed answer. */
-  doors: string;
-  onConnected: (pms: Pms) => void;
-  onSkip: () => void;
-}) {
-  const [choice, setChoice] = useState<Pms | null>(null);
-  const [notListed, setNotListed] = useState(false);
-
-  const choose = (pms: Pms) => {
-    captureWizard("wizard_pms_chosen", { pms });
-    setChoice(pms);
-  };
-
-  /** Every way out of this step without a connection goes through here, so
-   *  the skip is recorded once, with the screen it was taken from. */
-  const skip = (from: PmsSkippedFrom) => {
-    captureWizard("wizard_pms_skipped", { step: from });
-    onSkip();
-  };
-  // Asked once, before any keys are collected: a customer on a deployment
-  // where the Rentvine connector is off is told so here, not after pasting
-  // both keys and hitting the backend's 503.
-  const [rentvine, setRentvine] = useState<RentvineAvailability>("unknown");
-
-  useEffect(() => {
-    let active = true;
-    apiJson<unknown>("/api/v1/rentvine/credentials")
-      .then((status) => active && setRentvine(rentvineAvailability(status)))
-      .catch(() => active && setRentvine("unknown"));
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  if (choice === "buildium") {
-    return (
-      <StepBuildium
-        userEmail={userEmail}
-        workspaceName={workspaceName}
-        onNext={() => onConnected("buildium")}
-        onSkip={() => skip("buildium")}
-        onChangePms={() => setChoice(null)}
-      />
-    );
-  }
-  if (choice === "rentvine") {
-    return (
-      <StepRentvine
-        onNext={() => onConnected("rentvine")}
-        onSkip={() => skip("rentvine")}
-        onChangePms={() => setChoice(null)}
-      />
-    );
-  }
-
-  return (
-    <div className="panel" key="pms">
-      <StepTitle title="Connect your property management system" />
-      <p className="panel-desc" style={{ marginTop: -18, marginBottom: 24 }}>
-        Occupella reads your portfolio from it. Each workspace connects to one system.
-      </p>
-
-      <div className="ob-tiles">
-        {(["buildium", "rentvine"] as const).map((pms) => (
-          <button
-            key={pms}
-            type="button"
-            className="ob-tile"
-            onClick={() => choose(pms)}
-            disabled={pms === "rentvine" && rentvine === "off"}
-            aria-label={`Connect ${PMS_NAME[pms]}`}
-          >
-            <PmsMark pms={pms} />
-            <span className="ob-tile-reads">Reads your {PMS_READS[pms]}.</span>
-          </button>
-        ))}
-        {/* ⚠ This step was a dead end for anyone on another system: two
-            tiles and Skip. One tile, not one per system: Rent Manager,
-            Propertyware and DoorLoop are not offered as tiles. */}
-        <button
-          type="button"
-          className="ob-tile ob-tile-other"
-          onClick={() => setNotListed((v) => !v)}
-          aria-expanded={notListed}
-          aria-controls="ob-notlisted"
-        >
-          <span className="ob-tile-name">My system isn&rsquo;t listed</span>
-          <span className="ob-tile-reads">Tell us which one you use.</span>
-        </button>
-      </div>
-      {notListed ? <NotListedForm doors={doors} onContinue={() => skip("not_listed")} /> : null}
-      {rentvine === "off" && (
-        <p className="hint" style={{ marginTop: 12 }}>
-          Rentvine isn&rsquo;t switched on for new workspaces yet. Email{" "}
-          <a href="mailto:team@occupella.com?subject=Rentvine%20access">team@occupella.com</a> and
-          we&rsquo;ll turn it on for you, or skip this step and come back to occupella.com/start later.
-        </p>
-      )}
-
-      <p className="ob-alt-line">
-        <button type="button" className="ob-alt" onClick={() => skip("pms")}>Skip for now</button>
-      </p>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────
-// STEP 2b: CONNECT RENTVINE (keys → test → continue)
-// ─────────────────────────────────────────────────────────
-
-function StepRentvine({
-  onNext,
-  onSkip,
-  onChangePms,
-}: {
-  onNext: () => void;
-  onSkip: () => void;
-  onChangePms: () => void;
-}) {
-  const [apiKey, setApiKey] = useState("");
-  const [apiSecret, setApiSecret] = useState("");
-  const [accountCode, setAccountCode] = useState("");
-  // Hidden until needed: the backend works the subdomain out from the keys,
-  // and asks for it (422) only when it can't.
-  const [showAccountCode, setShowAccountCode] = useState(false);
-  const [integration, setIntegration] = useState<IntegrationState>({ status: "idle" });
-
-  /** Saves the keys, then tests them (the same two calls, in the same order,
-   *  as before the 2026-09-29 restyle). Returns whether the test passed. */
-  const testConnection = async (): Promise<boolean> => {
-    if (!apiKey || !apiSecret) return false;
-    setIntegration({ status: "testing" });
-    try {
-      await apiFetch("/api/v1/rentvine/credentials", {
-        method: "PUT",
-        body: JSON.stringify(rentvineCredentialsBody(apiKey, apiSecret, accountCode)),
-      });
-      const testData = await apiJson<{ ok: boolean; error?: string | null }>(
-        "/api/v1/rentvine/test",
-        { method: "POST" },
-      );
-      if (testData.ok) {
-        setIntegration({
-          status: "connected",
-          testMessage: "Connected. Occupella has started reading your portfolio.",
-        });
-        return true;
-      }
-      setIntegration({ status: "error", testMessage: testData.error || "Rentvine didn't accept those keys." });
-      // Rentvine's refusals are advice sentences with no status in them.
-      reportConnectFailed("rentvine", null);
-      return false;
-    } catch (e: any) {
-      // The backend's refusals are sentences for the customer (connector off,
-      // workspace already on Buildium, subdomain needed). Show them as written.
-      if (asksForAccountCode(e?.status)) setShowAccountCode(true);
-      setIntegration({ status: "error", testMessage: e?.message || "Couldn't reach Rentvine to test the keys." });
-      reportConnectFailed("rentvine", apiStatus(e));
-      return false;
-    }
-  };
-
-  const connectAndScan = async () => {
-    if (await testConnection()) onNext();
-  };
-
-  const testing = integration.status === "testing";
-
-  return (
-    <div className="panel" key="rentvine">
-      <StepTitle title="Connect Rentvine" onBack={testing ? undefined : onChangePms}>
-        <span className="ob-title-mark"><PmsMark pms="rentvine" /></span>
-      </StepTitle>
-      {/* The approval sentence that ended this line is held, as on the
-          Buildium step. TODO(brandon): confirm the autonomous notes flag. */}
-      <p className="panel-desc" style={{ marginTop: -18, marginBottom: 24 }}>
-        Occupella reads your {PMS_READS.rentvine}. Paste a Rentvine API key below.
-      </p>
-
-      <div className="field">
-        <label htmlFor="ob-rv-key">Access key</label>
-        <input id="ob-rv-key" type="text" value={apiKey} onChange={(e) => setApiKey(e.target.value)} autoComplete="off" spellCheck={false} />
-      </div>
-      <div className="field">
-        <label htmlFor="ob-rv-secret">Secret</label>
-        <SecretInput id="ob-rv-secret" value={apiSecret} onChange={setApiSecret} autoComplete="new-password" onEnter={connectAndScan} />
-        <span className="hint">
-          Rentvine shows the secret once, when the key is created. If you don&rsquo;t have it, create a
-          new key and use that pair.
-        </span>
-      </div>
-      {showAccountCode ? (
-        <div className="field">
-          <label htmlFor="ob-rv-code">Rentvine account code</label>
-          <input id="ob-rv-code" value={accountCode} placeholder="yourcompany" onChange={(e) => setAccountCode(e.target.value)} autoComplete="off" />
-          <span className="hint">
-            The word before &ldquo;.rentvine.com&rdquo; in your browser&rsquo;s address bar when you&rsquo;re signed in.
-          </span>
-        </div>
-      ) : null}
-
-      {testing && <div className="test-result info" role="status"><span className="spinner accent" /> Testing your keys with Rentvine</div>}
-      {integration.status === "connected" && <div className="test-result success" role="status">{integration.testMessage}</div>}
-      {integration.status === "error" && <div className="test-result error" role="alert">{integration.testMessage}</div>}
-
-      <button className="btn btn-primary wide" onClick={connectAndScan} disabled={!apiKey || !apiSecret || testing}>
-        {testing ? <><span className="spinner" /> Connecting</> : "Connect and scan"}
-      </button>
-
-      <div className="ob-alts">
-        {!showAccountCode ? (
-          <button type="button" className="ob-alt" onClick={() => setShowAccountCode(true)}>
-            I know my Rentvine account code
-          </button>
-        ) : null}
-        <button type="button" className="ob-alt" onClick={onSkip} disabled={testing}>Skip Rentvine for now</button>
-      </div>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────
-// STEP 3: LIVE BUILDIUM UPDATES (webhooks, reframed + skippable)
-// ─────────────────────────────────────────────────────────
-
-function StepLive({ onNext }: { onNext: (saved: boolean) => void }) {
-  // Buildium generates the signing secret when the user creates the
-  // webhook subscription on their side — Occupella cannot generate it.
-  const [secret, setSecret] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [error, setError] = useState("");
-
-  const saveSecret = async () => {
-    if (secret.trim().length < 8) {
-      setError("That doesn't look like a Buildium signing secret (too short).");
-      return;
-    }
-    setSaving(true);
-    setError("");
-    try {
-      await apiFetch("/api/v1/buildium/webhook-secret", {
-        method: "PUT",
-        body: JSON.stringify({ secret: secret.trim() }),
-      });
-      setSecret("");
-      setSaved(true);
-    } catch (e: any) {
-      setError(e.message || "Failed to save the signing secret");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="panel" key="live">
-      <StepTitle title="Turn on live updates" />
-      <p className="panel-desc" style={{ marginTop: -18, marginBottom: 24 }}>
-        Buildium can send work orders, resident messages, lease events and payments to Occupella as
-        they happen. Without this, Occupella sees them at the next sync.
-      </p>
-
-      {/* ⚠ Webhooks are a tab on Developer Tools per the 2026-09-02 console
-          screenshot, which the setup guide follows. TODO(brandon): confirm
-          which path Buildium shows; this line used to say Settings → Webhooks. */}
-      <ol className="ob-steps">
-        <li><span>In Buildium, open <b>Settings</b>, then <b>Developer Tools</b>, and pick the <b>Webhooks</b> tab.</span></li>
-        <li><span>Create a subscription with this address. One address takes every event.</span></li>
-        <li><span>Paste the signing secret Buildium shows you, once, when the subscription is created.</span></li>
-      </ol>
-      <CopyField label="Address for Buildium" value={BUILDIUM_WEBHOOK_URL} />
-
-      {saved ? (
-        <div className="test-result success" role="status" style={{ marginTop: 8 }}>
-          Live updates are on. Buildium events now reach Occupella as they happen.
-        </div>
-      ) : (
-        <>
-          <div className="field">
-            <label htmlFor="ob-signing">Signing secret</label>
-            <SecretInput id="ob-signing" value={secret} onChange={setSecret} autoComplete="new-password" onEnter={saveSecret} />
-          </div>
-          {error && <div className="test-result error" role="alert">{error}</div>}
-        </>
-      )}
-
-      {saved ? (
-        <button className="btn btn-primary wide" onClick={() => onNext(true)}>Continue</button>
-      ) : (
-        <button className="btn btn-primary wide" onClick={saveSecret} disabled={saving || !secret.trim()}>
-          {saving ? <><span className="spinner" /> Saving</> : "Save signing secret"}
-        </button>
-      )}
-      {!saved ? (
-        <div className="ob-alts">
-          <button type="button" className="ob-alt" onClick={() => onNext(false)} disabled={saving}>
-            Skip for now and scan without live updates
-          </button>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────
-// STEP 4 (EMAIL): GMAIL (Composio OAuth, optional)
-// ─────────────────────────────────────────────────────────
-
-function StepChannels({ onNext }: { onNext: (connected: boolean) => void }) {
-  const [googleConnected, setGoogleConnected] = useState(false);
-  const [googleConnecting, setGoogleConnecting] = useState(false);
-  const [error, setError] = useState("");
-
-  // ⚠ Gmail alone (lib/google.ts). Calendar and Drive are separate grants,
-  // so either one being connected says nothing about this step.
-  const refreshGoogleState = useCallback(async () => {
-    try {
-      return gmailConnected(await apiJson<unknown>("/api/v1/connectors/"));
-    } catch {
-      return false;
-    }
-  }, []);
-
-  const connectGoogle = async () => {
-    setGoogleConnecting(true);
-    setError("");
-    try {
-      // Composio-managed OAuth for GMAIL — the same connection the agent's
-      // Gmail specialist uses at tool time. Calendar and Drive are their own
-      // grants, connected from the app's Settings. callbackUrl sends the
-      // popup back to our own /oauth/callback (which auto-closes) instead of
-      // parking on Composio's hosted "Successfully connected" page.
-      const data = await apiJson<{ redirectUrl: string }>("/api/v1/connectors/gmail/connect", {
-        method: "POST",
-        body: JSON.stringify({ callbackUrl: `${window.location.origin}/oauth/callback` }),
-      });
-      window.open(data.redirectUrl, "_blank", "noopener");
-
-      // Poll until Composio reports the connection (max ~2 min).
-      for (let i = 0; i < 40; i++) {
-        await new Promise((r) => setTimeout(r, 3000));
-        if (await refreshGoogleState()) {
-          setGoogleConnected(true);
-          break;
-        }
-      }
-    } catch (e: any) {
-      // Inline rather than alert(), like every other step.
-      setError(e.message || "Couldn't start Google sign-in. Try again.");
-    } finally {
-      setGoogleConnecting(false);
-    }
-  };
-
-  useEffect(() => {
-    refreshGoogleState().then((connected) => {
-      if (connected) setGoogleConnected(true);
-    });
-  }, [refreshGoogleState]);
-
-  return (
-    <div className="panel" key="channels">
-      <StepTitle title="Connect Gmail" />
-      {/* ⚠ Describes what you can ASK for, not what arrives on its own:
-          automatic email-to-Inbox ingest is gated and has produced one card
-          across every company (measured 2026-09-02). And no approval claim:
-          it is held until the autonomous notes flag is confirmed off.
-          ⚠ Gmail only: this button connects one grant (lib/google.ts). It
-          used to promise Calendar and Drive too, which it never connected. */}
-      <ul className="ob-facts">
-        <li>Occupella can read a Gmail thread for context when you ask about one.</li>
-        <li>Access goes through Google&rsquo;s own sign-in screen, and you can disconnect it at any time in Settings.</li>
-        <li>Google Calendar and Google Drive are separate connections. Add them later in Occupella under Settings, then Connectors.</li>
-      </ul>
-
-      <div className="ob-google">
-        <svg width="28" height="28" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59A14.5 14.5 0 0 1 9.5 24c0-1.59.28-3.14.76-4.59l-7.98-6.19A23.99 23.99 0 0 0 0 24c0 3.77.9 7.35 2.56 10.53l7.97-5.94z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 5.94C6.51 42.62 14.62 48 24 48z"/></svg>
-        <div>
-          <b>Gmail</b>
-          <span>Signs in with your Google account</span>
-        </div>
-        {googleConnected ? (
-          <span className="ob-connected"><CheckIcon size={14} /> Connected</span>
-        ) : null}
-      </div>
-
-      {googleConnecting && <div className="test-result info" role="status"><span className="spinner accent" /> Waiting for Google. Finish signing in in the new tab.</div>}
-      {error && <div className="test-result error" role="alert">{error}</div>}
-
-      {googleConnected ? (
-        <button className="btn btn-primary wide" onClick={() => onNext(true)}>Continue</button>
-      ) : (
-        <button className="btn btn-primary wide" onClick={connectGoogle} disabled={googleConnecting}>
-          {googleConnecting ? <><span className="spinner" /> Connecting</> : "Connect Gmail"}
-        </button>
-      )}
-      <div className="ob-alts">
-        {!googleConnected ? (
-          <button type="button" className="ob-alt" onClick={() => onNext(false)} disabled={googleConnecting}>Skip for now</button>
-        ) : null}
-      </div>
-      {/* ⚠ Outlook has no connect path (see /features).
-          ⚠ team@, like the rest of the site. support@ is not confirmed to
-          receive mail (the open question is the TODO in Contact.tsx), so it
-          is not offered here until that is settled. */}
-      <p className="hint" style={{ marginTop: 20 }}>
-        Using Outlook? Email{" "}
-        <a href="mailto:team@occupella.com?subject=Outlook">team@occupella.com</a>.
-      </p>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────
-// STEP 3 (SCAN): THE FIRST READ OF THE PORTFOLIO
-// ─────────────────────────────────────────────────────────
-
-/** The rows the scan fills in, in the order a person reads a portfolio. */
-const SCAN_ROWS: { key: keyof ScanData; one: string; many: string }[] = [
-  { key: "properties", one: "property", many: "properties" },
-  { key: "units", one: "unit", many: "units" },
-  { key: "tenants", one: "tenant", many: "tenants" },
-  { key: "active_leases", one: "active lease", many: "active leases" },
-  { key: "open_work_orders", one: "open work order", many: "open work orders" },
-];
-
-function StepScan({ connectedPms, onNext }: { connectedPms: Pms; onNext: () => void }) {
-  const pmsName = PMS_NAME[connectedPms];
-  // The real day-one scan (GET /reports/first-scan): deterministic mirror
-  // counts. Poll while the initial backfill fills the mirror (synced=false),
-  // every 5 s, at most 12 times; an error stops polling and the screen says
-  // so rather than showing zeros.
-  const [scan, setScan] = useState<ScanData | null>(null);
-  const [scanning, setScanning] = useState(true);
-  const [failed, setFailed] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-    let attempts = 0;
-
-    const poll = async () => {
-      try {
-        const data = await apiJson<ScanData>("/api/v1/reports/first-scan");
-        if (!active) return;
-        setScan(data);
-        if (data.synced || attempts >= 11) {
-          setScanning(false);
-          return;
-        }
-      } catch {
-        if (!active) return;
-        setFailed(true);
-        setScanning(false); // endpoint missing/unreachable: say so, never $0
-        return;
-      }
-      attempts += 1;
-      setTimeout(poll, 5000);
-    };
-
-    poll();
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  // ⚠ Built in lib/pms.ts, which leaves the rent-owed card out when the
-  // backend cannot know it (Rentvine sends no balances) instead of showing $0.
-  const findings = findingCards(scan);
-  const done = Boolean(scan?.synced);
-
-  return (
-    <div className="panel" key="scan">
-      <StepTitle title={done ? `Here's your ${pmsName} portfolio` : `Reading your ${pmsName} account`}>
-        <span className="ob-title-mark"><PmsMark pms={connectedPms} /></span>
-      </StepTitle>
-
-      {done ? (
-        <div className="ob-done" role="status">
-          <span className="dot"><CheckIcon size={13} /></span> Done. Every number is read from your {pmsName} data.
-        </div>
-      ) : null}
-
-      <ul className="ob-scan" aria-live="polite">
-        {SCAN_ROWS.map((r) => {
-          const n = scan ? (scan[r.key] as number | null | undefined) : undefined;
-          const known = typeof n === "number" && (done || n > 0);
-          return (
-            <li key={r.key}>
-              <span className="ic">
-                {known ? <span style={{ color: "var(--positive)" }}><CheckIcon size={14} /></span> : scanning ? <span className="spinner accent" /> : null}
-              </span>
-              <span>{r.many.charAt(0).toUpperCase() + r.many.slice(1)}</span>
-              <span className={known ? "v" : "v wait"}>{known ? n : scanning ? "Reading" : "Not yet"}</span>
-            </li>
-          );
-        })}
-      </ul>
-
-      {findings ? (
-        <div className="scan-cards">
-          {findings.map((c) => (
-            <div className="scan-card" key={c.label}>
-              <div className="scan-num">{c.num}</div>
-              <div>
-                <div className="scan-label">{c.label}</div>
-                <div className="scan-sub">{c.sub}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : null}
-
-      {!done && !scanning ? (
-        <p className="hint" style={{ marginBottom: 16 }}>
-          {failed
-            ? "Occupella couldn't read the scan's progress just now. The scan itself keeps running, and the app shows each record as it arrives."
-            : `${pmsName} is still sending records. The scan keeps running after you move on, and the app fills in as it does.`}
-        </p>
-      ) : null}
-
-      <button className="btn btn-primary wide" onClick={onNext}>Continue</button>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────
 // FINISH: INTO THE APP, SIGNED IN
 // ─────────────────────────────────────────────────────────
 
@@ -1887,73 +835,46 @@ function StepFinish({ workspace }: { workspace: WorkspaceData }) {
 }
 
 // ─────────────────────────────────────────────────────────
-// SHELL: HEADER, PROGRESS, SIDE PANEL, FOOTER
+// SHELL: THE SIDE PANEL
 // ─────────────────────────────────────────────────────────
 
-/** The four steps a visitor sees, and which internal steps each covers. */
-const PROGRESS: { label: string; steps: Step[] }[] = [
-  { label: "Account", steps: ["identify"] },
-  { label: "Connect", steps: ["pms", "live"] },
-  { label: "Scan", steps: ["scan"] },
-  { label: "Email", steps: ["channels"] },
-];
-
-function Progress({ step, completed }: { step: Step; completed: Set<Step> }) {
-  const current = PROGRESS.findIndex((g) => g.steps.includes(step));
-  return (
-    <nav className="ob-prog" aria-label="Setup progress">
-      <ol>
-        {PROGRESS.map((g, i) => {
-          const done = g.steps.every((st) => completed.has(st));
-          const state = i === current ? "current" : done ? "done" : "todo";
-          return (
-            <li key={g.label} data-state={state} aria-current={i === current ? "step" : undefined}>
-              <span className="n">{state === "done" ? <CheckIcon size={11} /> : i + 1}</span>
-              <span className="t">{g.label}</span>
-              {state === "done" ? <span className="ob-sr"> (done)</span> : null}
-            </li>
-          );
-        })}
-      </ol>
-    </nav>
-  );
-}
-
-/** The pale blue panel: one product crop per step and what happens next. */
-const SIDE: Record<Step, { crop: () => React.ReactElement; next: string }> = {
-  identify: {
-    crop: () => <WorkOrderCard />,
-    next: "Next you connect Buildium or Rentvine. New work orders arrive as cards like this one.",
-  },
-  pms: {
-    crop: () => <HistoryCrop />,
-    next: "Once the keys pass, Occupella reads your portfolio and pulls the history behind each record.",
-  },
-  live: {
-    crop: () => <HistoryCrop />,
-    next: "With live updates on, a new work order reaches Occupella as it happens, not at the next sync.",
-  },
-  scan: {
-    crop: () => <NoticedCrop />,
-    next: "After the scan, Occupella checks each new event against the record, like this.",
-  },
-  channels: {
-    crop: () => <EmailDraftCrop />,
-    next: "With Gmail connected, you send drafted emails like this one from your own address.",
-  },
-  finish: {
-    crop: () => <DraftCrop />,
-    next: "In the app, each event comes with a drafted next step you can edit.",
-  },
+/** What happens next, said over the photo, one line per step. */
+const SIDE_NEXT: Record<Step, string> = {
+  identify: "Next, Occupella opens with a Getting started checklist for the rest of your setup.",
+  finish: "In the app, each event comes with a drafted next step you can edit.",
 };
 
+/**
+ * The panel's photo (founder, 2026-11-07: "a photo of NYC" in place of the
+ * product crops). Public domain: Carol M. Highsmith gave her archive to the
+ * Library of Congress with no restriction, so no credit is owed; the caption
+ * gives one anyway, in the form the Library asks for. Source and licence:
+ * public/shots/photos/CREDITS.md.
+ */
+const SIDE_PHOTO = {
+  src: "/shots/photos/upper-east-side-brownstone.jpg",
+  width: 960,
+  height: 1259,
+  credit: "Photo: Carol M. Highsmith, Library of Congress",
+} as const;
+
 function SidePanel({ step }: { step: Step }) {
-  const side = SIDE[step];
   return (
     <aside className="ob-side" aria-label="What happens next">
+      {/* Decorative: the words beside it carry everything a reader needs.
+          Lazy, so a phone, where the panel is hidden, never downloads it. */}
+      <img
+        className="ob-side-photo"
+        src={SIDE_PHOTO.src}
+        width={SIDE_PHOTO.width}
+        height={SIDE_PHOTO.height}
+        alt=""
+        loading="lazy"
+        decoding="async"
+      />
       <div className="ob-side-in">
-        {side.crop()}
-        <p className="ob-side-next">{side.next}</p>
+        <p className="ob-side-next">{SIDE_NEXT[step]}</p>
+        <p className="ob-side-credit">{SIDE_PHOTO.credit}</p>
       </div>
     </aside>
   );
@@ -1975,9 +896,6 @@ export default function App() {
     persisted.workspace || { name: "", slug: "" },
   );
   const [userEmail, setUserEmail] = useState(persisted.userEmail || "");
-  const [doors, setDoors] = useState(persisted.doors || "");
-  // Which system step 2 connected, or null when it was skipped.
-  const [connectedPms, setConnectedPms] = useState<Pms | null>(null);
   const [creatingWorkspace, setCreatingWorkspace] = useState(false);
   const didResume = useRef(false);
   // See persist.ts: true only between "send me a code" and step 1 completing.
@@ -1998,30 +916,6 @@ export default function App() {
   // "Signed in" on the code screen).
   const [signedIn, setSignedIn] = useState(false);
 
-  // Where "back" goes, as a stack rather than a table of predecessors: the
-  // flow is not linear. handlePmsSkip jumps pms → channels, so a
-  // table would send someone back to `live`, a step they were never shown.
-  //
-  // ⚠ Nothing pushes on the identify → buildium transition. The account and
-  // the company exist by then, so "back" would offer to re-do a step that
-  // cannot be re-done — which is exactly the state the user reads a back
-  // button as undoing. Setup starts here; the button appears from the step
-  // after it. Deliberately NOT persisted: a refresh restores `step`, and a
-  // back button that survives into a fresh page load would claim we can
-  // return somewhere this render never went.
-  const [history, setHistory] = useState<Step[]>([]);
-
-  const go = (next: Step) => {
-    setHistory((prev) => [...prev, step]);
-    setStep(next);
-  };
-
-  const back = () => {
-    if (!history.length) return;
-    setStep(history[history.length - 1]);
-    setHistory((prev) => prev.slice(0, -1));
-  };
-
   const complete = (s: Step) => setCompleted((prev) => new Set([...prev, s]));
 
   // One wizard_step_viewed per step shown. The ref keeps StrictMode's
@@ -2037,8 +931,8 @@ export default function App() {
   // attempt it interrupted. Progress is deliberately NOT written — see
   // persist.ts for why a five-minute flow should not be resumable.
   useEffect(() => {
-    saveWizard({ workspace, userEmail, doors, awaitingLink });
-  }, [workspace, userEmail, doors, awaitingLink]);
+    saveWizard({ workspace, userEmail, awaitingLink });
+  }, [workspace, userEmail, awaitingLink]);
 
   // Idempotently create the company + apply the workspace name. Shared by the
   // inline-OTP path (explicit token) and the magic-link resume path
@@ -2095,7 +989,8 @@ export default function App() {
         setAwaitingLink(false);
         complete("identify");
         setWorkspace((prev) => ({ ...prev, id: companyId }));
-        setStep((prev) => (prev === "identify" ? "pms" : prev));
+        complete("finish");
+        setStep("finish");
       } catch (e: any) {
         alert(e.message || "Failed to restore your workspace session");
       } finally {
@@ -2183,13 +1078,12 @@ export default function App() {
     window.location.assign("/start");
   }, []);
 
-  const handleProfile = (p: { email: string; name: string; doors: string }) => {
+  const handleProfile = (p: { email: string; name: string }) => {
     // ⚠ Called by `sendCode` immediately before the code goes out — the exact
     // moment an attempt begins, and the only point at which "a magic link is
     // coming back to this browser" becomes true.
     setAwaitingLink(true);
     setUserEmail(p.email);
-    setDoors(p.doors);
     setWorkspace((prev) => ({
       ...prev,
       name: p.name,
@@ -2213,84 +1107,40 @@ export default function App() {
       // opened, or it is just the old always-resume behaviour with a flag.
       setAwaitingLink(false);
       complete("identify");
-      // The range label only (DOORS_OPTIONS), never the email or the name.
-      captureWizard("wizard_account_created", { doors: doors || "not_given" });
+      // Never the email or the name: the event carries nothing about the person.
+      captureWizard("wizard_account_created", {});
       setWorkspace((prev) => ({ ...prev, id: companyId }));
-      setStep("pms");
+      // Straight into the app: the rest of setup is its Getting started checklist.
+      complete("finish");
+      setStep("finish");
     } finally {
       setCreatingWorkspace(false);
     }
   };
 
-  const handlePmsConnected = (pms: Pms) => {
-    captureWizard("wizard_pms_connected", { pms });
-    setConnectedPms(pms);
-    complete("pms");
-    const next = stepAfterConnect(pms);
-    // No live-updates step for this system: Connect still reads as done.
-    if (next !== "live") complete("live");
-    go(next);
-  };
-
-  // Skipping the PMS also bypasses live updates (webhooks are meaningless
-  // without credentials) and the scan (nothing to read). Google still stands
-  // on its own. The scan is NOT marked done: nothing was scanned.
-  const handlePmsSkip = () => {
-    complete("pms");
-    complete("live");
-    go("channels");
-  };
-
-  // Whether the secret was saved is shown on the live step itself; nothing
-  // after it reads it, so it is not kept.
-  const handleLive = (_saved: boolean) => {
-    complete("live");
-    go("scan");
-  };
-
-  const handleScanned = () => {
-    complete("scan");
-    go("channels");
-  };
-
-  const handleChannels = (_connected: boolean) => {
-    complete("channels");
-    complete("finish");
-    setStep("finish");
-  };
-
-  // Back is offered from the step after Account onward (the account exists
-  // by then, so there is nothing to undo there), never on the hand-off and
-  // never while the workspace is being written.
-  // Not on the scan either: the keys have passed and the scan is running,
-  // so going back would only offer to re-enter keys that already work.
-  const backHandler =
-    history.length > 0 && step !== "finish" && step !== "scan" && !creatingWorkspace ? back : undefined;
   const sideStep: Step = returningAs || creatingWorkspace ? "identify" : step;
 
   return (
     <div className="ob">
       <style>{css}</style>
-      <style>{cropCss}</style>
-      <header className="ob-head">
-        <Wordmark className="ob-word" />
-        {/* ⚠ The ONE thing that lets somebody set up a second account on the
-            same machine: the Supabase session persists, so without this a
-            returning visitor is carried back into the account they already
-            made with nothing to click (founder report, 2026-09-09). Shown
-            only when a session actually exists. */}
-        {signedIn && userEmail ? (
-          <span className="ob-who">
-            Signed in as <b>{userEmail}</b> ·{" "}
-            <button type="button" className="ob-alt" onClick={startOver}>Use a different account</button>
-          </span>
-        ) : null}
-      </header>
-      <Progress step={step} completed={completed} />
+      <div className="ob-left">
+        <header className="ob-head">
+          <Wordmark className="ob-word" />
+          {/* ⚠ The ONE thing that lets somebody set up a second account on the
+              same machine: the Supabase session persists, so without this a
+              returning visitor is carried back into the account they already
+              made with nothing to click (founder report, 2026-09-09). Shown
+              only when a session actually exists. */}
+          {signedIn && userEmail ? (
+            <span className="ob-who">
+              Signed in as <b>{userEmail}</b> ·{" "}
+              <button type="button" className="ob-alt" onClick={startOver}>Use a different account</button>
+            </span>
+          ) : null}
+        </header>
 
-      <BackContext.Provider value={backHandler}>
-        <main className="ob-main">
-          <section className="ob-form">
+        <main className="ob-form">
+          <div className="ob-form-in">
             {/* ⚠ Stands IN FRONT of step 1 whenever a session was found that
                 is not a magic-link continuation: two states used to run the
                 same code silently, so now they are two buttons. */}
@@ -2316,7 +1166,7 @@ export default function App() {
                 // REMOUNTS with the address the session actually carries; the
                 // component reads `initial` once, at mount.
                 key={awaitingPassword ? `resumed:${userEmail}` : "fresh"}
-                initial={{ email: userEmail, name: workspace.name, doors }}
+                initial={{ email: userEmail, name: workspace.name }}
                 onProfile={handleProfile}
                 onVerified={handleVerified}
                 resumedSession={awaitingPassword}
@@ -2330,36 +1180,23 @@ export default function App() {
                 </p>
               </div>
             )}
-            {step === "pms" && (
-              <StepPms
-                userEmail={userEmail}
-                workspaceName={workspace.name}
-                doors={doors}
-                onConnected={handlePmsConnected}
-                onSkip={handlePmsSkip}
-              />
-            )}
-            {step === "live" && <StepLive onNext={handleLive} />}
-            {step === "scan" && connectedPms && <StepScan connectedPms={connectedPms} onNext={handleScanned} />}
-            {step === "channels" && <StepChannels onNext={handleChannels} />}
             {step === "finish" && <StepFinish workspace={workspace} />}
-          </section>
-          <SidePanel step={sideStep} />
+          </div>
         </main>
-      </BackContext.Provider>
 
-      <footer className="ob-foot">
-        <span>
-          <a href={TERMS_URL} target="_blank" rel="noreferrer">Terms</a> ·{" "}
-          <a href={PRIVACY_URL} target="_blank" rel="noreferrer">Privacy</a> · Occupella is not affiliated
-          with Buildium.
-        </span>
-        {/* Legal-entity attribution (A2P/Twilio verification crawls read it). */}
-        <span>Operated by Oscar Ventures LLC.</span>
-        <span>
-          Stuck on a step? Email <a href="mailto:team@occupella.com">team@occupella.com</a>.
-        </span>
-      </footer>
+        <footer className="ob-foot">
+          <span>
+            <a href={TERMS_URL} target="_blank" rel="noreferrer">Terms</a> ·{" "}
+            <a href={PRIVACY_URL} target="_blank" rel="noreferrer">Privacy</a>
+          </span>
+          {/* Legal-entity attribution (A2P/Twilio verification crawls read it). */}
+          <span>Operated by Oscar Ventures LLC.</span>
+          <span>
+            Stuck on a step? Email <a href="mailto:team@occupella.com">team@occupella.com</a>.
+          </span>
+        </footer>
+      </div>
+      <SidePanel step={sideStep} />
     </div>
   );
 }

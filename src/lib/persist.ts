@@ -31,8 +31,6 @@ export interface PersistedWizard {
   /** Only `name`/`slug` are written; `id` is read back for an in-flight reload. */
   workspace?: { name: string; slug: string; id?: string };
   userEmail?: string;
-  /** Segmentation collected in step 1 (research: 2 early questions max). */
-  doors?: string;
   /**
    * A code has been sent and this browser is waiting to come back signed in.
    *
