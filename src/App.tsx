@@ -10,7 +10,7 @@ import { Wordmark } from "./Site";
 
 // ─────────────────────────────────────────────────────────
 // SETUP WIZARD — the account, then the hand-off into the app:
-//   Account  identify  — email code, company, doors, then a password; the
+//   Account  identify  — email code, company, then a password; the
 //                        company is made by /auth/bootstrap
 //   Open     finish    — the hand-off into the app, signed in
 // Since 2026-11-07 (founder; AgenticHelixis docs/decisions/ADR-one-product.md,
@@ -87,14 +87,6 @@ const TOS_VERSION = "2026-07-05";
 const TERMS_URL = "/terms";
 const PRIVACY_URL = "/privacy";
 
-// ⚠ Not stored on the company: bootstrap and the company PATCH carry the
-// name alone (checked 2026-09-29). Since 2026-10-23 the chosen label travels
-// as TEXT in two places: inside a "my system isn't listed" message
-// (lib/notListed.ts), and as the `doors` property of wizard_account_created
-// (lib/analytics.ts). No backend parses it, so the labels can still change
-// without a backend change; a renamed label only splits the analytics
-// breakdown at the date it changed.
-const DOORS_OPTIONS = ["1–50", "51–200", "201–500", "501–2,000", "2,000+"];
 
 // ─────────────────────────────────────────────────────────
 // WIZARD-SPECIFIC STYLES (tokens + primitives live in theme.ts)
@@ -434,7 +426,6 @@ function SecretInput({
 interface Profile {
   email: string;
   name: string;
-  doors: string;
 }
 
 function StepIdentify({
@@ -468,7 +459,6 @@ function StepIdentify({
 }) {
   const [email, setEmail] = useState(initial.email);
   const [name, setName] = useState(initial.name);
-  const [doors, setDoors] = useState(initial.doors);
   const [sent, setSent] = useState(false);
   // ToS acceptance — REQUIRED here now: the wizard is the ONE front door
   // (founder decision 2026-08-20; the app's signup + its checkbox are
@@ -513,7 +503,7 @@ function StepIdentify({
     if (!ready) return;
     // Persist the profile BEFORE the OTP round-trip so a magic-link
     // redirect (full SPA reload) resumes with the company name intact.
-    onProfile({ email, name: name.trim(), doors });
+    onProfile({ email, name: name.trim() });
     setLoading(true);
     setError("");
     const { error: e } = await supabase.auth.signInWithOtp({
@@ -703,15 +693,6 @@ function StepIdentify({
               onChange={(e) => setName(e.target.value)}
               autoComplete="organization"
             />
-          </div>
-          <div className="field">
-            <label htmlFor="ob-doors">Doors under management</label>
-            <select id="ob-doors" value={doors} onChange={(e) => setDoors(e.target.value)}>
-              <option value="">Choose a range</option>
-              {DOORS_OPTIONS.map((d) => (
-                <option key={d} value={d}>{d}</option>
-              ))}
-            </select>
           </div>
           <label className="tos-row">
             <input
@@ -912,7 +893,6 @@ export default function App() {
     persisted.workspace || { name: "", slug: "" },
   );
   const [userEmail, setUserEmail] = useState(persisted.userEmail || "");
-  const [doors, setDoors] = useState(persisted.doors || "");
   const [creatingWorkspace, setCreatingWorkspace] = useState(false);
   const didResume = useRef(false);
   // See persist.ts: true only between "send me a code" and step 1 completing.
@@ -948,8 +928,8 @@ export default function App() {
   // attempt it interrupted. Progress is deliberately NOT written — see
   // persist.ts for why a five-minute flow should not be resumable.
   useEffect(() => {
-    saveWizard({ workspace, userEmail, doors, awaitingLink });
-  }, [workspace, userEmail, doors, awaitingLink]);
+    saveWizard({ workspace, userEmail, awaitingLink });
+  }, [workspace, userEmail, awaitingLink]);
 
   // Idempotently create the company + apply the workspace name. Shared by the
   // inline-OTP path (explicit token) and the magic-link resume path
@@ -1095,13 +1075,12 @@ export default function App() {
     window.location.assign("/start");
   }, []);
 
-  const handleProfile = (p: { email: string; name: string; doors: string }) => {
+  const handleProfile = (p: { email: string; name: string }) => {
     // ⚠ Called by `sendCode` immediately before the code goes out — the exact
     // moment an attempt begins, and the only point at which "a magic link is
     // coming back to this browser" becomes true.
     setAwaitingLink(true);
     setUserEmail(p.email);
-    setDoors(p.doors);
     setWorkspace((prev) => ({
       ...prev,
       name: p.name,
@@ -1125,8 +1104,8 @@ export default function App() {
       // opened, or it is just the old always-resume behaviour with a flag.
       setAwaitingLink(false);
       complete("identify");
-      // The range label only (DOORS_OPTIONS), never the email or the name.
-      captureWizard("wizard_account_created", { doors: doors || "not_given" });
+      // Never the email or the name: the event carries nothing about the person.
+      captureWizard("wizard_account_created", {});
       setWorkspace((prev) => ({ ...prev, id: companyId }));
       // Straight into the app: the rest of setup is its Getting started checklist.
       complete("finish");
@@ -1185,7 +1164,7 @@ export default function App() {
                 // REMOUNTS with the address the session actually carries; the
                 // component reads `initial` once, at mount.
                 key={awaitingPassword ? `resumed:${userEmail}` : "fresh"}
-                initial={{ email: userEmail, name: workspace.name, doors }}
+                initial={{ email: userEmail, name: workspace.name }}
                 onProfile={handleProfile}
                 onVerified={handleVerified}
                 resumedSession={awaitingPassword}

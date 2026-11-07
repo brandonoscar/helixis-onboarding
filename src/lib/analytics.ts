@@ -61,8 +61,8 @@
  *     party. The hook cuts `?` and `#` off every absolute URL in an event's
  *     properties, `$set` and `$set_once`, whichever key it sits under.
  *   - NO PERSON DATA IN EVENTS, and no `identify()`. Every `wizard_*`
- *     property is an enum, a doors range picked from a list, or a status
- *     number (see `WizardEvents`). Never an email, a company name or a key.
+ *     property is an enum (see `WizardEvents`). Never an email, a company
+ *     name or a key.
  *
  * Everything degrades to a no-op when `VITE_PUBLIC_POSTHOG_KEY` is unset, so a
  * local `npm run dev` and a preview deploy send nothing.
@@ -281,17 +281,16 @@ export type WizardStep = 'identify' | 'finish'
 /**
  * Every wizard event and the ONLY properties each may carry.
  *
- * ⚠ The types are the privacy rule. Each property is a fixed set of values
- * or a number, except `doors`, which is a range label the person picked from
- * a list (DOORS_OPTIONS in App.tsx). A property that can hold free text, an
- * email, a company name or a key does not belong here, and widening one of
- * these to `string` is how it would get in.
+ * ⚠ The types are the privacy rule. Each property is a fixed set of values.
+ * A property that can hold free text, an email, a company name or a key does
+ * not belong here, and widening one of these to `string` is how it would get
+ * in.
  */
 export interface WizardEvents {
   /** A step came on screen. */
   wizard_step_viewed: { step: WizardStep }
   /** Step 1 finished: password set and the workspace bootstrapped. */
-  wizard_account_created: { doors: string }
+  wizard_account_created: Record<string, never>
 }
 
 /**

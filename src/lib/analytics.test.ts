@@ -366,7 +366,7 @@ describe('the wizard events', () => {
 
   it('sends nothing before initAnalytics has given the client its posture', async () => {
     const { captureWizard } = await loadWithKey('phc_test')
-    captureWizard('wizard_account_created', { doors: '51–200' })
+    captureWizard('wizard_account_created', {})
     await settle()
 
     // A capture on a client that was never told about opt-out, Do Not Track
@@ -379,13 +379,13 @@ describe('the wizard events', () => {
     await initAnalytics()
     posthogMock.capture.mockClear()
 
-    captureWizard('wizard_account_created', { doors: '51–200' })
+    captureWizard('wizard_account_created', {})
     captureWizard('wizard_step_viewed', { step: 'finish' })
     await settle()
 
     expect(posthogMock.init).toHaveBeenCalledTimes(1)
     expect(posthogMock.capture.mock.calls).toEqual([
-      ['wizard_account_created', { doors: '51–200' }],
+      ['wizard_account_created', {}],
       ['wizard_step_viewed', { step: 'finish' }],
     ])
   })
