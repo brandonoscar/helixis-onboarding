@@ -21,11 +21,6 @@ import { supabase } from "./supabase";
 export const API_URL: string =
   import.meta.env.VITE_API_URL || "https://agentichelixis.onrender.com";
 
-/** The URL the user registers in Buildium → Settings → Webhooks.
- *  Routing is by Buildium AccountId (backfilled by /buildium/test),
- *  so the endpoint is the same for every company. */
-export const BUILDIUM_WEBHOOK_URL = `${API_URL}/webhooks/buildium`;
-
 // APP_URL lives in ./urls so the marketing pages can link to the app
 // without loading the Supabase client this file needs.
 export { APP_URL } from "./urls";
