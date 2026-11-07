@@ -3,7 +3,6 @@ import { releaseSessionForHandOff, supabase } from "./lib/supabase";
 import { apiFetch, apiJson, APP_URL } from "./lib/api";
 import { clearWizard, loadWizard, saveWizard } from "./lib/persist";
 import { firstUnmet, meetsRequirements, requirements } from "./lib/passwordStrength";
-import { DraftCrop, WorkOrderCard, cropCss } from "./crops";
 import { resumeAction } from "./lib/resume";
 import { captureWizard } from "./lib/analytics";
 import { Wordmark } from "./Site";
@@ -102,7 +101,6 @@ const css = `
     --iris-press: #0F3B70;
     --iris-soft: rgba(25, 87, 160, 0.10);
     --iris-ring: rgba(25, 87, 160, 0.35);
-    --band: #E3EDF9;
     --line: #DCE3EC;
     --line-strong: #C5D0DD;
     --card-edge: #DCE3EC;
@@ -110,17 +108,22 @@ const css = `
     --font-display: 'Fraunces Variable', Georgia, 'Times New Roman', serif;
     --font-sans: 'IBM Plex Sans Variable', 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
     --font-mono: var(--font-sans);
-    min-height: 100vh; display: flex; flex-direction: column;
+    min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1fr);
     background: var(--canvas); color: var(--ink);
     font-family: var(--font-sans); font-size: 16px; line-height: 1.55;
     font-variant-numeric: normal;
   }
   .ob a { color: var(--iris); }
 
-  /* ── header: the site's bar ── */
+  /* ── the left column: wordmark, the form in the middle, the legal line at the foot ──
+     No rule runs across the page: the photo's column goes from top to bottom beside it. */
+  @media (min-width: 960px) { .ob { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+  .ob-left { display: flex; flex-direction: column; min-height: 100vh; min-width: 0; }
+
+  /* ── header: the wordmark, and who is signed in ── */
   .ob-head {
-    height: 64px; flex: none; display: flex; align-items: center; justify-content: space-between; gap: 16px;
-    padding: 0 32px; background: var(--canvas); border-bottom: 1px solid var(--line);
+    height: 80px; flex: none; display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 0 48px;
   }
   .ob .ob-word {
     font-family: var(--font-display); font-optical-sizing: auto;
@@ -130,31 +133,43 @@ const css = `
   .ob-who { font-size: 14px; color: var(--ink-muted); text-align: right; }
   .ob-who b { color: var(--ink); font-weight: 600; }
 
-  /* ── progress: four named steps ── */
-  .ob-prog { border-bottom: 1px solid var(--line); background: var(--canvas); }
-  .ob-prog ol { list-style: none; margin: 0; padding: 0 32px; display: flex; gap: 28px; height: 52px; align-items: center; }
-  .ob-prog li { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 500; color: var(--ink-subtle); white-space: nowrap; }
-  .ob-prog li .n {
-    width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
-    border: 1px solid var(--line-strong); font-size: 12px; font-weight: 600; color: var(--ink-subtle);
-  }
-  .ob-prog li[data-state="current"] { color: var(--iris); font-weight: 600; }
-  .ob-prog li[data-state="current"] .n { border-color: var(--iris); background: var(--iris); color: #fff; }
-  .ob-prog li[data-state="done"] { color: var(--ink); }
-  .ob-prog li[data-state="done"] .n { border-color: var(--iris); color: var(--iris); }
 
-  /* ── body: the form, and the pale blue panel on desktop ── */
-  .ob-main { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr); }
-  @media (min-width: 960px) { .ob-main { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
-  .ob-form { padding: 56px 32px 64px; display: flex; justify-content: center; }
-  @media (min-width: 960px) { .ob-form { justify-content: flex-end; padding-right: 64px; } }
-  .panel { width: 100%; max-width: 440px; animation: fadeUp 0.3s var(--ease-out) both; }
-  .ob-side { display: none; background: var(--band); }
+  /* ── body: the form, in the middle of its column ── */
+  .ob-form { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px 48px 56px; }
+  .ob-form-in { width: 100%; max-width: 420px; }
+  .panel { width: 100%; animation: fadeUp 0.3s var(--ease-out) both; }
+  /* The photo has no edge of its own: it fades out toward the form and toward the foot of
+     the page, into whatever the page's background is, so it belongs to the page rather
+     than sitting beside it (founder, 2026-11-07: "the photo needs to blend into whatever
+     design"). The fades are masks, not a white shade, so a new background follows. */
+  .ob-side { display: none; position: relative; overflow: hidden; }
   @media (min-width: 960px) {
-    .ob-side { display: flex; align-items: center; padding: 56px 64px; }
+    .ob-side { display: flex; align-items: flex-end; padding: 64px; position: sticky; top: 0; height: 100vh; }
   }
-  .ob-side-in { width: 100%; max-width: 440px; }
-  .ob-side-next { margin-top: 20px; font-size: 16px; line-height: 1.55; color: var(--ink); max-width: 38ch; }
+  .ob-side-photo {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; object-position: 45% 40%;
+    /* Mirrored, so the sunlit facade meets the form and the deep shade of the trees sits at
+       the far edge; lightened and softened to the page's quiet. A mask is drawn before the
+       flip, so the fade named "to left" lands on the form's side. */
+    transform: scaleX(-1);
+    filter: brightness(1.2) contrast(0.8) saturate(0.8);
+    -webkit-mask-image:
+      linear-gradient(to left, transparent 0%, rgba(0, 0, 0, 0.55) 22%, #000 55%),
+      linear-gradient(to top, transparent 0%, rgba(0, 0, 0, 0.12) 24%, #000 52%);
+    -webkit-mask-composite: source-in;
+    mask-image:
+      linear-gradient(to left, transparent 0%, rgba(0, 0, 0, 0.55) 22%, #000 55%),
+      linear-gradient(to top, transparent 0%, rgba(0, 0, 0, 0.12) 24%, #000 52%);
+    mask-composite: intersect;
+  }
+  .ob-side-in { position: relative; z-index: 1; width: 100%; max-width: 440px; }
+  .ob-side-next {
+    margin: 0; font-family: var(--font-display); font-optical-sizing: auto;
+    font-size: 22px; font-weight: 500; line-height: 1.35; letter-spacing: -0.01em;
+    color: var(--ink); max-width: 30ch; text-wrap: balance;
+  }
+  .ob-side-credit { margin: 14px 0 0; font-size: 12px; line-height: 1.4; color: var(--ink-muted); }
   @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
   @media (prefers-reduced-motion: reduce) { .panel { animation: none; } }
 
@@ -170,7 +185,7 @@ const css = `
   .ob .ob-back:focus-visible { outline: 2px solid var(--iris); outline-offset: 2px; }
   .panel-title {
     font-family: var(--font-display); font-optical-sizing: auto;
-    font-size: 32px; font-weight: 560; line-height: 1.15; letter-spacing: -0.015em;
+    font-size: 36px; font-weight: 560; line-height: 1.12; letter-spacing: -0.02em;
     color: var(--ink); text-wrap: balance;
   }
   .panel-desc { margin-top: 10px; font-size: 16px; line-height: 1.55; color: var(--ink-muted); }
@@ -180,7 +195,7 @@ const css = `
   /* ── fields: real labels above, sentence case ── */
   .ob .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 18px; }
   .ob label { font-size: 15px; font-weight: 600; color: var(--ink); letter-spacing: 0; }
-  .ob input, .ob select { height: 44px; font-size: 16px; padding: 0 14px; }
+  .ob input, .ob select { height: 46px; font-size: 16px; padding: 0 14px; border-radius: 8px; }
   .ob .hint { font-size: 14px; line-height: 1.5; color: var(--ink-muted); margin-top: 2px; }
   .ob-pw { position: relative; }
   .ob-pw input { padding-right: 72px; }
@@ -192,9 +207,10 @@ const css = `
   .ob .ob-pw-toggle:focus-visible { outline: 2px solid var(--iris); outline-offset: 1px; }
 
   /* ── buttons: the site's ── */
-  .ob .btn { height: 40px; padding: 0 18px; border-radius: 6px; font-family: var(--font-sans); font-size: 15px; font-weight: 600; box-shadow: none; }
+  .ob .btn { height: 46px; padding: 0 18px; border-radius: 8px; font-family: var(--font-sans); font-size: 15px; font-weight: 600; box-shadow: none; }
   .ob .btn-primary, .ob .btn-primary:hover { color: #fff; }
-  .ob .btn-primary:disabled, .ob .btn-secondary:disabled {
+  .ob .btn-primary:disabled { background: var(--iris); border-color: var(--iris); color: #fff; opacity: 0.45; cursor: not-allowed; }
+  .ob .btn-secondary:disabled {
     background: #E6EAF0; border-color: #E6EAF0; color: #8A94A3; opacity: 1; cursor: not-allowed;
   }
   .ob .btn-secondary { background: var(--canvas); border-color: var(--line-strong); color: var(--ink); }
@@ -327,10 +343,9 @@ const css = `
   }
   .ob .tos-row input[type="checkbox"]:focus-visible { outline: 2px solid var(--iris); outline-offset: 2px; }
   .tos-row a { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
-  .ob-works { margin: -4px 0 18px; font-size: 14px; color: var(--ink-muted); }
 
   /* ── footer line ── */
-  .ob-foot { border-top: 1px solid var(--line); padding: 18px 32px; display: flex; flex-wrap: wrap; gap: 6px 20px; font-size: 14px; color: var(--ink-muted); }
+  .ob-foot { padding: 20px 48px 28px; display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 13px; color: var(--ink-subtle); }
   .ob-foot a { color: var(--ink-muted); }
   .ob-foot a:hover { color: var(--ink); }
 
@@ -338,11 +353,8 @@ const css = `
     .ob-head { height: auto; min-height: 64px; padding-top: 10px; padding-bottom: 10px; flex-wrap: wrap; }
     .ob-who { font-size: 13px; text-align: left; }
     .ob-head, .ob-foot { padding-left: 20px; padding-right: 20px; }
-    .ob-prog ol { padding: 0 20px; gap: 14px; overflow-x: auto; }
-    .ob-prog li .t { display: none; }
-    .ob-prog li[data-state="current"] .t { display: inline; }
-    .ob-form { padding: 36px 20px 48px; }
-    .panel-title { font-size: 28px; }
+    .ob-form { align-items: flex-start; padding: 28px 20px 40px; }
+    .panel-title { font-size: 30px; }
   }
 `;
 
@@ -823,55 +835,46 @@ function StepFinish({ workspace }: { workspace: WorkspaceData }) {
 }
 
 // ─────────────────────────────────────────────────────────
-// SHELL: HEADER, PROGRESS, SIDE PANEL, FOOTER
+// SHELL: THE SIDE PANEL
 // ─────────────────────────────────────────────────────────
 
-/** The steps a visitor sees, and which internal step each covers. */
-const PROGRESS: { label: string; steps: Step[] }[] = [
-  { label: "Account", steps: ["identify"] },
-  { label: "Open Occupella", steps: ["finish"] },
-];
-
-function Progress({ step, completed }: { step: Step; completed: Set<Step> }) {
-  const current = PROGRESS.findIndex((g) => g.steps.includes(step));
-  return (
-    <nav className="ob-prog" aria-label="Setup progress">
-      <ol>
-        {PROGRESS.map((g, i) => {
-          const done = g.steps.every((st) => completed.has(st));
-          const state = i === current ? "current" : done ? "done" : "todo";
-          return (
-            <li key={g.label} data-state={state} aria-current={i === current ? "step" : undefined}>
-              <span className="n">{state === "done" ? <CheckIcon size={11} /> : i + 1}</span>
-              <span className="t">{g.label}</span>
-              {state === "done" ? <span className="ob-sr"> (done)</span> : null}
-            </li>
-          );
-        })}
-      </ol>
-    </nav>
-  );
-}
-
-/** The pale blue panel: one product crop per step and what happens next. */
-const SIDE: Record<Step, { crop: () => React.ReactElement; next: string }> = {
-  identify: {
-    crop: () => <WorkOrderCard />,
-    next: "Next, Occupella opens with a Getting started checklist for the rest of your setup.",
-  },
-  finish: {
-    crop: () => <DraftCrop />,
-    next: "In the app, each event comes with a drafted next step you can edit.",
-  },
+/** What happens next, said over the photo, one line per step. */
+const SIDE_NEXT: Record<Step, string> = {
+  identify: "Next, Occupella opens with a Getting started checklist for the rest of your setup.",
+  finish: "In the app, each event comes with a drafted next step you can edit.",
 };
 
+/**
+ * The panel's photo (founder, 2026-11-07: "a photo of NYC" in place of the
+ * product crops). Public domain: Carol M. Highsmith gave her archive to the
+ * Library of Congress with no restriction, so no credit is owed; the caption
+ * gives one anyway, in the form the Library asks for. Source and licence:
+ * public/shots/photos/CREDITS.md.
+ */
+const SIDE_PHOTO = {
+  src: "/shots/photos/upper-east-side-brownstone.jpg",
+  width: 960,
+  height: 1259,
+  credit: "Photo: Carol M. Highsmith, Library of Congress",
+} as const;
+
 function SidePanel({ step }: { step: Step }) {
-  const side = SIDE[step];
   return (
     <aside className="ob-side" aria-label="What happens next">
+      {/* Decorative: the words beside it carry everything a reader needs.
+          Lazy, so a phone, where the panel is hidden, never downloads it. */}
+      <img
+        className="ob-side-photo"
+        src={SIDE_PHOTO.src}
+        width={SIDE_PHOTO.width}
+        height={SIDE_PHOTO.height}
+        alt=""
+        loading="lazy"
+        decoding="async"
+      />
       <div className="ob-side-in">
-        {side.crop()}
-        <p className="ob-side-next">{side.next}</p>
+        <p className="ob-side-next">{SIDE_NEXT[step]}</p>
+        <p className="ob-side-credit">{SIDE_PHOTO.credit}</p>
       </div>
     </aside>
   );
@@ -1120,25 +1123,24 @@ export default function App() {
   return (
     <div className="ob">
       <style>{css}</style>
-      <style>{cropCss}</style>
-      <header className="ob-head">
-        <Wordmark className="ob-word" />
-        {/* ⚠ The ONE thing that lets somebody set up a second account on the
-            same machine: the Supabase session persists, so without this a
-            returning visitor is carried back into the account they already
-            made with nothing to click (founder report, 2026-09-09). Shown
-            only when a session actually exists. */}
-        {signedIn && userEmail ? (
-          <span className="ob-who">
-            Signed in as <b>{userEmail}</b> ·{" "}
-            <button type="button" className="ob-alt" onClick={startOver}>Use a different account</button>
-          </span>
-        ) : null}
-      </header>
-      <Progress step={step} completed={completed} />
+      <div className="ob-left">
+        <header className="ob-head">
+          <Wordmark className="ob-word" />
+          {/* ⚠ The ONE thing that lets somebody set up a second account on the
+              same machine: the Supabase session persists, so without this a
+              returning visitor is carried back into the account they already
+              made with nothing to click (founder report, 2026-09-09). Shown
+              only when a session actually exists. */}
+          {signedIn && userEmail ? (
+            <span className="ob-who">
+              Signed in as <b>{userEmail}</b> ·{" "}
+              <button type="button" className="ob-alt" onClick={startOver}>Use a different account</button>
+            </span>
+          ) : null}
+        </header>
 
-      <main className="ob-main">
-          <section className="ob-form">
+        <main className="ob-form">
+          <div className="ob-form-in">
             {/* ⚠ Stands IN FRONT of step 1 whenever a session was found that
                 is not a magic-link continuation: two states used to run the
                 same code silently, so now they are two buttons. */}
@@ -1179,21 +1181,22 @@ export default function App() {
               </div>
             )}
             {step === "finish" && <StepFinish workspace={workspace} />}
-          </section>
-          <SidePanel step={sideStep} />
+          </div>
         </main>
 
-      <footer className="ob-foot">
-        <span>
-          <a href={TERMS_URL} target="_blank" rel="noreferrer">Terms</a> ·{" "}
-          <a href={PRIVACY_URL} target="_blank" rel="noreferrer">Privacy</a>
-        </span>
-        {/* Legal-entity attribution (A2P/Twilio verification crawls read it). */}
-        <span>Operated by Oscar Ventures LLC.</span>
-        <span>
-          Stuck on a step? Email <a href="mailto:team@occupella.com">team@occupella.com</a>.
-        </span>
-      </footer>
+        <footer className="ob-foot">
+          <span>
+            <a href={TERMS_URL} target="_blank" rel="noreferrer">Terms</a> ·{" "}
+            <a href={PRIVACY_URL} target="_blank" rel="noreferrer">Privacy</a>
+          </span>
+          {/* Legal-entity attribution (A2P/Twilio verification crawls read it). */}
+          <span>Operated by Oscar Ventures LLC.</span>
+          <span>
+            Stuck on a step? Email <a href="mailto:team@occupella.com">team@occupella.com</a>.
+          </span>
+        </footer>
+      </div>
+      <SidePanel step={sideStep} />
     </div>
   );
 }
