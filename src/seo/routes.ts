@@ -19,6 +19,7 @@
 
 import { BLOG_CARD, BLOG_INDEX, BLOG_PATH, CARD_SIZE, POSTS } from "../blog/posts";
 import { STATES, descriptionFor } from "../stateLaws/data";
+import { ONE_PRODUCT_LEGAL_PUBLISHED, legalRoutes, legalSource } from "../legal/publish";
 
 export const SITE_ORIGIN = "https://occupella.com";
 
@@ -252,7 +253,7 @@ const STATIC_ROUTES: MarketingRoute[] = [
     title: "Terms of service | Occupella",
     description: "The terms of service for Occupella, operated by Oscar Ventures LLC.",
     inSitemap: true,
-    source: "src/Legal.tsx",
+    source: legalSource("terms", ONE_PRODUCT_LEGAL_PUBLISHED),
     changefreq: "monthly",
     priority: 0.3,
   },
@@ -263,7 +264,7 @@ const STATIC_ROUTES: MarketingRoute[] = [
     description:
       "What data Occupella collects, how we use and protect it, and which service providers process it for us.",
     inSitemap: true,
-    source: "src/Legal.tsx",
+    source: legalSource("privacy", ONE_PRODUCT_LEGAL_PUBLISHED),
     changefreq: "monthly",
     priority: 0.3,
   },
@@ -350,7 +351,12 @@ const BLOG_ROUTES: MarketingRoute[] = [
   ),
 ];
 
-export const MARKETING_ROUTES: readonly MarketingRoute[] = [...STATIC_ROUTES, ...STATE_LAW_ROUTES, ...BLOG_ROUTES];
+export const MARKETING_ROUTES: readonly MarketingRoute[] = [
+  ...STATIC_ROUTES,
+  ...legalRoutes(ONE_PRODUCT_LEGAL_PUBLISHED),
+  ...STATE_LAW_ROUTES,
+  ...BLOG_ROUTES,
+];
 
 /** Served for any URL no route answers, with a real 404 status. */
 export const NOT_FOUND_PAGE = {

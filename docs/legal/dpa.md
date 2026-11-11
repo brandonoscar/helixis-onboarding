@@ -97,8 +97,10 @@ cost and under confidentiality.
 
 ## 10. Where data is processed
 
-Your data is stored and processed in [[DATA LOCATION]]. Where a subprocessor processes it
-elsewhere, it does so under the protections the law requires for that transfer.
+Your data is stored and processed in the United States: the app's database and sign-in on Supabase,
+in Amazon Web Services' us-east-1 region (Northern Virginia), and Occupella's servers and the books'
+database on Render, in Oregon. Where a subprocessor processes it elsewhere, it does so under the
+protections the law requires for that transfer.
 
 ## 11. Liability and term
 
