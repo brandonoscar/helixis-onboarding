@@ -4,6 +4,8 @@ import Features from "./Features";
 import Pricing from "./Pricing";
 import NotFound from "./NotFound";
 import { Privacy, Sms, Terms } from "./Legal";
+import { legalPages } from "./legal/oneProduct";
+import { ONE_PRODUCT_LEGAL_PUBLISHED } from "./legal/publish";
 import Leasing from "./solutions/Leasing";
 import Maintenance from "./solutions/Maintenance";
 import Delinquency from "./solutions/Delinquency";
@@ -53,6 +55,8 @@ export const PAGES: Record<string, () => ReactElement> = {
   "/sms": () => <Sms />,
   "/terms": () => <Terms />,
   "/privacy": () => <Privacy />,
+  // The one product's /terms, /privacy and /dpa, once src/legal/publish.ts says so.
+  ...legalPages(ONE_PRODUCT_LEGAL_PUBLISHED),
   "/state-laws": () => <StateLawsIndex />,
   ...Object.fromEntries(STATES.map((st) => [st.path, () => <StateLawPage state={st} />])),
   [BLOG_PATH]: () => <BlogIndex />,

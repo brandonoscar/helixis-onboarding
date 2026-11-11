@@ -70,13 +70,17 @@ const css = `
   }
 `;
 
-function Shell({
+/** A legal page's frame. `note` false leaves out the plain-English box, for a page that brings
+ *  its own (the one product's drafts, src/legal/oneProduct.tsx). */
+export function Shell({
   title,
   updated,
+  note = true,
   children,
 }: {
   title: string;
   updated?: string;
+  note?: boolean;
   children: React.ReactNode;
 }) {
   return (
@@ -93,10 +97,12 @@ function Shell({
         <div className="legal-date">
           {updated ?? "Effective July 6, 2026 · Updated August 14, 2026"}
         </div>
-        <div className="legal-note">
-          This is written in plain English on purpose. If anything here is unclear, email{" "}
-          <a href="mailto:team@occupella.com">team@occupella.com</a> and a human will answer.
-        </div>
+        {note ? (
+          <div className="legal-note">
+            This is written in plain English on purpose. If anything here is unclear, email{" "}
+            <a href="mailto:team@occupella.com">team@occupella.com</a> and a human will answer.
+          </div>
+        ) : null}
         {children}
       </main>
       <SiteFooter />

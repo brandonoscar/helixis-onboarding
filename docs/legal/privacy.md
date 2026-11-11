@@ -78,7 +78,9 @@ We do not use any company's data to train AI models.
 - Sign-in sessions expire, repeated failed sign-ins are refused, and every request runs with only
   the rights its user holds.
 - Backups: [[BACKUPS]].
-- Data is stored and processed in [[DATA LOCATION]].
+- Data is stored and processed in the United States: the app's database and sign-in on Supabase, in
+  Amazon Web Services' us-east-1 region (Northern Virginia), and Occupella's servers and the books'
+  database on Render, in Oregon.
 
 ## Who else processes it
 

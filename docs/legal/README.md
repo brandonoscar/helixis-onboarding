@@ -21,23 +21,54 @@ online rent and the AI built in.
 | `privacy.md` | Privacy Policy: what Occupella collects as itself, and how it handles what it processes for a company. |
 | `dpa.md` | Data Processing Agreement: Occupella as the company's processor (service provider) for its tenants', owners', applicants' and vendors' data. |
 
+## Publishing
+
+Publishing all three is one change: set `ONE_PRODUCT_LEGAL_PUBLISHED` to `true` in
+`src/legal/publish.ts`. `/terms` and `/privacy` then render `terms.md` and `privacy.md`
+(`src/legal/oneProduct.tsx`), `/dpa` renders `dpa.md` and joins the sitemap, and the Privacy
+Policy's "*(At publication: ...)*" line becomes the shared subprocessor list. Each draft's
+"> Draft ..." note and the "(draft)" in its title are left out of the page. `/sms` stays as it is.
+
+`src/legal/oneProduct.test.tsx` refuses the switch while any `[[BLANK]]` is left. Measured on
+2026-11-11 with the switch set to true: every other test passed (391 of 392, the seo and prerender
+checks included), so the blanks are all that stand in the way. When it flips, also do the two
+items under "Not changed here" below.
+
 ## Blanks to fill
 
 Each blank reads `[[LIKE THIS]]`. `grep -n "\[\[" docs/legal/*.md` lists them.
+`[[DATA LOCATION]]` is filled. Every other blank is left for the founder. Each row gives a
+recommended value and why. **Lawyer** marks a choice a lawyer should make or check, and none has
+reviewed these drafts.
 
-| Blank | What goes there | What the live site says today |
-|---|---|---|
-| `[[LEGAL NAME]]` | The company that operates Occupella | Oscar Ventures LLC |
-| `[[STATE]]` | Its state of formation, and the law the terms follow | not stated |
-| `[[MAILING ADDRESS]]` | Its mailing address for notices | not stated |
-| `[[CONTACT EMAIL]]` | Where people write | team@occupella.com |
-| `[[PLANS AND PRICES]]` | The one product's plans | Starter, Pro, Scale, priced by answers (live `/terms`) |
-| `[[RETENTION]]` | How long a closed company's books are kept | not stated |
-| `[[DATA LOCATION]]` | Where the databases and servers run | not stated; NOT VERIFIED from here |
-| `[[BACKUPS]]` | The books' backups | not stated |
-| `[[NOTICE DAYS]]` | Days of notice before a new subprocessor | not stated |
-| `[[BREACH HOURS]]` | Hours to tell a company of a breach | not stated |
-| `[[EFFECTIVE DATE]]` | The day these take effect | — |
+| Blank | Recommended | Why | Lawyer |
+|---|---|---|---|
+| `[[DATA LOCATION]]` | **Filled:** the United States. The app's database and sign-in are on Supabase in AWS us-east-1 (Northern Virginia). The servers and the books' database are on Render in Oregon. | The founder's facts (11/11). The Supabase project `helixis-test` reads region `us-east-1` in Supabase's API (checked 2026-11-11). Render's region is NOT VERIFIED from here: its API needs a workspace chosen first. | |
+| `[[LEGAL NAME]]` | Oscar Ventures LLC | The name the live `/terms` and the app's legal pages use today. Check it against the formation filing, spelled exactly. | |
+| `[[STATE]]` | The LLC's state of formation, from its articles of organization. | The terms name it as the LLC's state and as the law they follow. Which law and which courts is a choice to check. | **Lawyer** |
+| `[[MAILING ADDRESS]]` | A registered agent's or mail service's address that accepts legal mail, not a home address. | The pages are public and the address takes legal notices. | |
+| `[[CONTACT EMAIL]]` | team@occupella.com | The address the live pages use, on the domain's Google Workspace mail (its MX), so someone reads it. A privacy@ alias can come later. | |
+| `[[EFFECTIVE DATE]]` | The day the switch flips. | There are no paying customers today, so no notice period applies. With customers, give 30 days' notice of a material change. | |
+| `[[PLANS AND PRICES]]` | "The plans and prices are those on [Pricing](/pricing) when you subscribe or renew." | Prices live in three places that must change together today (`plans.py`, `Pricing.tsx`, `Legal.tsx`; `src/Pricing.tsx`'s header). A link keeps the terms from drifting. Today's plans are Trial, Starter $50, Pro $199 and Scale $500 a month (`src/Pricing.tsx`). | |
+| `[[RETENTION]]` | "We keep a closed company's books, read only, for six years after its agreement ends, then delete them within 30 days. A company may ask in writing for them to be deleted sooner." | Trust records must be kept for years after the fact, six in Oregon by the founder's reading (the strictest state is in the PMS's `docs/law.md`; the Oregon cite is NOT VERIFIED here). Keeping them protects a company that didn't export, and early deletion on request leaves the duty with the company. | **Lawyer** |
+| `[[BACKUPS]]` | "Encrypted daily backups in the same region, each kept N days and then deleted." N comes from the Render and Supabase plans in use. | A deletion is only complete once the backups age out, so N has to be the real number. NOT VERIFIED here: the plans' retention. | |
+| `[[NOTICE DAYS]]` | 30 | The common figure in processing agreements. It is long enough for a company to object and leave under the DPA's own objection clause. | |
+| `[[BREACH HOURS]]` | 72 | A company may owe its own notices within 30 days of discovery: the FTC's Safeguards Rule, 16 CFR 314.4(j), for 500 or more people, and many state laws within 30 to 45. 72 hours leaves it about 27. Whether the Safeguards Rule covers a property manager is a question for counsel. | **Lawyer** |
+
+Also for a lawyer, beyond the blanks: the limitation of liability (`terms.md`, twelve months'
+fees); the DPA's processor and service-provider terms under each state's privacy law; and the
+statements about e-signing (ESIGN disclosures, in the books' signing page).
+
+## Not changed here
+
+- **AgenticHelixis `frontend/public/legal/*.html`**: the app's own Terms, Privacy, SMS, Billing,
+  Subprocessors and Accessibility pages. They are dated August to September 2026, describe the
+  Buildium product, and are what the app's sign-in form links to (`LoginForm.tsx`). At the
+  switch-over they say something other than these pages. That repo belongs to another session.
+- **Sign-up's `tos_version`**: `src/App.tsx` records `TOS_VERSION = "2026-07-05"` with each
+  sign-up's acceptance. When the switch flips, it should become the new effective date, so an
+  acceptance names the terms it accepted.
+- `/sms`: unchanged, as above.
 
 ## What every statement here rests on
 
@@ -61,6 +92,6 @@ publishing, as the product will have moved:
   the PMS's own sign-in does today. The drafts make no claim on the last.
 
 The subprocessor list (`src/legal/subprocessors.tsx`) is shared by `/privacy` and `/security`
-and is checked against AgenticHelixis's code. At the switch-over its Supabase entry
-("your synced Buildium data") becomes the books, and a mail sender joins it if the books' email
-goes through one.
+and is checked against AgenticHelixis's code. Since 2026-11-11 it names the books' database on
+Render, Resend (Amazon SES behind it) for email, and Stripe for rent paid online. At the
+switch-over its Supabase entry ("your synced Buildium data") becomes the app's account data.

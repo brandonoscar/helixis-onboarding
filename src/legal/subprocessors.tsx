@@ -10,9 +10,25 @@
  *     refuses to boot on an OpenAI model.
  *   · Browserbase and E2B are real integrations that are off or unused for
  *     customers; they are listed with that status rather than hidden, since
- *     turning one on must not silently outrun this page.
- *     TODO(brandon): confirm both are off in Render, and update their status
- *     here the day either is turned on.
+ *     turning one on must not silently outrun this page. Checked 2026-11-11
+ *     in AgenticHelixis main:
+ *       E2B: code execution ships dark. HELIXIS_CODEEXEC__ENABLED defaults to
+ *       false (settings.py CodeExecSettings), render.yaml never sets it, and
+ *       docs/adr/0008-agent-code-execution.md says it must stay false.
+ *       Browserbase: browser_agent runs only when both
+ *       HELIXIS_BROWSER__BROWSERBASE_API_KEY and _PROJECT_ID are set. They are
+ *       dashboard secrets in render.yaml (sync: false), so whether they are set
+ *       is in Render, not the code; without them every browser tool answers
+ *       "browser_unavailable". Update its status the day they are set.
+ * Checked 2026-11-11 for the one product:
+ *   · Render also runs the books' database (Postgres): the PMS mounted at
+ *     /books (AgenticHelixis src/helixis/books.py).
+ *   · Resend sends email from updates.occupella.com, with Amazon SES behind
+ *     it: the domain's DNS has Resend's DKIM key
+ *     (resend._domainkey.updates) and SPF include:amazonses.com with an SES
+ *     feedback MX on send.updates.
+ *   · Stripe also takes tenants' rent and owners' money online, on Stripe's
+ *     own page (the PMS's src/pms/payments.py; it never sees a bank number).
  * Adding a vendor to the code means adding it here the same day.
  */
 
@@ -26,10 +42,21 @@ export const SUBPROCESSORS: Subprocessor[] = [
   { name: "Anthropic", purpose: "The AI models that read your data and write answers and drafts." },
   { name: "Voyage AI", purpose: "Turns remembered facts into search vectors so they can be recalled later." },
   { name: "Supabase", purpose: "Database and sign-in. Your synced Buildium data and your account live here." },
-  { name: "Render", purpose: "Runs the Occupella servers and background workers." },
+  {
+    name: "Render",
+    purpose: "Runs the Occupella servers and background workers, and the books' database.",
+  },
   { name: "Vercel", purpose: "Hosts this website and the Occupella web app." },
   { name: "Composio", purpose: "Manages the Google sign-in (OAuth) for Gmail, Calendar and Drive." },
-  { name: "Stripe", purpose: "Billing and payments for your subscription." },
+  {
+    name: "Stripe",
+    purpose:
+      "Billing for your subscription, and rent and owners' money paid online by bank, on Stripe's own page.",
+  },
+  {
+    name: "Resend",
+    purpose: "Sends Occupella's email, with Amazon Web Services' email service (Amazon SES) behind it.",
+  },
   { name: "Twilio", purpose: "Text messages and calls, and the carrier registration for your business number." },
   { name: "Tavily", purpose: "Web search, when a question needs public information." },
   { name: "Sentry", purpose: "Error reports, so we can see and fix failures." },
