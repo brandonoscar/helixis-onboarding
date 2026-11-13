@@ -228,6 +228,8 @@ function client(): Promise<PostHog> {
  */
 export function pageName(pathname: string = window.location.pathname): string {
   if (pathname.startsWith('/start')) return 'start'
+  // The owner and tenant invite page (Invited.tsx): a page of its own, never counted as a 404.
+  if (pathname === '/invited' || pathname.startsWith('/invited/')) return 'invited'
   // Resolved exactly as the router resolves it (src/pages.tsx), so the label
   // and the page on screen cannot disagree: `/pricing/anything` renders the
   // 404 page and is counted as one.

@@ -37,6 +37,14 @@
     {
       "source": "/oauth/:path*",
       "destination": "/app-shell"
+    },
+    {
+      "source": "/invited",
+      "destination": "/app-shell"
+    },
+    {
+      "source": "/invited/:path*",
+      "destination": "/app-shell"
     }
   ],
   "headers": [
