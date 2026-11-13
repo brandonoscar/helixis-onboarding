@@ -1,23 +1,26 @@
-import { Reveal, SitePageShell } from "./Site";
+import { Coming, Reveal, SitePageShell, type Block } from "./Site";
 import { SubprocessorList } from "./legal/subprocessors";
 
 // ─────────────────────────────────────────────────────────────────────
-// /security: only facts that are true in the AgenticHelixis code today.
+// /security: only facts that are true in the code today.
 //
 // Each block's source:
-//   · company isolation: every helixis_* query carries company_id, pinned by
-//     tests/unit/test_tenant_scoping_corpus.py and test_tenant_isolation_probe.py
-//   · credentials encrypted at rest: Fernet with HELIXIS_DATA_KEY (settings.py,
-//     api/routes/buildium.py); entered once and never shown again
-//   · Google via Composio managed OAuth, minimum scopes (Legal.tsx /privacy)
-//   · disconnect deletes the mirror: Buildium's API terms (/privacy, /pricing)
-//   · role checks, locks, half-landed writes: the /features safeguards
-//   · identifiers stripped from replies, outside text fenced: /features
+//   · the books (Occupella-PMS CLAUDE.md): every table carries its company and
+//     every transfer stays inside one company; the ledger is append-only and
+//     fixed by reversing entries; every write is in trust_audit_log naming the
+//     staff member; the admin, approve and disburse roles and a trust
+//     account's broker and signers; bank numbers, tax IDs and payment keys
+//     sealed under PMS_DATA_KEY with only the last four shown, a tax ID's
+//     reveal logged; trust_ai_agent, which reads and inserts drafts only
+//   · the AI assistant add-on (AgenticHelixis): Google via Composio managed
+//     OAuth, minimum scopes (Legal.tsx /privacy); outside text fenced
+//
+// ⚠ IT DESCRIBED THE BUILDIUM ASSISTANT UNTIL 2026-11-13 (encrypted Buildium
+// keys, the mirror deleted on disconnect, a lock before each Buildium call).
+// The connector left the product (AgenticHelixis docs/decisions/
+// ADR-one-product.md), so those blocks went with it.
 //
 // ⚠ NO CERTIFICATION CLAIMS: no SOC 2, ISO, HIPAA or similar. There are none.
-// ⚠ THE APPROVAL CLAIM IS HELD. TODO(brandon): confirm autonomous notes flag
-// is off; then add "Nothing is written to Buildium or sent without an
-// approval card" as the first block.
 // ⚠ TODO(brandon): confirm security@occupella.com routes to you; until then
 // every request here goes to team@occupella.com, the address the site
 // already uses.
@@ -36,38 +39,39 @@ const css = `
   .sc-ask { margin-top: 20px; font-size: 17px; line-height: 1.6; color: var(--ink); max-width: 62ch; }
 `;
 
-const BLOCKS = [
+const BLOCKS: Block[] = [
   {
-    t: "Your data stays in your company",
-    b: "Every query Occupella runs is scoped to your company. A test reads every query in the codebase to keep it that way, and another tries to read one company's data from another's session.",
+    t: "Each company's books kept apart",
+    b: "Every record carries the company it belongs to, and the books refuse a transfer from one company to another.",
   },
   {
-    t: "Credentials encrypted at rest",
-    b: "Your Buildium API keys are encrypted before they are stored, entered once and never shown again, not even to you.",
+    t: "A ledger that's never rewritten",
+    b: "Nothing in the trust ledger is edited or deleted. A mistake is fixed with a reversing entry, so the record of what happened stays whole.",
+  },
+  {
+    t: "Every change logged",
+    b: "Every write to the books goes in an audit log with when it happened, what changed and which staff member did it.",
+  },
+  {
+    t: "Roles on money leaving trust",
+    b: "Paying a bill or an owner takes the disburse role and approving month-end takes the approve role. A trust account's broker can limit payouts to the signers they name.",
+  },
+  {
+    t: "Bank numbers and tax IDs encrypted",
+    b: "Owners' and vendors' bank account numbers, tax IDs and payment keys are encrypted before they are stored. Only the last four digits are shown, and each time an admin reveals a tax ID is logged.",
+  },
+  {
+    t: "The assistant can't move money",
+    coming: true,
+    b: "When the AI assistant reads your books, it does so under a database role that can only read and propose drafts. It can't record a payment, a charge, a bill or a draw.",
   },
   {
     t: "Google access through managed sign-in",
-    b: "Gmail, Calendar and Drive connect through Composio's OAuth with the minimum scopes Occupella needs. We never see or store your Google password.",
-  },
-  {
-    t: "Disconnect deletes the copy",
-    b: "Disconnecting Buildium deletes Occupella's synced copy of your data, as Buildium's API terms require. There is no option to keep it.",
-  },
-  {
-    t: "Roles on the changes that can't be undone",
-    b: "A payment, a charge and closing a work order need a manager or an admin, and are refused if the role can't be verified.",
-  },
-  {
-    t: "No double charges",
-    b: "Each approved change takes a lock before the Buildium call. A change that might have half-landed is flagged for review and never retried automatically.",
-  },
-  {
-    t: "Identifiers kept off the screen",
-    b: "Buildium record numbers, tenant emails and phone numbers are stripped from replies as they are written.",
+    b: "For the AI assistant, Gmail, Calendar and Drive connect through Composio's OAuth with the minimum scopes it needs. We never see or store your Google password.",
   },
   {
     t: "Outside text can't give orders",
-    b: "A resident's message, an email, a file or a web page is fenced off before the AI reads it, so text written by someone else can't tell Occupella what to do.",
+    b: "A message, an email, a file or a web page is fenced off before the AI assistant reads it, so text written by someone else can't tell Occupella what to do.",
   },
 ];
 
@@ -77,13 +81,14 @@ export default function Security() {
       title="How Occupella protects your data"
       lede={
         <>
-          What is in place today, stated as specifically as we can. We don&rsquo;t hold a
-          security certification such as SOC 2, and this page doesn&rsquo;t claim one.
+          What is in place today, stated as specifically as we can. Anything not on
+          app.occupella.com yet is marked Coming. We don&rsquo;t hold a security certification
+          such as SOC 2, and this page doesn&rsquo;t claim one.
         </>
       }
       css={css}
       close={{
-        title: "Questions before you connect Buildium?",
+        title: "Questions about security?",
         body: "Email team@occupella.com and a person will answer.",
       }}
     >
@@ -92,7 +97,10 @@ export default function Security() {
           <div className="sc-blocks">
             {BLOCKS.map((b) => (
               <div className="sc-block" key={b.t}>
-                <h3>{b.t}</h3>
+                <h3>
+                  {b.t}
+                  {b.coming ? <Coming /> : null}
+                </h3>
                 <p>{b.b}</p>
               </div>
             ))}

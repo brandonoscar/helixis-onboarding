@@ -10,10 +10,12 @@ occupella.com and describing the company the same way.
 ## What the site already does
 
 - Every page is prerendered with its own title, description and canonical,
-  and all 69 are in `sitemap.xml`.
+  and every one is in `sitemap.xml` (`npm run build` prints the count).
 - The Organization structured data names Oscar Ventures LLC and says
-  "Occupella is AI software for property managers who use Buildium", so a
-  crawler can tell the two Occupellas apart.
+  "Occupella is free property management software with trust accounting, for
+  companies that manage rentals for owners" (since 2026-11-13; it said "AI
+  software for property managers who use Buildium" before), so a crawler can
+  tell the two Occupellas apart.
 - `setup.occupella.com` and `helixis-onboarding.vercel.app` redirect to
   occupella.com (`vercel.json`), so Google counts one site instead of three.
 - After each production deploy, `.github/workflows/indexnow.yml` tells Bing
@@ -50,22 +52,24 @@ and the site are the same company.
 5. **G2 and Capterra.** Free vendor listings, category "Property Management
    Software". One Capterra listing also appears on GetApp and Software
    Advice.
-6. **YouTube.** A channel named Occupella, with
-   `public/demo/product-tour.mp4` uploaded as "Occupella product tour". Link
-   occupella.com in the channel and the video description. Videos show up
-   in brand results as their own block.
+6. **YouTube.** A channel named Occupella, with a tour of the books uploaded
+   as "Occupella product tour". Link occupella.com in the channel and the
+   video description. Videos show up in brand results as their own block.
+   (`public/demo/product-tour.mp4` is the Buildium assistant's tour, from
+   before 2026-11-13; it no longer shows the product.)
 7. **Product Hunt.** A launch day gives one strong link and a spike of
    branded searches, which Google notices. Do it after 1 to 6, so the
    searches land on something.
 8. **Smaller directories:** SaaSHub, AlternativeTo (as an alternative to
-   other Buildium add-ons), BetaList.
+   Buildium and other property management systems), BetaList.
 
 Not recommended:
 - **Wikipedia or Wikidata.** Both require independent press coverage, and a
   self-made entry gets deleted.
-- **Calling Buildium a partner anywhere.** Say "works with Buildium" or
-  "integrates with Buildium". The site's footer says Occupella is not
-  affiliated with Buildium, and every profile has to agree.
+- **Calling Buildium a partner anywhere.** Since 2026-11-13 Occupella
+  doesn't connect to Buildium at all: say "switch from Buildium". The site's
+  footer says Occupella is not affiliated with Buildium, and every profile has
+  to agree.
 
 ## Copy to paste
 
@@ -79,37 +83,39 @@ Use the same words everywhere. Consistency is the signal.
 
 **Category:** Property Management Software
 
+(Rewritten 2026-11-13 for the one product: the books, free to use, with the
+AI assistant as a paid add-on. Profiles made with the old copy say "AI
+assistant for property managers who use Buildium" and need the same change.)
+
 **Tagline (under 60 characters):**
-AI assistant for property managers who use Buildium
+Free property management software with trust accounting
 
 **Short description (under 160 characters):**
-Occupella connects to Buildium, reads your work orders, late rent and lease
-events, and drafts the reply, the work order or the owner update for you.
+The rent roll, leases and e-signing, bills, owner draws, month-end and owner
+statements, with trust accounting under it all. Free to use.
 
 **Long description:**
-Occupella is an AI assistant for property management companies that run on
-Buildium. You connect it with a Buildium API key, and it keeps a synced copy
-of your properties, units, leases, tenants, owners, vendors, bills and work
-orders.
+Occupella is property management software for companies that manage rentals
+for owners. It keeps the books: trust accounting for the money you hold, the
+rent roll, leases signed on its own signing page, rent and late fees posted
+by themselves every night, bills and owner approvals, owner draws by ACH file
+or check, month-end bank reconciliation, owner statements and 1099
+summaries, maintenance and work orders, vendors and leasing.
 
-When something happens in Buildium, such as a maintenance request, it pulls
-the history around it and drafts what comes next: the reply to the resident,
-the work order, the follow-up task. You can ask it questions in plain
-English, like "who is behind on rent?" or "what do we owe vendors?", and get
-a table built from your own data. It sends email from your own Gmail, checks
-Google Calendar and reads the documents you keep in Google Drive.
+Every trust bank account is checked on every posting, nothing in the ledger
+is edited or deleted, and every change is logged with who made it.
 
-It declines fair housing questions that turn on a protected class, and it
-won't offer school ratings or crime statistics as a workaround.
+Companies switching from Buildium bring their records over from CSV files
+with its switching tool.
 
-Plans start at $50 a month, and every plan starts with a 14-day free trial
-with no card.
+Occupella is free to use. Online rent payments are coming, with a small fee
+on each one shown before anyone pays. The AI assistant is a paid add-on.
 
-**Pricing:** Starter $50/month. Pro $199 per person/month. Scale $500/month.
-14-day free trial, no card.
+**Pricing:** Free to use. AI assistant add-on: Starter $50/month, Pro $199
+per person/month, Scale $500/month, with a 14-day trial and no card.
 
-**Screenshots:** `public/shots/gallery/*.jpg`, the same frames as
-occupella.com/screenshots.
+**Screenshots:** none of the books yet. TODO(brandon): the old frames in
+`public/shots/gallery/` show the Buildium assistant; don't use them.
 
 TODO(brandon): the city and state, and the year founded. Most of these forms
 ask for both. Nothing above states them, because the site doesn't.

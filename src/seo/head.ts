@@ -4,7 +4,7 @@
  * seo.test.ts calls the same functions, so what is tested is what ships.
  */
 
-import { PLANS } from "../Pricing";
+import { OFFER, PLANS } from "../Pricing";
 import {
   MARKETING_ROUTES,
   NOT_FOUND_PAGE,
@@ -48,7 +48,8 @@ export const ORGANIZATION_JSONLD = {
   "@type": "Organization",
   name: "Occupella",
   legalName: "Oscar Ventures LLC",
-  description: "Occupella is AI software for property managers who use Buildium.",
+  description:
+    "Occupella is free property management software with trust accounting, for companies that manage rentals for owners.",
   url: `${SITE_ORIGIN}/`,
   logo: `${SITE_ORIGIN}/icon-512.png`,
   ...(SAME_AS.length ? { sameAs: SAME_AS } : {}),
@@ -88,9 +89,10 @@ export function breadcrumbJsonLd(route: MarketingRoute): object | null {
 /**
  * The product itself, on the pages that describe it and price it.
  *
- * ⚠ THE PRICES ARE THE PRICING PAGE'S PLANS, read from the same list the
- * cards render (Pricing.tsx PLANS), so a price change cannot leave a stale
- * number in what Google reads. No aggregateRating or review: there are no
+ * ⚠ THE PRICES ARE THE PRICING PAGE'S, read from the same lists the cards
+ * render (Pricing.tsx OFFER and PLANS), so a price change cannot leave a stale
+ * number in what Google reads: the books at 0, then the AI assistant add-on's
+ * plans. The online payment fee has no figure yet, so it is no offer here. No aggregateRating or review: there are no
  * public reviews yet, and inventing one is the thing this site never does.
  * Google's rich-result test calls that "ineligible for stars", which is true
  * and harmless; the point here is telling search engines, and the assistants
@@ -99,6 +101,7 @@ export function breadcrumbJsonLd(route: MarketingRoute): object | null {
 export const SOFTWARE_PAGES = ["/", "/pricing"] as const;
 
 export function softwareJsonLd(): object {
+  const books = OFFER.find((o) => o.key === "books")!;
   return {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
@@ -109,14 +112,24 @@ export function softwareJsonLd(): object {
     applicationSubCategory: "Property management",
     operatingSystem: "Web",
     publisher: { "@type": "Organization", name: "Occupella", legalName: ORGANIZATION_JSONLD.legalName },
-    offers: PLANS.map((p) => ({
-      "@type": "Offer",
-      name: p.name,
-      price: p.fig === "Free" ? "0" : p.fig.replace(/^\$/, ""),
-      priceCurrency: "USD",
-      description: `${p.name}: ${p.fig === "Free" ? "free for" : p.fig} ${p.unit}`,
-      url: `${SITE_ORIGIN}/pricing`,
-    })),
+    offers: [
+      {
+        "@type": "Offer",
+        name: books.name,
+        price: "0",
+        priceCurrency: "USD",
+        description: `${books.name}: ${books.fig.toLowerCase()} ${books.unit}`,
+        url: `${SITE_ORIGIN}/pricing`,
+      },
+      ...PLANS.map((p) => ({
+        "@type": "Offer",
+        name: `AI assistant ${p.name}`,
+        price: p.fig.replace(/^\$/, ""),
+        priceCurrency: "USD",
+        description: `The AI assistant add-on, ${p.name}: ${p.fig} ${p.unit}`,
+        url: `${SITE_ORIGIN}/pricing#ai-assistant`,
+      })),
+    ],
   };
 }
 
@@ -168,9 +181,11 @@ export function headTags(route: MarketingRoute): string {
   const crumbs = breadcrumbJsonLd(route);
   const posting = blogPostingJsonLd(route);
   const image = imageFor(route);
+  // ⚠ social-preview.png is still a picture of the chat (the AI assistant
+  // add-on), so the alt says so. TODO(brandon): a share image of the books.
   const imageAlt = route.image
     ? esc(route.image.alt)
-    : "The Occupella chat surface answering a question about a property.";
+    : "The Occupella AI assistant answering a question about a property.";
   // A post's card and preview show the article's own title, without the
   // " | Occupella" the browser tab and search results get.
   const shareTitle = route.article ? esc(route.article.headline) : title;
@@ -237,7 +252,7 @@ export function notFoundHead(): string {
  * answers the client-only paths, and says nothing a search engine should keep.
  */
 export function appShellHead(): string {
-  return unindexedHead("Start your free trial | Occupella", "Set up Occupella.");
+  return unindexedHead("Start free | Occupella", "Set up Occupella.");
 }
 
 /**
@@ -297,7 +312,7 @@ export function llmsTxt(): string {
     "",
     `> ${ORGANIZATION_JSONLD.description} It is operated by ${ORGANIZATION_JSONLD.legalName}. Occupella is not affiliated with Buildium.`,
     "",
-    "Occupella connects to a property manager's Buildium account with an API key, keeps a synced copy of it, and drafts replies, work orders and owner updates. Every plan starts with a 14-day free trial, and no card is needed to start.",
+    "Occupella runs a property management company's books: trust accounting, the rent roll, leases and e-signing, bills, owner draws, bank reconciliation, owner statements, maintenance and leasing. It is free to use, and the AI assistant is a paid add-on. Online rent payments, owner and tenant sign-in, and the assistant reading the books are coming. Companies switching from Buildium bring their records over from CSV files with its switching tool.",
     "",
     ...group("Product", (r) => !isLegal(r) && !isResource(r)),
     ...group("Free resources", isResource),

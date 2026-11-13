@@ -1,13 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { CloseBand, Reveal, useStartLabel, SiteFooter, SiteNav, siteCss, DemoPanel } from "./Site";
-import {
-  ApprovalCrop,
-  DelinquencyCrop,
-  DraftCrop,
-  TodayRow,
-  WorkOrderDetailCrop,
-  cropCss,
-} from "./crops";
+import { useEffect, useState } from "react";
+import { Blocks, Checks, CloseBand, Reveal, SectionHead, SiteFooter, SiteNav, siteCss, useStartLabel, type Block } from "./Site";
 
 // ─────────────────────────────────────────────────────────────────────
 // LANDING — the front door.
@@ -18,20 +10,34 @@ import {
 //   · Type — weight ceiling 600, negative tracking scaled to size
 //     (-0.036em display → 0 at body), display line-height 1.05 against
 //     body 1.5, POSITIVE tracking on the small caps eyebrow.
-//   · Depth — surface ladder + 1px hairlines. One soft shadow, on the
-//     product panel only. No glassmorphism, no gradient fills, one
-//     chromatic accent (--iris) and nothing else.
+//   · Depth — surface ladder + 1px hairlines. No glassmorphism, no gradient
+//     fills, one chromatic accent (--iris) and nothing else.
 //   · Motion — ONE choreographed entrance (4 elements, 200ms stagger,
 //     translateY(-10px): content settles DOWN into place, it doesn't
-//     fly up); the product panel tilts up once at threshold 0.4; below
-//     the fold, 12px reveals on headers and cards only — never on
-//     paragraphs, never re-triggered. Hover changes background or
+//     fly up); below the fold, 12px reveals on headers and cards only —
+//     never on paragraphs, never re-triggered. Hover changes background or
 //     hairline, never scale.
 //   · Copy — sentence case, terminal period, ≤8-word headline, concrete
 //     nouns, no adjectives.
 //
-// Everything shown ships today. The visuals are product crops rebuilt from
-// the real app (src/crops.tsx), not mockups.
+// ⚠ WHAT OCCUPELLA IS NOW (founder, 2026-11-13; AgenticHelixis
+// docs/decisions/ADR-one-product.md): property management software, the
+// "books", built on the free PMS (Occupella-PMS, its CLAUDE.md is the list of
+// what is built). It is free to use. Occupella earns a small fee on each
+// online rent payment once those arrive, and the AI assistant is a paid
+// add-on. Every line here is true of the books today, or marked Coming:
+// online rent payments (bank first, then card), owner and tenant sign-in on
+// app.occupella.com, and the assistant reading the books.
+//
+// ⚠ NEVER IMPLIED, because none is offered: a tenant-screening partner,
+// texting, listing syndication, HOA management, bank feeds, 1099 e-filing,
+// mailing, renters-insurance sales, credit reporting, SOC 2. claims.test.ts
+// reads every page for the worst of these.
+//
+// ⚠ NO PRODUCT PICTURES, for now. The walkthrough video and the crops this
+// page carried (src/crops.tsx, removed) showed the Buildium assistant, which
+// left the product. Pictures of the books come back once there are honest
+// ones to show; until then the page says it in words.
 // ─────────────────────────────────────────────────────────────────────
 
 const css = `
@@ -121,63 +127,26 @@ const css = `
   /* ── hero ── */
   .lp-hero { padding: clamp(56px, 9vw, 104px) 0 0; }
   .lp-hero-ctas { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
-  .lp-hero .lp-video { margin-top: clamp(40px, 6vw, 72px); }
 
-  /* ── works with: names in grey text, not logos. A logo needs the
-     company's permission; a name does not. ── */
-  .lp-works { margin-top: 40px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px 32px; }
-  .lp-works-h { font-size: 15px; color: var(--ink-muted); }
-  .lp-works-n { font-size: 18px; font-weight: 600; color: var(--ink-subtle); }
-
-  /* ── how it works: steps left, one large marked crop right ── */
-  .lp-how { display: grid; gap: 48px; margin-top: 48px; align-items: start; }
-  @media (min-width: 1024px) { .lp-how { grid-template-columns: 5fr 6fr; gap: 72px; } }
-  .lp-how .lp-steps { grid-template-columns: 1fr !important; margin-top: 0; gap: 28px; }
-  .lp-how-vis { padding-left: 14px; }
+  /* ── how it works: three numbered steps under a thin rule. They are a
+     real sequence, so they keep their numbers. ── */
+  .lp-steps { display: grid; gap: 36px 48px; margin-top: 48px; }
+  @media (min-width: 860px) { .lp-steps { grid-template-columns: repeat(3, 1fr); } }
+  .lp-step { border-top: 1px solid var(--line); padding-top: 20px; }
   .lp .lp-step-n {
     display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
-    background: var(--iris); color: #fff; font-size: 13px;
+    background: var(--iris); color: #fff; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums;
   }
-
-  /* ── a weekday: a vertical line, times on the left ── */
-  .lp-day { margin-top: 48px; display: flex; flex-direction: column; max-width: 860px; }
-  .lp-day-row { display: grid; grid-template-columns: 92px 1fr; gap: 20px; position: relative; padding-bottom: 32px; }
-  .lp-day-row::before {
-    content: ""; position: absolute; left: 123px; top: 20px; bottom: -4px; width: 1px; background: var(--line-strong);
-  }
-  .lp-day-row:last-child::before { display: none; }
-  .lp-day-t { font-size: 15px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; padding-top: 2px; }
-  .lp-day-b { padding-left: 26px; position: relative; }
-  .lp-day-b::before {
-    content: ""; position: absolute; left: 0; top: 7px; width: 9px; height: 9px; border-radius: 50%;
-    background: var(--canvas); border: 2px solid var(--iris);
-  }
-  .lp-day-b p { font-size: 17px; line-height: 1.55; color: var(--ink); max-width: 56ch; }
-  .lp-day-b .cr { margin-top: 12px; max-width: 460px; }
-  @media (max-width: 640px) {
-    .lp-day-row { grid-template-columns: 1fr; gap: 6px; }
-    .lp-day-row::before { left: 6px; top: 44px; }
-  }
-
-  /* ── controls: text left, the approval card right ── */
-  .lp-ctl { display: grid; gap: 40px; align-items: center; }
-  @media (min-width: 1024px) { .lp-ctl { grid-template-columns: 5fr 6fr; gap: 72px; } }
-
-  /* ── steps and trust: plain blocks under a thin rule, no box. The steps
-     are a real sequence, so they keep their numbers. ── */
-  .lp-steps, .lp-trust { display: grid; gap: 36px 48px; margin-top: 48px; }
-  @media (min-width: 860px) { .lp-steps { grid-template-columns: repeat(3, 1fr); } }
-  @media (min-width: 760px) { .lp-trust { grid-template-columns: 1fr 1fr; } }
-  .lp-step, .lp-trust-item { border-top: 1px solid var(--line); padding-top: 20px; }
-  .lp-step-n { font-size: 15px; font-weight: 600; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
   .lp-step-t { margin-top: 10px; font-size: 18px; font-weight: 600; color: var(--ink); }
-  .lp-step-b, .lp-trust-item { font-size: 16px; line-height: 1.6; color: var(--ink-muted); }
-  .lp-step-b { margin-top: 8px; }
+  .lp-step-b { margin-top: 8px; font-size: 16px; line-height: 1.6; color: var(--ink-muted); }
 
-  /* ── alternating feature bands ── */
-  .lp-band { display: grid; gap: clamp(28px, 4vw, 56px); align-items: center; margin-top: 36px; }
-  @media (min-width: 900px) { .lp-band { grid-template-columns: 0.85fr 1.15fr; } .lp-band[data-flip="true"] > *:first-child { order: 2; } }
-  .lp-crop-cap { margin-top: 12px; font-size: 14px; color: var(--ink-muted); }
+  /* ── the page's one pale-blue band: trust accounting ── */
+  .lp-band-bg { margin-top: clamp(80px, 10vw, 128px); padding: clamp(64px, 8vw, 104px) 0; background: var(--band); }
+  .lp-band-bg .lp-list-item { border-top-color: rgba(14, 22, 32, 0.12); }
+  .lp-split { display: grid; gap: 40px; align-items: start; }
+  @media (min-width: 1024px) { .lp-split { grid-template-columns: 5fr 6fr; gap: 72px; } }
+  .lp-split .lp-list { margin-top: 0; }
+
   /* Free tools: plain links in a row of three, one line each. They are the
      site's most linkable pages, and a link from the home page is what tells a
      crawler they matter. */
@@ -198,20 +167,16 @@ const css = `
 `;
 
 // ── rotating hero word ───────────────────────────────────────────────
-// "We help Buildium users with ___" — the blank cycling through five
-// things the product actually does.
-//
-// The five are grounded in shipped capability, not aspiration: the
-// delinquency + ledger surface, the work-order and task path, the
-// email/text/call inbox with drafted replies, the leasing CRM, and the
-// consent + confirmation guardrails. A rotator that names a feature the
-// product does not have is a promise the first demo breaks.
+// "Free property management for ___" — the blank cycling through what the
+// books do today. A rotator that names something the product does not do is
+// a promise the first demo breaks, so nothing coming is in this list.
 const ROTATING = [
-  "rent collection",
+  "trust accounting",
+  "the rent roll",
+  "owner statements",
+  "bank reconciliation",
   "maintenance",
-  "resident communication",
   "leasing",
-  "compliance",
 ] as const;
 
 //: Long enough to READ, which is the whole point — a rotator fast enough
@@ -312,68 +277,77 @@ function RotatingWord() {
 const STEPS = [
   {
     n: "1",
-    t: "Connect Buildium.",
-    b: "One API key, ten minutes. Occupella mirrors your properties, leases, work orders, and contacts. Buildium stays the system of record.",
+    t: "Start free.",
+    b: "Make your company's account. There is no card to enter, and nothing to pay for the books.",
   },
   {
     n: "2",
-    t: "It reads the event and its history.",
-    b: "New work order, late payment, lease expiring. Occupella pulls the history around it and tells you what it noticed.",
+    t: "Bring your records over.",
+    b: "The switching tool reads CSV files of your owners, properties, units, tenants, leases, open charges and unpaid bills, then opens each trust bank account with what it held on your cutover day.",
   },
   {
-    // TODO(brandon): confirm autonomous notes flag is off. This step was
-    // "You approve the work. It drafts the reply, the work order, the owner
-    // update — and holds. Nothing reaches a tenant, an owner, or Buildium
-    // until you say so." Restore it then.
     n: "3",
-    t: "It drafts the next step.",
-    b: "The reply, the work order or the owner update, written out for you to edit.",
+    t: "Let the books run.",
+    b: "Rent, monthly charges and late fees post by themselves every night. You record payments, pay bills, pay owners and close the month.",
   },
 ];
 
-/**
- * An example weekday. The times are when YOU look, not when anything
- * runs; every entry is something the product produces today. The Today
- * titles are the reminder producers' own formats (AgenticHelixis
- * reminders/producers.py), with the demo account's names. Before adding an
- * entry, find the producer or tool that makes it.
- */
-const DAY: { at: string; text: string; row: { title: string; sub?: string } }[] = [
+/** Each line is enforced by the PMS's own database, not by a page. */
+const TRUST = [
+  "Security deposits sit in their own trust bank account, apart from operating money.",
+  "Every posting is checked: a trust bank account's cash must equal what it holds for owners, tenants, vendors and you.",
+  "Nothing in the ledger is edited or deleted. A mistake is fixed with a reversing entry.",
+  "Every change is logged with the staff member who made it.",
+  "Month-end takes two people: one prepares the reconciliation and another approves it.",
+  "Your earned fees are listed with the last day to take them out of trust.",
+];
+
+// ⚠ SIX here, the full list on /features. The front door makes the promise;
+// the features page is where somebody who wants to check it goes.
+const MONTH: Block[] = [
   {
-    at: "7:30 AM",
-    text: "You open the Inbox. The Today strip lists what is being neglected.",
-    row: { title: "4 overdue tasks at Garden Row" },
+    t: "The rent roll",
+    b: "Every lease, current, upcoming, ended or owing, with days left, rent, deposits and balance. Receive a payment from the row.",
   },
   {
-    at: "9:15 AM",
-    text: "Maria Alvarez reports the AC in unit 4B. The card arrives with the unit's history and a drafted reply.",
-    row: { title: "AC not cooling — unit 4B — Maria Alvarez", sub: "3rd similar issue in 90 days" },
+    t: "Leases and e-signing",
+    b: "Draft a lease on your own PDF or a template, and each signer signs on Occupella's own signing page. Every signed lease keeps a signing certificate.",
   },
   {
-    at: "11:40 AM",
-    text: "Two leases at Garden Row are close to ending and nobody has started a renewal offer.",
-    row: { title: "2 leases at Garden Row are in the renewal window", sub: "Soonest ends in 28 days. No renewal offer has been started." },
+    t: "Rent and late fees, by themselves",
+    b: "Each night Occupella charges rent and monthly fees, prorated by the day, and adds the late fee when a grace period ends, under each property's terms.",
   },
   {
-    at: "2:05 PM",
-    text: "A move-out last month means a deposit is due back. The date is counted from the state's deadline.",
-    row: { title: "Deposit return due 2026-10-14 — 14 Garden Row #6" },
+    t: "Bills and owner approvals",
+    b: "Enter a vendor's bill against the owner's account. A bill over the owner's approval limit waits for their approval before it is paid.",
   },
   {
-    at: "4:40 PM",
-    text: "In Leasing, a lead has gone quiet.",
-    row: { title: "Jordan Reyes is going cold", sub: "No touch in 3+ days · interested in Maple Court" },
+    t: "Owner draws by ACH file or check",
+    b: "Pay owners what is above their reserve and unpaid bills. Occupella writes the NACHA file for your bank, or checks to print on your stock.",
+  },
+  {
+    t: "Month-end and owner statements",
+    b: "Import the bank statement, match it and approve the reconciliation. Owner statements, the year-end and the 1099 summary come from the same books.",
   },
 ];
 
-// ⚠ FOUR here, six on /features. The front door makes the promise; the
-// features page is where somebody who wants to check it goes. Repeating the
-// full list on both is how a landing page swallows the site it is supposed to
-// be the door to.
-// TODO(brandon): confirm autonomous notes flag is off. The trust list led
-// with "Nothing auto-sends. Every draft waits for a person." and "Every
-// write to Buildium or Gmail passes a confirmation card you can edit before
-// approving." Both come back then.
+const COMING: Block[] = [
+  {
+    t: "Online rent payments",
+    coming: true,
+    b: "Tenants pay rent online through our payments provider, by bank first and by card after. Occupella earns a small fee on each payment, shown before anyone pays.",
+  },
+  {
+    t: "Owner and tenant sign-in",
+    coming: true,
+    b: "Owners and tenants sign in to their portals at app.occupella.com: statements, bills to approve, repair requests and lease documents.",
+  },
+  {
+    t: "The assistant reads your books",
+    coming: true,
+    b: "Ask about rent, balances and work orders in plain English, and get drafts your staff approve. The assistant can't move money.",
+  },
+];
 
 const TOOLS = [
   {
@@ -396,220 +370,109 @@ const TOOLS = [
 export default function Landing() {
   const start = useStartLabel();
 
-
-
   return (
     <div className="lp">
       <style>{siteCss}</style>
       <style>{css}</style>
-      <style>{cropCss}</style>
 
       <SiteNav active="home" />
 
       <header className="lp-hero">
         <div className="lp-wrap">
           <h1 className="lp-h1 rise" style={{ "--d": "0ms" } as React.CSSProperties}>
-            We help Buildium users with
+            Free property management for
             <br />
             <RotatingWord />
           </h1>
           <p className="lp-lede rise" style={{ "--d": "400ms", marginTop: 20 } as React.CSSProperties}>
-            {/* TODO(brandon): confirm autonomous notes flag is off. This
-                ended "Then it waits for you."; restore it then. */}
-            Buildium keeps the records. Occupella does the work. It reads your Buildium
-            events, pulls the history around each one, and drafts what comes next: the reply,
-            the work order, the owner update.
+            Occupella is property management software with trust accounting built in: the rent
+            roll, leases and e-signing, bills, owner draws, month-end and owner statements. It is
+            free to use.
           </p>
           <div className="lp-hero-ctas rise" style={{ "--d": "600ms", marginTop: 30 } as React.CSSProperties}>
-            {/* ⚠ The "See it work" text link that sat here was REMOVED by
-                explicit founder instruction (2026-09-04), and nothing replaces
-                it. The thing it scrolled to is directly below the fold anyway,
-                and the nav now carries Features and Pricing as real pages — so
-                the hero is one primary action, which is what a hero should be.
-                Do not quietly reintroduce a secondary link here. */}
+            {/* ⚠ ONE action. The "See it work" text link that sat here was
+                REMOVED by explicit founder instruction (2026-09-04), and the
+                hero is one primary action, which is what a hero should be. Do
+                not quietly reintroduce a secondary link here. "Book a demo"
+                lives in the header (Site.tsx). */}
             <a className="btn btn-primary" href="/start" style={{ padding: "12px 24px", fontSize: 15 }}>
               {start} →
             </a>
           </div>
           <div className="lp-note rise" style={{ "--d": "600ms", marginTop: 16 } as React.CSSProperties}>
-            {/* TODO(brandon): confirm autonomous notes flag is off; this line
-                continued "Nothing sends without your approval." */}
-            Ten minutes to connect.
-          </div>
-
-          {/* The stage is the walkthrough, and nothing else. It briefly held a
-              five-slide carousel of capability screenshots; that was removed
-              by founder instruction (2026-09-08) because it looked bad, not
-              because it was broken. The shots are still in public/demo/ if it
-              is ever wanted back. */}
-          {/* walkthrough-web.mp4 is the served copy: the recording with its
-              Mac title bar cropped off, re-encoded to H.264 at 30fps (9.5 MB
-              to 1.2 MB). walkthrough.mp4 is the original, kept so the web copy
-              can be re-cut from it. */}
-          <DemoPanel
-            src="/demo/walkthrough-web.mp4"
-            poster="/demo/walkthrough-poster.jpg"
-            caption="A minute of Occupella working a real Buildium account."
-            width={1656}
-            height={1016}
-            // ⚠ This one is NARRATED (AAC stereo on the file). It autoplays
-            // muted like everything else, so controls are the only route to
-            // the audio — without them the narration can never be heard.
-            controls
-          />
-
-          {/* TODO(brandon): Twilio joins this row once carrier approval for
-              texting is done. Rentvine joins it when you decide to show it
-              (held off on 2026-09-29). */}
-          <div className="lp-works">
-            <span className="lp-works-h">Works with</span>
-            <span className="lp-works-n">Buildium</span>
-            <span className="lp-works-n">Gmail</span>
-            <span className="lp-works-n">Google Calendar</span>
-            <span className="lp-works-n">Google Drive</span>
+            No card to start. Switching from Buildium?{" "}
+            <a href="/integrations/buildium">See what comes over</a>.
           </div>
         </div>
       </header>
 
-      <section className="lp-section" id="work">
+      <section className="lp-section" id="how">
         <div className="lp-wrap">
-          <Reveal>
-            <div className="lp-section-head">
-              <h2 className="lp-h2">The part between the event and the reply.</h2>
+          <SectionHead title="From sign-up to a running set of books." />
+          <Reveal delay={60}>
+            <div className="lp-steps">
+              {STEPS.map((s) => (
+                <div className="lp-step" key={s.n}>
+                  <div className="lp-step-n">{s.n}</div>
+                  <h3 className="lp-step-t">{s.t}</h3>
+                  <p className="lp-step-b">{s.b}</p>
+                </div>
+              ))}
             </div>
           </Reveal>
-          <div className="lp-how">
-            <Reveal delay={60}>
-              <div className="lp-steps">
-                {STEPS.map((s) => (
-                  <div className="lp-step" key={s.n}>
-                    <div className="lp-step-n">{s.n}</div>
-                    <h3 className="lp-step-t">{s.t}</h3>
-                    <p className="lp-step-b">{s.b}</p>
-                  </div>
-                ))}
-              </div>
-            </Reveal>
-            <Reveal delay={120}>
-              <div className="lp-how-vis">
-                <WorkOrderDetailCrop />
-                <p className="lp-crop-cap">One work order in Occupella, with example data.</p>
-              </div>
-            </Reveal>
+        </div>
+      </section>
+
+      <section className="lp-band-bg" id="trust">
+        <div className="lp-wrap">
+          <div className="lp-split">
+            <SectionHead title="Trust accounting that ties out.">
+              Every trust bank account is checked on every posting, so the books can&rsquo;t drift
+              from the bank. These are rules the database keeps, not settings.
+            </SectionHead>
+            <Checks items={TRUST} />
           </div>
         </div>
       </section>
 
       <section className="lp-section">
         <div className="lp-wrap">
-          <div className="lp-band" data-flip="true">
-            <div>
-              <Reveal>
-                <div className="lp-section-head">
-                  <h2 className="lp-h2">It writes the email. You pick the tone.</h2>
-                  <p className="lp-body">
-                    When there is more than one sensible way to answer a tenant, Occupella
-                    drafts each one and names the approach. Slide through, edit any word,
-                    approve the one you want.
-                  </p>
-                </div>
-              </Reveal>
-            </div>
-            <Reveal delay={60}>
-              <DraftCrop />
-              <p className="lp-crop-cap">Three drafted next steps for one work order, with example data.</p>
-            </Reveal>
-          </div>
+          <SectionHead title="The month's work, in one place." />
+          <Blocks items={MONTH} cols={3} />
+          <a className="lp-textlink" href="/features" style={{ display: "inline-block", marginTop: 32 }}>
+            Everything Occupella does →
+          </a>
         </div>
       </section>
 
-      <section className="lp-section">
+      <section className="lp-section" id="coming">
         <div className="lp-wrap">
-          <div className="lp-band">
-            <div>
-              <Reveal>
-                <div className="lp-section-head">
-                  <h2 className="lp-h2">Ask it what you'd ask your bookkeeper.</h2>
-                  <p className="lp-body">
-                    Occupancy, rent roll, what is open and what is owed, read from a synced copy
-                    of your account, not pasted into a paragraph. Every figure traces to Buildium.
-                  </p>
-                </div>
-              </Reveal>
-            </div>
-            {/* ⚠ NOT report.png — see the long note at the same swap in
-                Features.tsx. Short version: that image has "Demo mode — no
-                email sent." readable in it, shows a chart card that has never
-                rendered in production, and leads on NOI, which is implemented
-                nowhere. The copy above dropped "NOI" for the same reason. */}
-            <Reveal delay={60}>
-              <DelinquencyCrop />
-              <p className="lp-crop-cap">The answer to &ldquo;who is behind on rent?&rdquo;, with example data.</p>
-            </Reveal>
-          </div>
+          <SectionHead title="Coming next.">
+            Built or being built, and not on app.occupella.com yet. Each is marked the same way
+            wherever this site mentions it.
+          </SectionHead>
+          <Blocks items={COMING} cols={3} />
         </div>
       </section>
 
-      <section className="lp-section">
+      <section className="lp-section" id="switching">
         <div className="lp-wrap">
-          <Reveal>
-            <div className="lp-section-head">
-              <h2 className="lp-h2">An example weekday</h2>
-              <p className="lp-body">What the Inbox shows over one day, using the demo account.</p>
-            </div>
-          </Reveal>
-          <div className="lp-day">
-            {DAY.map((d) => (
-              <div className="lp-day-row" key={d.at}>
-                <div className="lp-day-t">{d.at}</div>
-                <div className="lp-day-b">
-                  <p>{d.text}</p>
-                  <TodayRow title={d.row.title} sub={d.row.sub} label={d.row.title} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="lp-section">
-        <div className="lp-wrap">
-          <div className="lp-ctl">
-            <Reveal>
-              <div className="lp-section-head">
-                {/* TODO(brandon): confirm autonomous notes flag is off. The
-                    heading was "It asks before it acts." and the paragraph
-                    ended "So the default everywhere is that it stops and
-                    shows you first." Both come back then.
-                    ⚠ Do NOT add "and texts residents": every SMS path is
-                    behind carrier approval. */}
-                <h2 className="lp-h2">Controls on your Buildium account</h2>
-                <p className="lp-body">
-                  Occupella changes records in your Buildium account and sends email from your
-                  address. Payments, charges and closing a work order also need a manager or an
-                  admin. One company&rsquo;s data never reaches another&rsquo;s, and credentials
-                  are encrypted at rest, entered once and never shown again.
-                </p>
-              </div>
-            </Reveal>
-            <Reveal delay={60}>
-              <ApprovalCrop />
-              <p className="lp-crop-cap">The approval card for a new work order, with example data.</p>
-            </Reveal>
-          </div>
+          <SectionHead title="Switching from Buildium?">
+            Export your records from Buildium as CSV files and bring them in with the switching
+            tool. Your opening balances are checked against the old system&rsquo;s book cash, and
+            its past ledger lines come along as history. Nothing needs an API key.
+          </SectionHead>
+          <a className="lp-textlink" href="/integrations/buildium" style={{ display: "inline-block", marginTop: 24 }}>
+            How switching from Buildium works →
+          </a>
         </div>
       </section>
 
       <section className="lp-section" id="free-tools">
         <div className="lp-wrap">
-          <Reveal>
-            <div className="lp-section-head">
-              <h2 className="lp-h2">Free tools for property managers</h2>
-              <p className="lp-body">
-                Built from the same state rules Occupella applies to your properties. No sign-up.
-              </p>
-            </div>
-          </Reveal>
+          <SectionHead title="Free tools for property managers">
+            Built from Occupella&rsquo;s state-by-state rules data. No sign-up.
+          </SectionHead>
           <div className="lp-tools">
             {TOOLS.map((t) => (
               <a className="lp-tool" href={t.href} key={t.href}>
@@ -621,30 +484,20 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ⚠ A SUMMARY, not the pricing table. The four cards, the comparison
-          and the FAQ live on /pricing now. Two copies of a price is the
-          hand-copied-figure problem that billing/plans.py's own test exists to
-          catch, and the landing page is the copy that would go stale. What
-          stays here is the shape of the offer and the cheapest number, which
-          is what a visitor needs before deciding to look properly. */}
+      {/* ⚠ A SUMMARY, not the pricing page. The AI add-on's plans and the
+          questions live on /pricing; the cheapest add-on price is the one
+          figure repeated here. */}
       <section className="lp-section">
         <div className="lp-wrap">
-          <Reveal>
-            <div className="lp-section-head">
-              <h2 className="lp-h2">Start free for two weeks.</h2>
-              <p className="lp-body">
-                No card to begin. Plans start at $50 a month, and nothing is charged when the
-                trial ends. You pick one then, or you do not.
-              </p>
-            </div>
-          </Reveal>
+          <SectionHead title="Free to use.">
+            The books cost nothing. Once online rent payments arrive, Occupella earns a small fee
+            on each one, set just above what it costs us. The AI assistant is a paid add-on, from
+            $50 a month.
+          </SectionHead>
           <Reveal delay={60}>
             <div className="lp-hero-ctas" style={{ marginTop: 26 }}>
               <a className="btn btn-secondary" href="/pricing">
-                See the plans
-              </a>
-              <a className="lp-textlink" href="/features">
-                Everything it does →
+                See pricing
               </a>
             </div>
           </Reveal>

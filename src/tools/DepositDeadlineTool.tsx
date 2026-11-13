@@ -164,8 +164,8 @@ export default function DepositDeadlineTool() {
       }
       css={toolCss}
       close={{
-        title: "The same date, from your Buildium leases",
-        body: "Ask Occupella when a deposit is due back and it works out the date from the move-out on the lease, with the statute named. 14 days free, no card.",
+        title: "Deposit returns, kept with the lease",
+        body: "Occupella lists each ended lease with the day its deposit is due back, on the strictest deadline we found, and writes each tenant's itemized statement. Free to use.",
       }}
     >
       <section>

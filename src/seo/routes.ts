@@ -59,10 +59,9 @@ const STATIC_ROUTES: MarketingRoute[] = [
   {
     path: "/",
     name: "landing",
-    lcpImage: "/demo/walkthrough-poster.jpg",
-    title: "Occupella | AI assistant for Buildium property managers",
+    title: "Occupella | Free property management software with trust accounting",
     description:
-      "Occupella connects to Buildium, reads your work orders, late payments and lease events, and drafts the reply for your approval. 14-day free trial.",
+      "The rent roll, leases and e-signing, bills, owner draws, month-end and owner statements, with trust accounting under it all. Free to use.",
     inSitemap: true,
     source: "src/Landing.tsx",
     changefreq: "weekly",
@@ -71,10 +70,9 @@ const STATIC_ROUTES: MarketingRoute[] = [
   {
     path: "/features",
     name: "features",
-    lcpImage: "/demo/product-tour-poster.jpg",
     title: "Features | Occupella",
     description:
-      "Occupella reads your Buildium work orders and payments, drafts replies and owner updates, and answers questions from your own data.",
+      "Trust accounting, the rent roll, rent and late fees each night, bills and owner approvals, ACH and check draws, month-end, owner statements and leasing.",
     inSitemap: true,
     source: "src/Features.tsx",
     changefreq: "weekly",
@@ -85,29 +83,18 @@ const STATIC_ROUTES: MarketingRoute[] = [
     name: "pricing",
     title: "Pricing | Occupella",
     description:
-      "Starter $50 a month, Pro $199 per person a month, Scale $500 a month. Every plan starts with a 14-day free trial, and no card is needed to start.",
+      "Free to use, with a small fee on online rent payments once they arrive. AI assistant add-on: Starter $50, Pro $199 per person, Scale $500 a month.",
     inSitemap: true,
     source: "src/Pricing.tsx",
     changefreq: "weekly",
     priority: 0.9,
   },
   {
-    path: "/screenshots",
-    name: "screenshots",
-    title: "Screenshots of the Occupella Inbox, chat and Operations",
-    description:
-      "Screenshots of Occupella, the AI assistant for Buildium property managers: a work order in the Inbox, answers in chat and the Operations tables.",
-    inSitemap: true,
-    source: "src/Screenshots.tsx",
-    changefreq: "monthly",
-    priority: 0.6,
-  },
-  {
     path: "/solutions/owner-reporting",
     name: "solutions_owner_reporting",
-    title: "Owner reporting from your Buildium data | Occupella",
+    title: "Owner statements, draws and the year-end | Occupella",
     description:
-      "Ask how a property is doing: occupancy, rent collected, open work orders, what's owed and spent, from your Buildium data. Then send the owner update.",
+      "Owner statements for any period, draws by ACH file or check, income statements by Schedule E line and the year-end summary with 1099-MISC rents.",
     inSitemap: true,
     source: "src/solutions/OwnerReporting.tsx",
     changefreq: "monthly",
@@ -116,9 +103,9 @@ const STATIC_ROUTES: MarketingRoute[] = [
   {
     path: "/solutions/delinquency",
     name: "solutions_delinquency",
-    title: "Late rent follow-up for Buildium users | Occupella",
+    title: "Late rent, late fees and payments | Occupella",
     description:
-      "See every lease with a balance and how late it is, get a reminder when rent hasn't posted by the 10th, and send a drafted late-rent email from your Gmail.",
+      "Rent and late fees post by themselves each night under each property's terms. See every balance by age, record payments and undo a bounced one.",
     inSitemap: true,
     source: "src/solutions/Delinquency.tsx",
     changefreq: "monthly",
@@ -127,9 +114,9 @@ const STATIC_ROUTES: MarketingRoute[] = [
   {
     path: "/solutions/maintenance",
     name: "solutions_maintenance",
-    title: "Maintenance coordination for Buildium users | Occupella",
+    title: "Maintenance, work orders and vendors | Occupella",
     description:
-      "Occupella reads each Buildium maintenance request, pulls the unit's history and drafts the resident reply and the work order for you to edit and send.",
+      "Open work orders, assign vendors with current insurance, schedule visits and bill the owner. Vendors update their own jobs through a link, with no login.",
     inSitemap: true,
     source: "src/solutions/Maintenance.tsx",
     changefreq: "monthly",
@@ -138,11 +125,10 @@ const STATIC_ROUTES: MarketingRoute[] = [
   {
     path: "/solutions/leasing",
     name: "solutions_leasing",
-    // ⚠ Not the planned "Leasing follow-up by text and email": texting waits
-    // on carrier approval, and the title must not say it works today.
-    title: "Leasing pipeline and lead follow-up | Occupella",
+    // ⚠ No texting, no syndication and no screening partner: none is offered.
+    title: "Listings, applications and e-signed leases | Occupella",
     description:
-      "One board for every lead, a drafted reply for each, and a flag when one goes quiet. Replies send from your Gmail today, and by text after carrier approval.",
+      "A public listings page, leads and showings, an application link for each unit, and leases signed on Occupella's own signing page. Renewals 90 days out.",
     inSitemap: true,
     source: "src/solutions/Leasing.tsx",
     changefreq: "monthly",
@@ -151,10 +137,10 @@ const STATIC_ROUTES: MarketingRoute[] = [
   {
     path: "/integrations",
     name: "integrations",
-    crumb: "Integrations",
-    title: "Integrations | Occupella",
+    crumb: "Switching to Occupella",
+    title: "Switching from Buildium and other systems | Occupella",
     description:
-      "Occupella works with Buildium, Gmail, Google Calendar and Google Drive today. Texting opens after carrier approval. See the status of each.",
+      "Bring your company over from CSV files: owners, properties, tenants, leases, open charges, unpaid bills and opening balances. No API key to create.",
     inSitemap: true,
     source: "src/integrations/Integrations.tsx",
     changefreq: "monthly",
@@ -163,25 +149,14 @@ const STATIC_ROUTES: MarketingRoute[] = [
   {
     path: "/integrations/buildium",
     name: "integrations_buildium",
-    crumb: "Buildium",
-    title: "Occupella for Buildium: what it reads and changes",
+    crumb: "From Buildium",
+    title: "Switching from Buildium | Occupella",
     description:
-      "What Occupella reads from your Buildium account, the changes it can make there, and the API key it needs. Revoke the key in Buildium at any time.",
+      "Move from Buildium to Occupella with CSV files you export: the roster, open charges, unpaid bills and opening balances. No change to your Buildium account.",
     inSitemap: true,
     source: "src/integrations/Buildium.tsx",
     changefreq: "monthly",
     priority: 0.7,
-  },
-  {
-    path: "/docs/buildium-api-setup",
-    name: "docs_buildium_api_setup",
-    title: "How to create a Buildium API key | Occupella",
-    description:
-      "Create a Buildium API key under Settings, Developer Tools, API Keys, and paste the Client ID and Client Secret into Occupella. About two minutes.",
-    inSitemap: true,
-    source: "src/docs/BuildiumApiSetup.tsx",
-    changefreq: "monthly",
-    priority: 0.6,
   },
   {
     path: "/changelog",
@@ -220,7 +195,7 @@ const STATIC_ROUTES: MarketingRoute[] = [
     name: "security",
     title: "Security | Occupella",
     description:
-      "How Occupella protects your data: per-company isolation, encrypted credentials, role checks on money, and the list of service providers that process data.",
+      "How Occupella protects your books: company isolation, a ledger that is never rewritten, roles on payouts, encrypted bank numbers and the service providers.",
     inSitemap: true,
     source: "src/Security.tsx",
     changefreq: "monthly",
@@ -357,6 +332,21 @@ export const MARKETING_ROUTES: readonly MarketingRoute[] = [
   ...STATE_LAW_ROUTES,
   ...BLOG_ROUTES,
 ];
+
+/**
+ * Pages that are gone, and where each one's visitors go instead. vercel.json
+ * carries the same pairs as permanent redirects (seo.test.ts checks both
+ * agree, and that each destination is a page here).
+ *
+ *   · /screenshots showed the Buildium assistant's Inbox, chat and
+ *     Operations pages, which left the product (ADR-one-product, 2026-11-05).
+ *   · /docs/buildium-api-setup was the Buildium connector's API key guide.
+ *     A Buildium user now switches with files, so it goes to that page.
+ */
+export const RETIRED: Readonly<Record<string, string>> = {
+  "/screenshots": "/features",
+  "/docs/buildium-api-setup": "/integrations/buildium",
+};
 
 /** Served for any URL no route answers, with a real 404 status. */
 export const NOT_FOUND_PAGE = {

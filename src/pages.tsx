@@ -9,13 +9,11 @@ import { ONE_PRODUCT_LEGAL_PUBLISHED } from "./legal/publish";
 import Leasing from "./solutions/Leasing";
 import Maintenance from "./solutions/Maintenance";
 import Delinquency from "./solutions/Delinquency";
-import Screenshots from "./Screenshots";
 import Security from "./Security";
 import Contact from "./Contact";
 import OwnerReporting from "./solutions/OwnerReporting";
 import Integrations from "./integrations/Integrations";
 import BuildiumIntegration from "./integrations/Buildium";
-import BuildiumApiSetup from "./docs/BuildiumApiSetup";
 import Changelog from "./changelog/Changelog";
 import DepositDeadlineTool from "./tools/DepositDeadlineTool";
 import NoticePeriodTool from "./tools/NoticePeriodTool";
@@ -34,17 +32,19 @@ import { normalizePath } from "./seo/routes";
  * Exact matches, not prefixes: `/features/anything` is a 404, as it is on the
  * static host. Every path here must also be in src/seo/routes.ts
  * (seo.test.ts checks).
+ *
+ * ⚠ RETIRED PAGES ARE REDIRECTS, NOT 404s (vercel.json, RETIRED in
+ * seo/routes.ts): /screenshots showed the Buildium assistant that left the
+ * product, and /docs/buildium-api-setup was the connector's key guide.
  */
 export const PAGES: Record<string, () => ReactElement> = {
   "/": () => <Landing />,
   "/features": () => <Features />,
   "/pricing": () => <Pricing />,
-  "/screenshots": () => <Screenshots />,
   "/security": () => <Security />,
   "/contact": () => <Contact />,
   "/integrations": () => <Integrations />,
   "/integrations/buildium": () => <BuildiumIntegration />,
-  "/docs/buildium-api-setup": () => <BuildiumApiSetup />,
   "/changelog": () => <Changelog />,
   "/tools/deposit-deadline": () => <DepositDeadlineTool />,
   "/tools/notice-period": () => <NoticePeriodTool />,

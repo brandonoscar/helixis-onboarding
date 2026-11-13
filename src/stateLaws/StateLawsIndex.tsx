@@ -27,14 +27,14 @@ export default function StateLawsIndex() {
       lede={
         <>
           Security deposit caps and return deadlines, notice periods and source-of-income rules
-          for all 50 states and DC, from the data Occupella uses. Open a state for late fees,
+          for all 50 states and DC, from Occupella&rsquo;s jurisdiction data. Open a state for late fees,
           licensing, citations and local rules. {NOT_ADVICE}
         </>
       }
       css={css}
       close={{
-        title: "Rules applied per property",
-        body: "Occupella looks up these rules for each property's own state and does the date arithmetic. 14 days free, no card.",
+        title: "Your leases and deposits, in one place",
+        body: "Occupella posts rent and late fees under the terms you set for each property, holds every deposit in trust and dates each deposit return. Free to use.",
       }}
     >
       <section>

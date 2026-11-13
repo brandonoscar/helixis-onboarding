@@ -84,6 +84,18 @@ describe('reading App.tsx at all', () => {
     }
     expect(prose(source)).not.toMatch(/Buildium|Rentvine/)
   })
+
+  it('says nothing of the Buildium assistant on its screens', () => {
+    // The last screen named "Gmail" in the checklist, and its side panel
+    // promised "each event comes with a drafted next step" (founder,
+    // 2026-11-13: remove both). The first said "14 days free": the books are
+    // free, and only the AI add-on has a trial.
+    const words = prose(source)
+    expect(words).not.toMatch(/Gmail|drafted next step|each event/i)
+    expect(words).not.toMatch(/14 days|free trial/i)
+    expect(prose(scopeOf('StepFinish'))).toMatch(/Getting started checklist/)
+    expect(prose(scopeOf('StepIdentify'))).toMatch(/Free to use, no card/)
+  })
 })
 
 describe('the addresses the wizard sends people to', () => {

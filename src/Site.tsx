@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import "@fontsource-variable/fraunces/opsz.css";
 import "@fontsource-variable/ibm-plex-sans";
 import { TrackingOptOut } from "./ConsentBar";
-import { APP_URL } from "./lib/urls";
+import { APP_URL, DEMO_URL } from "./lib/urls";
 
 // ─────────────────────────────────────────────────────────────────────
 // SITE CHROME — the nav, the footer, and everything more than one page
@@ -150,7 +150,8 @@ export const siteCss = `
   .lp .lp-wordmark:hover { color: var(--ink); }
   .lp-nav-right { display: flex; align-items: center; gap: 4px; }
   .lp-nav-right .btn-ghost { font-size: 15px; padding: 8px 12px; }
-  .lp-nav-right .btn-primary { height: 36px; padding: 0 16px; font-size: 14px; margin-left: 8px; }
+  .lp-nav-right .btn-primary,
+  .lp-nav-right .btn-secondary { height: 36px; padding: 0 16px; font-size: 14px; margin-left: 8px; }
 
   /* ── the menu: dropdowns at desktop ── */
   .lp-menu { display: flex; align-items: center; gap: 2px; list-style: none; margin: 0 auto 0 32px; padding: 0; }
@@ -203,6 +204,7 @@ export const siteCss = `
   .lp-drawer-h { font-size: 14px; font-weight: 600; color: var(--ink-muted); margin-bottom: 4px; }
   .lp .lp-drawer-group a { padding: 10px 0; font-size: 18px; font-weight: 500; color: var(--ink); text-decoration: none; }
   .lp .lp-drawer-cta { margin-top: 24px; height: 48px; font-size: 16px; }
+  .lp .lp-drawer-demo { margin-top: 12px; height: 48px; font-size: 16px; }
 
   @media (max-width: 959px) {
     .lp-menu { display: none; }
@@ -210,7 +212,7 @@ export const siteCss = `
   }
   @media (max-width: 640px) {
     .lp-nav-inner { padding: 0 20px; }
-    .lp-nav-signin { display: none; }
+    .lp-nav-signin, .lp-nav-demo { display: none; }
     .lp-nav-right .btn-primary { margin-left: 0; }
   }
 
@@ -230,6 +232,38 @@ export const siteCss = `
   }
   .lp .lp-textlink:hover { color: var(--iris-hover); }
   .lp-note { font-size: 15px; color: var(--ink-muted); }
+
+  /* ── text blocks: a heading and a paragraph under a thin rule, no box.
+     Most pages describe the books in words rather than pictures, so these
+     are shared (Blocks, Checks, Coming below). Moved here from /features. */
+  .lp-anchor { scroll-margin-top: 88px; }
+  .lp-blocks { display: grid; gap: 36px 56px; margin-top: 48px; }
+  @media (min-width: 760px) { .lp-blocks { grid-template-columns: 1fr 1fr; } }
+  @media (min-width: 1024px) { .lp-blocks[data-cols="3"] { grid-template-columns: repeat(3, 1fr); } }
+  .lp-block { border-top: 1px solid var(--line); padding-top: 20px; }
+  .lp-block-t { font-size: 18px; font-weight: 600; line-height: 1.4; color: var(--ink); }
+  .lp-block-b { margin-top: 8px; font-size: 16px; line-height: 1.6; color: var(--ink-muted); }
+
+  /* A plain list a manager scans for the one line they care about. */
+  .lp-list { display: flex; flex-direction: column; margin-top: 28px; max-width: 820px; }
+  .lp-list-item {
+    display: flex; gap: 12px; align-items: flex-start;
+    padding: 12px 0; border-top: 1px solid var(--line);
+    font-size: 17px; line-height: 1.5; color: var(--ink);
+  }
+  .lp-list-item svg { flex: none; margin-top: 4px; color: var(--ink-muted); }
+
+  /* "Coming": something not built yet, or not on app.occupella.com yet.
+     ⚠ Monochrome on purpose. Spending the one colour on "not ready yet"
+     would make the unfinished thing the loudest element on the page. */
+  .lp-coming {
+    display: inline-flex; align-items: center; align-self: flex-start; vertical-align: 2px;
+    margin-left: 8px; padding: 1px 9px;
+    border: 1px solid var(--line-strong); border-radius: 999px; background: var(--canvas);
+    font-size: 13px; font-weight: 500; line-height: 1.5; color: var(--ink-muted); white-space: nowrap;
+  }
+  /* Above a section's heading it stands alone, not after a word. */
+  .lp-section-head > .lp-coming { margin-left: 0; }
 
   /* ── video: a plain container. The recordings carry their own window
      chrome, so the page adds none: no fake browser bar, no tilt, no glow.
@@ -465,8 +499,12 @@ export const BELL = "M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9 M13.7 21a2 2 0 
 export const MINUS = "M5 12h14";
 
 /**
- * Always "Start free trial", on marketing pages only. The wizard's own
- * buttons keep their labels.
+ * Always "Start free", on marketing pages only. The wizard's own buttons keep
+ * their labels.
+ *
+ * ⚠ "Start free", not "Start free trial" (founder, 2026-11-13). Occupella is
+ * free to use; only the AI assistant add-on has a trial, and a label that
+ * promises a trial on the free product reads as a clock that isn't there.
  *
  * ⚠ **"Resume setup" was removed, not broken** (founder call, 2026-09-09).
  * It read the wizard's persisted `completed` set and promised a saved draft;
@@ -481,7 +519,88 @@ export const MINUS = "M5 12h14";
  * place. Someone re-introducing a two-state label has one place to do it.
  */
 export function useStartLabel(): string {
-  return "Start free trial";
+  return "Start free";
+}
+
+/**
+ * "Book a demo", a secondary button, only once `DEMO_URL` (lib/urls.ts) names
+ * a calendar. With it empty this renders nothing, so no page ships a button
+ * that goes nowhere. `url` is a parameter for the test (demoLink.test.tsx).
+ */
+export function DemoLink({
+  className,
+  url = DEMO_URL,
+  onClick,
+}: {
+  className: string;
+  url?: string;
+  onClick?: () => void;
+}) {
+  if (!url) return null;
+  return (
+    <a className={className} href={url} onClick={onClick}>
+      Book a demo
+    </a>
+  );
+}
+
+/** Something built and not yet reachable, said in one word. See .lp-coming. */
+export function Coming() {
+  return <span className="lp-coming">Coming</span>;
+}
+
+export type Block = { t: string; b: React.ReactNode; coming?: boolean };
+
+/** Headings and paragraphs under thin rules, two or three across. */
+export function Blocks({ items, cols }: { items: Block[]; cols?: 3 }) {
+  return (
+    <div className="lp-blocks" data-cols={cols}>
+      {items.map((c) => (
+        <div className="lp-block" key={c.t}>
+          <h3 className="lp-block-t">
+            {c.t}
+            {c.coming ? <Coming /> : null}
+          </h3>
+          <p className="lp-block-b">{c.b}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** A list of short lines, each with a check. */
+export function Checks({ items }: { items: string[] }) {
+  return (
+    <div className="lp-list">
+      {items.map((w) => (
+        <div className="lp-list-item" key={w}>
+          <Icon d={CHECK} size={15} />
+          <span>{w}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** A section's heading and its one paragraph. */
+export function SectionHead({
+  title,
+  coming,
+  children,
+}: {
+  title: string;
+  coming?: boolean;
+  children?: React.ReactNode;
+}) {
+  return (
+    <Reveal>
+      <div className="lp-section-head">
+        {coming ? <Coming /> : null}
+        <h2 className="lp-h2">{title}</h2>
+        {children ? <p className="lp-body">{children}</p> : null}
+      </div>
+    </Reveal>
+  );
 }
 
 /**
@@ -523,10 +642,11 @@ export const MENU: MenuGroup[] = [
     label: "Product",
     page: "features",
     items: [
-      { href: "/features#the-loop", label: "How an event is handled" },
-      { href: "/features#ask-it-anything", label: "Reports from your Buildium data" },
-      { href: "/features#writing-back", label: "Changes it can make in Buildium" },
-      { href: "/features#fair-housing", label: "Fair housing guardrails" },
+      { href: "/features#trust-accounting", label: "Trust accounting" },
+      { href: "/features#rent", label: "Rent, leases and the rent roll" },
+      { href: "/features#bills-and-owners", label: "Bills, owners and draws" },
+      { href: "/features#month-end", label: "Month-end and reports" },
+      { href: "/features#ai-assistant", label: "The AI assistant" },
       { href: "/features", label: "All features" },
     ],
   },
@@ -535,10 +655,10 @@ export const MENU: MenuGroup[] = [
     label: "Solutions",
     page: "solutions",
     items: [
-      { href: "/solutions/maintenance", label: "Maintenance", note: "From the report to the work order" },
-      { href: "/solutions/delinquency", label: "Late rent", note: "Who owes what, and the follow-up" },
-      { href: "/solutions/owner-reporting", label: "Owner reporting", note: "The numbers an owner asks for" },
-      { href: "/solutions/leasing", label: "Leasing", note: "Every lead, from first message to lease" },
+      { href: "/solutions/delinquency", label: "Late rent", note: "Late fees, balances and payments" },
+      { href: "/solutions/owner-reporting", label: "Owner reporting", note: "Statements, draws and the year-end" },
+      { href: "/solutions/maintenance", label: "Maintenance", note: "Work orders and vendors" },
+      { href: "/solutions/leasing", label: "Leasing", note: "Listings, applications and signed leases" },
     ],
   },
   {
@@ -546,13 +666,11 @@ export const MENU: MenuGroup[] = [
     label: "Resources",
     page: "resources",
     items: [
-      { href: "/integrations", label: "Integrations", note: "What Occupella connects to" },
-      { href: "/docs/buildium-api-setup", label: "Buildium setup guide", note: "Create the API key in two minutes" },
+      { href: "/integrations", label: "Switching to Occupella", note: "From Buildium and other systems" },
       { href: "/state-laws", label: "Landlord rules by state", note: "Deposits, late fees and notices" },
       { href: "/blog", label: "Blog", note: "Notes from Occupella Engineering" },
       { href: "/tools/deposit-deadline", label: "Deposit deadline calculator", note: "The day a deposit is due back" },
       { href: "/tools/notice-period", label: "Notice period calculator", note: "Pay-or-quit and month-to-month" },
-      { href: "/screenshots", label: "Screenshots", note: "What the app looks like" },
       { href: "/changelog", label: "Changelog", note: "What changed, newest first" },
     ],
   },
@@ -692,8 +810,8 @@ export function SiteNav({ active }: { active?: SitePage }) {
           <a className="btn btn-ghost lp-nav-signin" href={APP_URL}>
             Sign in
           </a>
-          {/* TODO(brandon): "Book a demo" (secondary button) goes here once
-              there is a calendar link to point it at. */}
+          {/* "Book a demo" shows once DEMO_URL in lib/urls.ts is set. */}
+          <DemoLink className="btn btn-secondary lp-nav-demo" />
           <a className="btn btn-primary" href="/start">
             {start}
           </a>
@@ -754,6 +872,7 @@ export function SiteNav({ active }: { active?: SitePage }) {
           <a className="btn btn-primary lp-drawer-cta" href="/start">
             {start}
           </a>
+          <DemoLink className="btn btn-secondary lp-drawer-demo" onClick={() => setDrawer(false)} />
         </div>
       </div>
     </nav>
@@ -767,8 +886,8 @@ export function SiteNav({ active }: { active?: SitePage }) {
  * door, which is the only thing either page is for.
  */
 export function CloseBand({
-  title = "Set up in about ten minutes.",
-  body = "Connect Buildium, watch it triage your first real work order, and decide from there.",
+  title = "Bring your company over.",
+  body = "Make your account, then bring in your owners, properties, tenants and leases from CSV files with the switching tool. Occupella is free to use, with no card to start.",
 }: {
   title?: string;
   body?: string;
@@ -829,11 +948,8 @@ export function SiteFooter() {
         <div className="lp-footer-cols">
           <div className="lp-footer-brand">
             <Wordmark />
-            {/* TODO(brandon): confirm autonomous notes flag is off. The old
-                blurb ended "waiting for your approval", which is the approval
-                claim; it comes back when the flag is confirmed off. */}
             <p className="lp-footer-blurb">
-              An AI assistant for property managers who use Buildium.
+              Free property management software, with trust accounting built in.
             </p>
           </div>
 
@@ -845,8 +961,8 @@ export function SiteFooter() {
               { href: "/", label: "Home" },
               { href: "/features", label: "Features" },
               { href: "/pricing", label: "Pricing" },
-              { href: "/integrations/buildium", label: "Occupella for Buildium" },
-              { href: "/start", label: "Start free trial" },
+              { href: "/integrations/buildium", label: "Switching from Buildium" },
+              { href: "/start", label: "Start free" },
               { href: APP_URL, label: "Sign in" },
             ]}
           />

@@ -1,69 +1,70 @@
-import { Reveal, SitePageShell } from "../Site";
-import { OwnerEmailCrop, PropertySnapshotCrop, SpendCrop, cropCss } from "../crops";
+import { Blocks, SectionHead, SitePageShell, type Block } from "../Site";
 
 // ─────────────────────────────────────────────────────────────────────
-// /solutions/owner-reporting: one job, answering an owner's questions from
-// the Buildium data, then writing the update.
+// /solutions/owner-reporting: one job, an owner's money, from the rent that
+// comes in to the statement and the draw.
 //
-// ⚠ EVERY LINE IS CHECKED AGAINST AgenticHelixis agents/mirror_tools.py:
-//   · property_snapshot: occupancy, rent roll scheduled vs collected this
-//     month, open work orders, delinquency, tenant roster, next expiration
-//   · spending_report: BILLED vendor spend by GL category and by property,
-//     last N days (default 90), filterable by property
-//   · portfolio_review, expiring_leases, unpaid_bills, bank_balances,
-//     vendor_performance (12-month billing, "billed, not paid"),
-//     property_hazards (FEMA flood, wildfire, radon, Superfund, HUD FMR)
-//   · every answer carries an as-of line from the sync
-//   · the owner update: the email draft card, sent from the PM's Gmail
+// ⚠ EVERY LINE IS CHECKED AGAINST THE BOOKS (Occupella-PMS CLAUDE.md: the
+// owner money loop, owners' fees, owner draws and payout files, ownership
+// shares, bill markups, owner year-end, the income statements, budgets;
+// trust_report_owner_statement takes any period). It was the Buildium
+// assistant's page until 2026-11-13.
 //
-// ⚠ NOT CLAIMED: charts (built, never produced by a real question), CSV
-// export, NOI (implemented nowhere), paid vendor history (the mirror has
-// unpaid bills and billed totals only), generating owner statements (that
-// is Buildium's).
+// ⚠ NOT CLAIMED: statements emailed to owners each month (needs the server
+// to send email, NOT VERIFIED on the hosted app) and mailing anything. The
+// owner portal carries the Coming chip until owner sign-in arrives.
 // ─────────────────────────────────────────────────────────────────────
 
-const css = `
-  .or-split { display: grid; gap: 40px; align-items: start; }
-  @media (min-width: 1024px) {
-    .or-split { grid-template-columns: 5fr 6fr; gap: 72px; }
-    .or-split[data-flip="true"] { grid-template-columns: 6fr 5fr; }
-    .or-split[data-flip="true"] > :first-child { order: 2; }
-  }
-  .or-list { margin-top: 28px; display: flex; flex-direction: column; }
-  .or-list p { padding: 14px 0; border-top: 1px solid var(--line); font-size: 17px; line-height: 1.55; color: var(--ink); }
-  .or-qa { margin-top: 40px; display: grid; gap: 32px 48px; }
-  @media (min-width: 760px) { .or-qa { grid-template-columns: 1fr 1fr; } }
-  .or-q { border-top: 1px solid var(--line); padding-top: 18px; }
-  .or-q h3 { font-size: 17px; font-weight: 600; color: var(--ink); }
-  .or-q p { margin-top: 6px; font-size: 16px; line-height: 1.6; color: var(--ink-muted); }
-  .or-band { margin-top: clamp(80px, 10vw, 128px); padding: clamp(64px, 8vw, 104px) 0; background: var(--band); }
-  .or-caption { margin-top: 12px; font-size: 14px; color: var(--ink-muted); }
-`;
+const STATEMENTS: Block[] = [
+  {
+    t: "Owner statements",
+    b: "An owner's statement for any period: opening balance, rent collected, fees, bills, draws and contributions, closing balance.",
+  },
+  {
+    t: "Income statements",
+    b: "Cash or accrual, by what each charge was, with each line on its Schedule E line, for one owner or all of them.",
+  },
+  {
+    t: "The year-end",
+    b: "Each property account's year, added up across the owner's properties, with the year's 1099-MISC rents. Occupella files nothing.",
+  },
+  {
+    t: "Budgets",
+    b: "Set a property's budget month by month, and read it beside what happened.",
+  },
+];
 
-const ASK = [
+const DRAWS: Block[] = [
   {
-    q: "Give me a full portfolio review",
-    a: "Units and occupancy, total delinquency with the largest balances, unpaid vendor bills, open work orders and tasks with overdue flagged, and leases ending within 90 days, in one answer.",
+    t: "What is available",
+    b: "An owner is paid what is above their reserve and the bills not yet paid, so a draw never pays out money a bill is holding.",
   },
   {
-    q: "Which leases expire this quarter?",
-    a: "Tenant, property, unit, end date, rent and current balance, soonest first, with the open maintenance at each address.",
+    t: "Your draw day",
+    b: "On the day of the month you pick, the nightly run prepares each owner's draw. Nothing is paid until you approve it.",
   },
   {
-    q: "What do we owe vendors?",
-    a: "Every unpaid bill with vendor, amount and due date, overdue flagged, and the properties it charges.",
+    t: "ACH file or check",
+    b: "Each owner is paid their way. Occupella writes the NACHA file for your bank and checks for your pre-printed stock, and your bank moves the money.",
   },
   {
-    q: "Which vendor bills us the most?",
-    a: "Each vendor's 12-month billing, work-order volume and how fast they finish. Amounts are billed, not paid.",
+    t: "Owners who share a property",
+    b: "Payments, bills and fees split by each owner's share, to the cent, with the cents left over placed the same way every time.",
+  },
+];
+
+const FEES: Block[] = [
+  {
+    t: "Management fees",
+    b: "A percent of rent collected, a minimum and a flat fee, from each owner's agreement. Collect them by hand for a period, or have the nightly run take last month's by itself.",
   },
   {
-    q: "What's in our operating account?",
-    a: "Every bank account and its balance, refreshed on each Buildium bank-transaction webhook. Account and routing numbers are never shown.",
+    t: "Other fees and markups",
+    b: "Take an inspection or lease-up fee from an owner with what it is for, and add the agreement's markup to a bill.",
   },
   {
-    q: "Is this property in a flood zone?",
-    a: "FEMA flood zone, wildfire hazard, radon zone and nearby Superfund sites for the property's own coordinates, with HUD's fair market rent for its ZIP.",
+    t: "Contributions",
+    b: "Record money an owner sends in to cover a bill or rebuild their reserve.",
   },
 ];
 
@@ -71,116 +72,44 @@ export default function OwnerReporting() {
   return (
     <SitePageShell
       active="solutions"
-      title="The numbers an owner asks for, from your Buildium data"
+      title="Owner reporting, from the rent to the draw"
       lede={
         <>
-          Ask how a property is doing and Occupella answers from a synced copy of your Buildium
-          account: occupancy, rent scheduled against rent collected, open work orders, what is
-          owed and what was spent. Then it drafts the owner update for you to send.
+          Each owner&rsquo;s money is tracked in trust from the first rent payment to the draw.
+          Statements, the year-end and the income statement come from the same books, so they
+          agree with each other.
         </>
       }
-      css={css + cropCss}
-      close={{
-        title: "Try Occupella free for 14 days",
-        body: "Connect Buildium and ask how your biggest property is doing. No card to start.",
-      }}
     >
       <section className="lp-section" style={{ paddingTop: 72 }}>
         <div className="lp-wrap">
-          <div className="or-split">
-            <div>
-              <Reveal>
-                <div className="lp-section-head">
-                  <h2 className="lp-h2">One property at a glance</h2>
-                  <p className="lp-body">
-                    Ask &ldquo;how is Lexington Court doing?&rdquo; and the answer comes back with
-                    the figures an owner asks about first.
-                  </p>
-                </div>
-              </Reveal>
-              <div className="or-list">
-                <p>Occupancy, and rent scheduled this month against rent collected.</p>
-                <p>Open work orders, the delinquent balance and the next lease to end.</p>
-                <p>
-                  Every answer says when your Buildium data was last synced, so you know how
-                  fresh each number is.
-                </p>
-              </div>
-            </div>
-            <div>
-              <PropertySnapshotCrop />
-              <p className="or-caption">A property snapshot, with example data.</p>
-            </div>
-          </div>
+          <SectionHead title="Statements and the year-end" />
+          <Blocks items={STATEMENTS} />
         </div>
       </section>
 
       <section className="lp-section">
         <div className="lp-wrap">
-          <div className="or-split" data-flip="true">
-            <div>
-              <Reveal>
-                <div className="lp-section-head">
-                  <h2 className="lp-h2">Where the money went</h2>
-                  <p className="lp-body">
-                    Vendor spend, grouped by category and by property, over the period you ask
-                    for. Narrow it to one property with its name.
-                  </p>
-                </div>
-              </Reveal>
-              <div className="or-list">
-                <p>
-                  The amounts are what vendors billed, summed from each bill&rsquo;s line items.
-                  Payments are recorded in Buildium, and the report says billed, not paid.
-                </p>
-                <p>Answers come back as tables you can sort, not figures pasted into a paragraph.</p>
-              </div>
-            </div>
-            <div>
-              <SpendCrop />
-              <p className="or-caption">Spend by category, with example data.</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="or-band">
-        <div className="lp-wrap">
-          <div className="or-split">
-            <div>
-              <Reveal>
-                <div className="lp-section-head">
-                  <h2 className="lp-h2">The owner update, drafted</h2>
-                  <p className="lp-body">
-                    Ask for an update to the owner and Occupella writes the email from those
-                    figures. You edit any word and send it from your own Gmail address.
-                  </p>
-                </div>
-              </Reveal>
-            </div>
-            <div>
-              <OwnerEmailCrop />
-              <p className="or-caption">A drafted owner update, with example data.</p>
-            </div>
-          </div>
+          <SectionHead title="Paying owners" />
+          <Blocks items={DRAWS} />
         </div>
       </section>
 
       <section className="lp-section">
         <div className="lp-wrap">
-          <Reveal>
-            <div className="lp-section-head">
-              <h2 className="lp-h2">Other questions owners ask</h2>
-            </div>
-          </Reveal>
-          <div className="or-qa">
-            {ASK.map((r) => (
-              <div className="or-q" key={r.q}>
-                <h3>{r.q}</h3>
-                <p>{r.a}</p>
-              </div>
-            ))}
-          </div>
+          <SectionHead title="Fees" />
+          <Blocks items={FEES} cols={3} />
+        </div>
+      </section>
+
+      <section className="lp-section">
+        <div className="lp-wrap">
+          <SectionHead title="The owner portal" coming>
+            Owners read their statements and the year-end, approve bills over their limit and see
+            repairs at their properties. They sign in on app.occupella.com once owner sign-in
+            arrives. Until then, staff record an approval an owner gives by phone, email or in
+            person.
+          </SectionHead>
         </div>
       </section>
     </SitePageShell>

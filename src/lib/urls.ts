@@ -23,3 +23,10 @@
  *  inert rather than load-bearing). */
 export const APP_URL: string =
   import.meta.env.VITE_HELIXIS_APP_URL || "https://app.occupella.com";
+
+/** The calendar link behind "Book a demo" (Site.tsx `DemoLink`). The button
+ *  renders only while this is set, so an empty value ships no button rather
+ *  than a broken one.
+ *
+ *  TODO(brandon): put the booking page's https URL here when there is one. */
+export const DEMO_URL: string = "";
