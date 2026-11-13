@@ -23,6 +23,16 @@
       ],
       "destination": "https://occupella.com/:path*",
       "permanent": true
+    },
+    {
+      "source": "/screenshots",
+      "destination": "/features",
+      "permanent": true
+    },
+    {
+      "source": "/docs/buildium-api-setup",
+      "destination": "/integrations/buildium",
+      "permanent": true
     }
   ],
   "rewrites": [

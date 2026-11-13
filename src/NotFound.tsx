@@ -65,19 +65,19 @@ export default function NotFound() {
           <div className="nf-links">
             <a className="nf-link" href="/">
               <b>Home</b>
-              <span>What Occupella does, in about a minute.</span>
+              <span>What Occupella is, in about a minute.</span>
             </a>
             <a className="nf-link" href="/features">
               <b>Features</b>
-              <span>The full list, with the product tour.</span>
+              <span>Everything it does, and what is coming.</span>
             </a>
             <a className="nf-link" href="/pricing">
               <b>Pricing</b>
-              <span>Four plans and what separates them.</span>
+              <span>Free to use, and what the AI add-on costs.</span>
             </a>
             <a className="nf-link" href="/start">
-              <b>Start free trial</b>
-              <span>Connect Buildium and be running today.</span>
+              <b>Start free</b>
+              <span>Make your company&rsquo;s account. No card to start.</span>
             </a>
           </div>
         </div>

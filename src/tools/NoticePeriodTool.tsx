@@ -167,8 +167,8 @@ export default function NoticePeriodTool() {
       }
       css={toolCss + extraCss}
       close={{
-        title: "Notice dates from your own leases",
-        body: "Ask Occupella for a notice date and it counts it the same way, for the property's own state, with the statute named. 14 days free, no card.",
+        title: "Your leases and notices, in one place",
+        body: "Occupella keeps every lease's dates and rent, and fills notices you write in your own words from the lease. Free to use.",
       }}
     >
       <section>

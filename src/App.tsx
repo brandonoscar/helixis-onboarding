@@ -651,7 +651,9 @@ function StepIdentify({
         title={needsPassword ? "Create your password" : sent ? "Check your email" : "Create your account"}
         onBack={sent && !needsPassword ? () => { setSent(false); setResendMsg(""); setOtp(["", "", "", "", "", ""]); } : undefined}
       />
-      {!sent && !needsPassword ? <p className="ob-sub" style={{ marginTop: -18, marginBottom: 28 }}>14 days free, no card.</p> : null}
+      {/* "Free to use", not "14 days free" (founder, 2026-11-13): the books
+          are free, and only the AI assistant add-on has a trial. */}
+      {!sent && !needsPassword ? <p className="ob-sub" style={{ marginTop: -18, marginBottom: 28 }}>Free to use, no card.</p> : null}
       {sent && !needsPassword ? (
         <p className="panel-desc" style={{ marginTop: -18, marginBottom: 24 }}>
           We sent a 6-digit code to <b>{email}</b>.
@@ -820,9 +822,12 @@ function StepFinish({ workspace }: { workspace: WorkspaceData }) {
   return (
     <div className="panel" key="finish">
       <StepTitle title={`${workspace.name || "Your workspace"} is ready`} />
+      {/* ⚠ It named "your first question, Gmail" until 2026-11-13, the
+          Buildium assistant's checklist. The founder asked for no Gmail line
+          here: the books are the product. */}
       <p className="panel-desc" style={{ marginTop: -18, marginBottom: 24 }}>
-        Opening Occupella. The Getting started checklist there walks you through the rest: your first
-        question, Gmail and inviting your team.
+        Opening Occupella. The Getting started checklist there walks you through the rest of setup,
+        including inviting your team.
       </p>
       <a className="btn btn-primary wide" href={appHref} onClick={() => releaseSessionForHandOff()}>
         Open Occupella
@@ -841,7 +846,7 @@ function StepFinish({ workspace }: { workspace: WorkspaceData }) {
 /** What happens next, said over the photo, one line per step. */
 const SIDE_NEXT: Record<Step, string> = {
   identify: "Next, Occupella opens with a Getting started checklist for the rest of your setup.",
-  finish: "In the app, each event comes with a drafted next step you can edit.",
+  finish: "Next, the Getting started checklist in the app lists the rest of your setup.",
 };
 
 /**

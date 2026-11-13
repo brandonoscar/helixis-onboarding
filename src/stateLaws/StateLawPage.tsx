@@ -119,14 +119,14 @@ export default function StateLawPage({ state }: { state: StateEntry }) {
       title={`${s.name} landlord rules: deposits, late fees and notices`}
       lede={
         <>
-          The rules Occupella applies to properties in {s.name}, from our jurisdiction data. {NOT_ADVICE}{" "}
+          The rules for properties in {s.name}, from Occupella&rsquo;s jurisdiction data. {NOT_ADVICE}{" "}
           Check the statute, or a local attorney, before you act.
         </>
       }
       css={stateLawCss}
       close={{
-        title: "Rules applied per property",
-        body: `Occupella looks up these rules for each property's own state and does the date arithmetic, like the day a deposit is due back. 14 days free, no card.`,
+        title: "Your leases and deposits, in one place",
+        body: "Occupella posts rent and late fees under the terms you set for each property, holds every deposit in trust and dates each deposit return. Free to use.",
       }}
     >
       <section>

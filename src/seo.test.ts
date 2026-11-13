@@ -44,6 +44,7 @@ import { PAGES } from './pages';
 import {
   CLIENT_ONLY_PREFIXES,
   MARKETING_ROUTES,
+  RETIRED,
   SITE_ORIGIN,
   canonicalFor,
   routeFor,
@@ -148,10 +149,15 @@ describe('other hosts redirect to occupella.com', () => {
   };
   const canonicalHost = new URL(SITE_ORIGIN).host;
 
+  // Re-pointed 2026-11-13: vercel.json now also redirects two retired pages
+  // (the next describe). Those carry no host condition and name a single
+  // path; every other redirect is held to the rules here.
+  const byHost = (config.redirects ?? []).filter((r) => r.has?.length || r.source.includes(':'));
+
   it('sends the two old hosts, and only those, permanently', () => {
-    const hosts = (config.redirects ?? []).map((r) => r.has?.find((h) => h.type === 'host')?.value);
+    const hosts = byHost.map((r) => r.has?.find((h) => h.type === 'host')?.value);
     expect(hosts.sort()).toEqual(['helixis-onboarding.vercel.app', 'setup.occupella.com']);
-    for (const r of config.redirects ?? []) {
+    for (const r of byHost) {
       expect(r.has?.length, r.source).toBe(1);
       expect(r.has![0].value).not.toBe(canonicalHost);
       expect(r.source).toBe('/:path*');
@@ -160,10 +166,59 @@ describe('other hosts redirect to occupella.com', () => {
     }
   });
 
+  it('redirects no path without a host condition except a retired page', () => {
+    // A path redirect with no host condition applies on occupella.com itself,
+    // so anything but a named retired page here could loop or swallow a live
+    // page.
+    const byPath = (config.redirects ?? []).filter((r) => !byHost.includes(r));
+    expect(byPath.map((r) => r.source).sort()).toEqual(Object.keys(RETIRED).sort());
+  });
+
   it('serves the IndexNow key file as itself', () => {
     const keys = PUBLIC_FILES.filter((f) => /^[0-9a-f]{32}\.txt$/.test(f));
     expect(keys).toHaveLength(1);
     expect(rewritten(`/${keys[0]}`)).toBe(false);
+  });
+});
+
+/**
+ * RETIRED PAGES (2026-11-13). /screenshots showed the Buildium assistant
+ * and /docs/buildium-api-setup was the Buildium connector's key guide; both
+ * left with the connector (AgenticHelixis docs/decisions/ADR-one-product.md).
+ * A link to either, or a search result, must land on a page, never on the
+ * 404, and never loop.
+ */
+describe('a retired page redirects to a live one', () => {
+  const config = JSON.parse(vercelRaw) as {
+    redirects?: { source: string; has?: unknown[]; destination: string; permanent?: boolean }[];
+  };
+
+  it('found the retired pages to judge', () => {
+    expect(Object.keys(RETIRED).length).toBeGreaterThan(0);
+  });
+
+  for (const [from, to] of Object.entries(RETIRED)) {
+    it(`${from} goes to ${to}, permanently`, () => {
+      const r = (config.redirects ?? []).filter((x) => x.source === from);
+      expect(r, `vercel.json has no single redirect for ${from}`).toHaveLength(1);
+      expect(r[0].has, 'a retired page redirects on every host').toBeUndefined();
+      expect(r[0].destination).toBe(to);
+      expect(r[0].permanent).toBe(true);
+      // Gone from the site, so it can't be both a page and a redirect...
+      expect(routeFor(from), `${from} is still a marketing route`).toBeUndefined();
+      expect(Object.keys(PAGES)).not.toContain(from);
+      // ...and it lands on a page that exists, which is not itself retired.
+      expect(routeFor(to), `${to} is not a marketing route`).toBeDefined();
+      expect(Object.keys(RETIRED)).not.toContain(to);
+    });
+  }
+
+  it('is linked from no page', () => {
+    for (const route of MARKETING_ROUTES) {
+      for (const from of Object.keys(RETIRED)) {
+        expect(render(route.path), `${route.path} links to ${from}`).not.toContain(`href="${from}"`);
+      }
+    }
   });
 });
 
@@ -297,14 +352,20 @@ describe('every marketing route has its own head', () => {
       }
     }
     expect(withCrumbs).toBeGreaterThan(51);
-    for (const p of ['/', '/features', '/solutions/leasing', '/docs/buildium-api-setup']) {
+    for (const p of ['/', '/features', '/integrations', '/solutions/leasing']) {
       expect(breadcrumbJsonLd(MARKETING_ROUTES.find((r) => r.path === p)!), p).toBeNull();
     }
   });
 
   it('preloads each page\'s largest image, and only an image the page shows', () => {
+    // Re-pointed 2026-11-13: the home and features videos showed the Buildium
+    // assistant and left with it, so no page has a hero image to preload.
     const withImage = MARKETING_ROUTES.filter((r) => r.lcpImage);
-    expect(withImage.map((r) => r.path)).toEqual(['/', '/features']);
+    expect(withImage.map((r) => r.path)).toEqual([]);
+    for (const r of ['/', '/features']) {
+      expect(headTags(routeFor(r)!), r).not.toContain('rel="preload"');
+      expect(render(r), r).not.toContain('poster=');
+    }
     for (const r of withImage) {
       expect(headTags(r)).toContain(`<link rel="preload" as="image" href="${r.lcpImage}" fetchpriority="high" />`);
       // A preload for an image the page doesn't render is a wasted download
@@ -316,14 +377,19 @@ describe('every marketing route has its own head', () => {
 
   it('describes the product with the pricing page\'s own prices', () => {
     const ld = softwareJsonLd() as { offers: { name: string; price: string; priceCurrency: string }[] };
-    // The same three prices the pricing route's description states, so the
-    // structured data and the page cannot disagree.
+    // The same three add-on prices the pricing route's description states, so
+    // the structured data and the page cannot disagree.
     const pricing = MARKETING_ROUTES.find((r) => r.path === '/pricing')!;
     for (const price of ['50', '199', '500']) {
       expect(ld.offers.map((o) => o.price)).toContain(price);
       expect(pricing.description).toContain(`$${price}`);
+      expect(render('/pricing')).toContain(`$${price}`);
     }
-    expect(ld.offers.find((o) => o.name === 'Trial')!.price).toBe('0');
+    // Re-pointed 2026-11-13 from the trial at 0: the product itself is free,
+    // and the online payment fee has no figure, so it is no offer at all.
+    expect(ld.offers.find((o) => o.name === 'Occupella')!.price).toBe('0');
+    expect(ld.offers).toHaveLength(4);
+    expect(pricing.description).toMatch(/free to use/i);
     expect(ld.offers.every((o) => o.priceCurrency === 'USD')).toBe(true);
     expect(JSON.stringify(ld)).not.toMatch(/aggregateRating|review/i);
     for (const r of MARKETING_ROUTES) {
