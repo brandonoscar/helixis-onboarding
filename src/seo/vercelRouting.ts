@@ -97,9 +97,10 @@ export function routingProblems(
     }
   };
   for (const prefix of clientOnlyPrefixes) {
-    // The wizard opens at bare /start; the OAuth popup returns to
-    // /oauth/callback. Any sub-path of either must reach the shell.
-    if (prefix === "/start") expect(prefix, 200, "app-shell.html");
+    // The wizard opens at bare /start and the invite page at bare /invited;
+    // the OAuth popup returns to /oauth/callback. Any sub-path of each must
+    // reach the shell.
+    if (prefix !== "/oauth") expect(prefix, 200, "app-shell.html");
     expect(`${prefix}/callback`, 200, "app-shell.html");
   }
   for (const path of marketingPaths) expect(path, 200, pageFile(path));

@@ -8,6 +8,7 @@ import { ConsentBar } from './ConsentBar'
 import { initAnalytics, watchStartClicks } from './lib/analytics'
 import { rescueAuthLanding } from './lib/authRescue'
 import { maybeLoadVisitorTracker } from './lib/visitorTracking'
+import { isInvitedPath, takeInviteFromUrl, type Arrival } from './lib/invite'
 import { pageFor } from './pages'
 import { tokensCss } from './theme'
 
@@ -27,13 +28,23 @@ import { tokensCss } from './theme'
 // (about 500 KB of source), which no marketing page uses; importing it here
 // made every visitor download it before the home page could run.
 const App = lazy(() => import('./App'))
+// The owner and tenant invite page: client-only like /start, and like it the
+// only other page that loads the Supabase client.
+const Invited = lazy(() => import('./Invited'))
 
-function route() {
+function route(invite: Arrival | null) {
   const p = window.location.pathname
   if (p.startsWith('/start')) {
     return (
       <Suspense fallback={null}>
         <App />
+      </Suspense>
+    )
+  }
+  if (invite) {
+    return (
+      <Suspense fallback={null}>
+        <Invited arrival={invite} />
       </Suspense>
     )
   }
@@ -62,6 +73,11 @@ else if (window.location.pathname.startsWith('/oauth/callback')) {
     '<div style="font: 14px \'IBM Plex Sans Variable\', system-ui, sans-serif; padding: 48px; text-align: center; color: #9a97ad">Connected. You can close this window.</div>'
   setTimeout(() => window.close(), 250)
 } else {
+  // ⚠ BEFORE ANALYTICS, AND THE ORDER IS LOAD-BEARING. On /invited the
+  // fragment holds an owner's or a tenant's invite token (lib/invite.ts):
+  // it leaves the address here, into memory, before initAnalytics or any
+  // other script can read location.href.
+  const invite = isInvitedPath(window.location.pathname) ? takeInviteFromUrl() : null
   // ⚠ INSIDE the else, deliberately. The branch above is the Composio OAuth
   // popup: it belongs to an authenticated wizard session, auto-closes in
   // 250ms, and is not a page anybody visits. Counting it would inflate every
@@ -78,7 +94,7 @@ else if (window.location.pathname.startsWith('/oauth/callback')) {
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <style>{tokensCss}</style>
-      {route()}
+      {route(invite)}
       <ConsentBar />
     </StrictMode>,
   )

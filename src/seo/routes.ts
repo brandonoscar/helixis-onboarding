@@ -359,7 +359,7 @@ export const NOT_FOUND_PAGE = {
  * sitemap or given a canonical: the setup wizard and the OAuth popup return.
  * vercel.json rewrites exactly these to the app shell.
  */
-export const CLIENT_ONLY_PREFIXES = ["/start", "/oauth"] as const;
+export const CLIENT_ONLY_PREFIXES = ["/start", "/oauth", "/invited"] as const;
 
 /** `/features/` and `/features` are one page. */
 export function normalizePath(path: string): string {
