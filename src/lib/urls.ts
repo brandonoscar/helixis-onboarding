@@ -30,3 +30,7 @@ export const APP_URL: string =
  *
  *  TODO(brandon): put the booking page's https URL here when there is one. */
 export const DEMO_URL: string = "";
+
+/** The free, open-source PMS the books are built on (founder, 2026-11-15: lead people to the
+ *  repository, where they can read the code, run it and star it). */
+export const GITHUB_URL: string = "https://github.com/brandonoscar/Occupella-PMS";
