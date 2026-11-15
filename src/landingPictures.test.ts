@@ -74,3 +74,16 @@ describe("the home page's screens of the books", () => {
     for (const r of TOUR.filter((r) => /portal/i.test(r.who))) expect(r.coming, r.who).toBe(true)
   })
 })
+
+describe('the home page leads to the open-source repository (founder, 2026-11-15)', () => {
+  it("makes GitHub the first button, beside the hosted sign-up", async () => {
+    const { render } = await import('./entry-server')
+    const { GITHUB_URL } = await import('./lib/urls')
+    const html = render('/')
+    const hero = html.slice(html.indexOf('class="lp-hero-ctas'), html.indexOf('class="lp-stage"'))
+    const first = hero.match(/href="([^"]+)"/)
+    expect(first?.[1]).toBe(GITHUB_URL)
+    expect(hero).toContain('href="/start"')
+    expect(html).toContain('View the code on GitHub')
+  })
+})

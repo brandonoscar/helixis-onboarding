@@ -1,4 +1,5 @@
 import { Blocks, Checks, CloseBand, Coming, SectionHead, SiteFooter, SiteNav, siteCss, useStartLabel, type Block } from "./Site";
+import { GITHUB_URL } from "./lib/urls";
 
 // ─────────────────────────────────────────────────────────────────────
 // LANDING — the front door.
@@ -292,18 +293,19 @@ export default function Landing() {
               month-end and owner statements, in books that tie out to the bank.
             </p>
             <div className="lp-hero-ctas rise" style={{ "--d": "400ms", marginTop: 30 } as React.CSSProperties}>
-              {/* ⚠ ONE action. The "See it work" text link that sat here was
-                  REMOVED by explicit founder instruction (2026-09-04), and the
-                  hero is one primary action, which is what a hero should be. Do
-                  not quietly reintroduce a secondary link here. "Book a demo"
-                  lives in the header (Site.tsx). */}
-              <a className="btn btn-primary" href="/start" style={{ padding: "12px 24px", fontSize: 15 }}>
-                {start} →
+              {/* The founder, 2026-11-15: the first button leads to the open-source repository,
+                  where people read the code, run it and star it; the hosted sign-up sits beside
+                  it. (This replaces the 2026-09-04 rule of one action in the hero.) */}
+              <a className="btn btn-primary" href={GITHUB_URL} style={{ padding: "12px 24px", fontSize: 15 }}>
+                View on GitHub →
+              </a>
+              <a className="btn btn-secondary" href="/start" style={{ padding: "12px 24px", fontSize: 15 }}>
+                {start}
               </a>
             </div>
             <div className="lp-note rise" style={{ "--d": "400ms", marginTop: 16 } as React.CSSProperties}>
-              Free to use, no card to start. Switching from Buildium?{" "}
-              <a href="/integrations/buildium">See what comes over</a>.
+              The books are open source (Apache-2.0): run them on your own server, or use ours free.
+              Switching from Buildium? <a href="/integrations/buildium">See what comes over</a>.
             </div>
           </div>
           <div className="lp-stage">
@@ -437,6 +439,7 @@ export default function Landing() {
       {/* ⚠ A SUMMARY, not the pricing page: the books are free, and the
           cheapest add-on price is the one figure repeated here. */}
       <CloseBand
+        github
         body="The books cost nothing, with no card to start. Once online rent payments arrive, Occupella earns a small fee on each one. The AI assistant is a paid add-on, from $50 a month."
       />
 

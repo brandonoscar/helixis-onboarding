@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import "@fontsource-variable/fraunces/opsz.css";
 import "@fontsource-variable/ibm-plex-sans";
 import { TrackingOptOut } from "./ConsentBar";
-import { APP_URL, DEMO_URL } from "./lib/urls";
+import { APP_URL, DEMO_URL, GITHUB_URL } from "./lib/urls";
 
 // ─────────────────────────────────────────────────────────────────────
 // SITE CHROME — the nav, the footer, and everything more than one page
@@ -807,6 +807,9 @@ export function SiteNav({ active }: { active?: SitePage }) {
           ))}
         </ul>
         <div className="lp-nav-right">
+          <a className="btn btn-ghost lp-nav-signin" href={GITHUB_URL}>
+            GitHub
+          </a>
           <a className="btn btn-ghost lp-nav-signin" href={APP_URL}>
             Sign in
           </a>
@@ -867,6 +870,7 @@ export function SiteNav({ active }: { active?: SitePage }) {
                 {l.label}
               </a>
             ))}
+            <a href={GITHUB_URL}>GitHub</a>
             <a href={APP_URL}>Sign in</a>
           </div>
           <a className="btn btn-primary lp-drawer-cta" href="/start">
@@ -888,9 +892,12 @@ export function SiteNav({ active }: { active?: SitePage }) {
 export function CloseBand({
   title = "Bring your company over.",
   body = "Make your account, then bring in your owners, properties, tenants and leases from CSV files with the switching tool. Occupella is free to use, with no card to start.",
+  github = false,
 }: {
   title?: string;
   body?: string;
+  /** A second button to the open-source repository (the home page's). */
+  github?: boolean;
 }) {
   const start = useStartLabel();
   return (
@@ -906,6 +913,11 @@ export function CloseBand({
           <a className="btn btn-primary" href="/start">
             {start}
           </a>
+          {github ? (
+            <a className="btn btn-secondary" href={GITHUB_URL} style={{ marginLeft: 12 }}>
+              View the code on GitHub
+            </a>
+          ) : null}
         </Reveal>
       </div>
     </section>
@@ -963,6 +975,7 @@ export function SiteFooter() {
               { href: "/pricing", label: "Pricing" },
               { href: "/integrations/buildium", label: "Switching from Buildium" },
               { href: "/start", label: "Start free" },
+              { href: GITHUB_URL, label: "Source code on GitHub" },
               { href: APP_URL, label: "Sign in" },
             ]}
           />
