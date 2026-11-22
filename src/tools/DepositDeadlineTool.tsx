@@ -165,7 +165,7 @@ export default function DepositDeadlineTool() {
       css={toolCss}
       close={{
         title: "Deposit returns, kept with the lease",
-        body: "Occupella lists each ended lease with the day its deposit is due back, on the strictest deadline we found, and writes each tenant's itemized statement. Free to use.",
+        body: "Occupella shows each ended lease's deposit due day as 14 days after the lease ends, or 10 when nothing is owed: the strictest deadline we found, so it is on or before your state's.",
       }}
     >
       <section>

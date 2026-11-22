@@ -25,7 +25,7 @@ export default function Contact() {
   return (
     <SitePageShell
       title="Contact Occupella"
-      lede={<>Email is the fastest way to reach us. Support replies within one business day.</>}
+      lede={<>Email is the fastest way to reach us. A person reads every email.</>}
       css={css}
     >
       <section>

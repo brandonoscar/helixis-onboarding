@@ -1,5 +1,6 @@
 import { Blocks, Checks, CloseBand, Coming, SectionHead, SiteFooter, SiteNav, siteCss, useStartLabel, type Block } from "./Site";
-import { GITHUB_URL } from "./lib/urls";
+import { BOOKS_LIVE, PORTALS_LIVE } from "./lib/releaseState";
+import { GITHUB_URL, INSTALL_GUIDE_URL } from "./lib/urls";
 
 // ─────────────────────────────────────────────────────────────────────
 // LANDING — the front door.
@@ -23,11 +24,16 @@ import { GITHUB_URL } from "./lib/urls";
 // ⚠ WHAT OCCUPELLA IS NOW (founder, 2026-11-13; AgenticHelixis
 // docs/decisions/ADR-one-product.md): property management software, the
 // "books", built on the free PMS (Occupella-PMS, its CLAUDE.md is the list of
-// what is built). It is free to use. Occupella earns a small fee on each
-// online rent payment once those arrive, and the AI assistant is a paid
-// add-on. Every line here is true of the books today, or marked Coming:
-// online rent payments (bank first, then card), owner and tenant sign-in on
-// app.occupella.com, and the assistant reading the books.
+// what is built). It is free to use and open source (Apache-2.0), and the AI
+// assistant is a paid add-on.
+//
+// ⚠ THE COPY IS THE FOUNDER'S OF 2026-11-22 (reports/Phase 2 site copy
+// draft.md). Only what runs today is said as working. What isn't ready sits in
+// one labelled section, "Not available yet" (online rent payments, the
+// assistant reading the books). Lines that turn true later read a flag in
+// src/lib/releaseState.ts and show a true fallback until it flips: the
+// hosted books running (BOOKS_LIVE) and the owner and tenant portals
+// (PORTALS_LIVE, the tour's Coming chips).
 //
 // ⚠ NEVER IMPLIED, because none is offered: a tenant-screening partner,
 // texting, listing syndication, HOA management, bank feeds, 1099 e-filing,
@@ -39,8 +45,8 @@ import { GITHUB_URL } from "./lib/urls";
 // realistic made-up ones), in public/shots/books/, and public-domain New York
 // photographs, each credited on the page and in public/shots/photos/CREDITS.md.
 // No picture shows anything the books don't do today. The owner and tenant
-// portals are built, but signing in to them on app.occupella.com is Coming,
-// so their rows carry the Coming chip.
+// portals are built; until signing in to them on app.occupella.com works
+// (PORTALS_LIVE), their rows carry the Coming chip.
 // ─────────────────────────────────────────────────────────────────────
 
 const css = `
@@ -156,7 +162,7 @@ const STEPS = [
   {
     n: "2",
     t: "Bring your records over.",
-    b: "The switching tool reads CSV files of your owners, properties, units, tenants, leases, open charges and unpaid bills, then opens each trust bank account with what it held on your cutover day.",
+    b: "The switching tool reads CSV files of your owners, properties, units, tenants, leases, open charges and unpaid bills, then opens each trust bank account with what it held on your cutover day. It reads files you export; it doesn't connect to your old system.",
   },
   {
     n: "3",
@@ -168,10 +174,10 @@ const STEPS = [
 /** Each line is enforced by the PMS's own database, not by a page. */
 const TRUST = [
   "Security deposits sit in their own trust bank account, apart from operating money.",
-  "Every posting is checked: a trust bank account's cash must equal what it holds for owners, tenants, vendors and you.",
+  "On every posting, a trust bank account's book cash must equal what it holds for owners, tenants, vendors and you, or the posting is refused.",
+  "Each month, you import the bank statement and match it. One person prepares the reconciliation and another approves it.",
   "Nothing in the ledger is edited or deleted. A mistake is fixed with a reversing entry.",
-  "Every change is logged with the staff member who made it.",
-  "Month-end takes two people: one prepares the reconciliation and another approves it.",
+  "Every change is logged with when it happened and what changed. Staff changes name the staff member.",
   "Your earned fees are listed with the last day to take them out of trust.",
 ];
 
@@ -214,15 +220,15 @@ export const TOUR: Row[] = [
     who: "Owner portal",
     t: "Owners approve their own bills.",
     b: "A bill over the owner's approval limit waits for them. They see what each property holds before and after, then approve or decline it. Statements, the year-end and repairs are on the same page.",
-    coming: true,
+    coming: !PORTALS_LIVE,
   },
   {
     src: "/shots/books/tenant-overview.jpg",
     alt: "A tenant's page in Occupella: their lease, rent and due day, the security deposit held, a balance of $0.00, the next charge and a note that rent goes up on December 1.",
     who: "Tenant portal",
     t: "Tenants see what they owe, and why.",
-    b: "The lease, the balance, the next charge and any rent change coming, with every payment's receipt. Repair requests and messages go to your staff.",
-    coming: true,
+    b: "The lease, the balance, the next charge and any rent change coming, with every payment's receipt. They file repair requests and write to your staff from the same page.",
+    coming: !PORTALS_LIVE,
   },
 ];
 
@@ -241,18 +247,21 @@ function Shot({ src, alt, eager = false }: { src: string; alt: string; eager?: b
   );
 }
 
-const COMING: Block[] = [
+/** Not on app.occupella.com yet. Listed here, and nowhere said as working. */
+const NOT_YET: Block[] = [
   {
     t: "Online rent payments",
-    coming: true,
-    b: "Tenants pay rent online through our payments provider, by bank first and by card after. Occupella earns a small fee on each payment, shown before anyone pays.",
+    b: "Tenants pay rent online by bank or card through our payments provider. Occupella will earn a small fee on each payment, shown before anyone pays.",
   },
   {
-    t: "The assistant reads your books",
-    coming: true,
-    b: "Ask about rent, balances and work orders in plain English, and get drafts your staff approve. The assistant can't move money.",
+    t: "Occupella's assistant reading your books",
+    b: "Today it works with your Gmail, Calendar, Drive, documents and the web. Connecting it to your books is next.",
   },
 ];
+
+/** Any AI, through the books' own API (Occupella-PMS ADR 0011). */
+export const CONNECT_AI =
+  "An admin makes an API key in Settings. Software with that key can read your books and propose an email, a notice, a work order or a note. Nothing happens until someone on your staff approves it. The key's database role can't record a payment, a charge, a bill or a draw. There is an MCP server for AI tools that speak it, and a feed of events with signed webhooks.";
 
 const TOOLS = [
   {
@@ -268,7 +277,7 @@ const TOOLS = [
   {
     href: "/state-laws",
     t: "Landlord rules by state",
-    b: "Deposit caps, late fees, notice periods and screening rules for all 50 states and DC.",
+    b: "Deposit caps, late fees, notice periods and source-of-income protection for all 50 states and DC.",
   },
 ];
 
@@ -286,26 +295,28 @@ export default function Landing() {
         <div className="lp-wrap lp-hero-grid">
           <div>
             <h1 className="lp-h1 rise" style={{ "--d": "0ms" } as React.CSSProperties}>
-              Free property management software.
+              Free, open-source property management software.
             </h1>
             <p className="lp-lede rise" style={{ "--d": "200ms", marginTop: 20 } as React.CSSProperties}>
-              Trust accounting built in: the rent roll, leases and e-signing, bills, owner draws,
-              month-end and owner statements, in books that tie out to the bank.
+              The books for a property management company: trust accounting, the rent roll, leases
+              and e-signing, bills, owner draws, month-end and owner statements. Every trust bank
+              account balances on every posting, or the posting doesn&rsquo;t go through.
             </p>
             <div className="lp-hero-ctas rise" style={{ "--d": "400ms", marginTop: 30 } as React.CSSProperties}>
               {/* The founder, 2026-11-15: the first button leads to the open-source repository,
                   where people read the code, run it and star it; the hosted sign-up sits beside
                   it. (This replaces the 2026-09-04 rule of one action in the hero.) */}
               <a className="btn btn-primary" href={GITHUB_URL} style={{ padding: "12px 24px", fontSize: 15 }}>
-                View on GitHub →
+                Read the code on GitHub →
               </a>
               <a className="btn btn-secondary" href="/start" style={{ padding: "12px 24px", fontSize: 15 }}>
                 {start}
               </a>
             </div>
             <div className="lp-note rise" style={{ "--d": "400ms", marginTop: 16 } as React.CSSProperties}>
-              The books are open source (Apache-2.0): run them on your own server, or use ours free.
-              Switching from Buildium? <a href="/integrations/buildium">See what comes over</a>.
+              {BOOKS_LIVE
+                ? "Apache-2.0. Run it on your own server with one Docker command, or use ours at no cost."
+                : "Apache-2.0. Run it on your own server with one Docker command."}
             </div>
           </div>
           <div className="lp-stage">
@@ -375,9 +386,9 @@ export default function Landing() {
         <div className="lp-wrap">
           <div className="lp-split">
             <div>
-              <SectionHead title="Trust accounting that ties out.">
-                Every trust bank account is checked on every posting, so the books can&rsquo;t
-                drift from the bank. These are rules the database keeps, not settings.
+              <SectionHead title="Trust accounting the database enforces.">
+                These are rules the database keeps on every posting, whoever makes it. They
+                aren&rsquo;t settings anyone can turn off.
               </SectionHead>
               <div className="lp-trust-photo-wrap">
                 <img
@@ -397,13 +408,39 @@ export default function Landing() {
         </div>
       </section>
 
-      <section className="lp-section" id="coming">
+      <section className="lp-section" id="open-source">
         <div className="lp-wrap">
-          <SectionHead title="Coming next">
-            Built or being built, and not on app.occupella.com yet. Each is marked the same way
-            wherever this site mentions it.
+          <SectionHead title="Open source, so you can check it.">
+            The books are on GitHub under Apache-2.0: the code, the database rules, every test and
+            the decisions behind them. Run your own copy with Docker and a daily backup.
+            {BOOKS_LIVE ? " Or use ours, which runs the same code." : ""} If you leave, an admin
+            downloads every record, document and signed lease in one zip.
           </SectionHead>
-          <Blocks items={COMING} />
+          <div className="lp-hero-ctas" style={{ marginTop: 24 }}>
+            <a className="lp-textlink" href={GITHUB_URL}>
+              Read the code →
+            </a>
+            <a className="lp-textlink" href={INSTALL_GUIDE_URL}>
+              Install guide →
+            </a>
+          </div>
+        </div>
+      </section>
+
+      {BOOKS_LIVE ? (
+        <section className="lp-section" id="connect-ai">
+          <div className="lp-wrap">
+            <SectionHead title="Connect the AI you already use.">{CONNECT_AI}</SectionHead>
+          </div>
+        </section>
+      ) : null}
+
+      <section className="lp-section" id="not-yet" data-not-yet>
+        <div className="lp-wrap">
+          <SectionHead title="Not available yet">
+            These aren&rsquo;t on app.occupella.com yet. We&rsquo;ll say so here when they are.
+          </SectionHead>
+          <Blocks items={NOT_YET} />
         </div>
       </section>
 
@@ -411,8 +448,9 @@ export default function Landing() {
         <div className="lp-wrap">
           <SectionHead title="Switching from Buildium?">
             Export your records from Buildium as CSV files and bring them in with the switching
-            tool. Your opening balances are checked against the old system&rsquo;s book cash, and
-            its past ledger lines come along as history. Nothing needs an API key.
+            tool. Your opening balances are checked against Buildium&rsquo;s book cash, and its
+            past ledger lines come along as history. There is no connection to Buildium&rsquo;s
+            systems and no API key. Occupella is not affiliated with Buildium.
           </SectionHead>
           <a className="lp-textlink" href="/integrations/buildium" style={{ display: "inline-block", marginTop: 24 }}>
             How switching from Buildium works →
@@ -436,11 +474,11 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ⚠ A SUMMARY, not the pricing page: the books are free, and the
-          cheapest add-on price is the one figure repeated here. */}
+      {/* ⚠ A SUMMARY, not the pricing page: the add-on's prices and the online
+          payment fee are on /pricing, beside the note that billing isn't on yet. */}
       <CloseBand
         github
-        body="The books cost nothing, with no card to start. Once online rent payments arrive, Occupella earns a small fee on each one. The AI assistant is a paid add-on, from $50 a month."
+        body="The books cost nothing, with no card to start. The AI assistant is a separate paid add-on."
       />
 
       <SiteFooter />

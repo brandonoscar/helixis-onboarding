@@ -1,4 +1,5 @@
 import { Blocks, SectionHead, SitePageShell, type Block } from "../Site";
+import { PORTALS_LIVE } from "../lib/releaseState";
 
 // ─────────────────────────────────────────────────────────────────────
 // /solutions/maintenance: one job, a repair, from the work order to the paid
@@ -12,7 +13,8 @@ import { Blocks, SectionHead, SitePageShell, type Block } from "../Site";
 // ⚠ NOT CLAIMED: the on-call email for an emergency request and the vendor's
 // work order email. Both need the server to send email, which is NOT
 // VERIFIED on the hosted app. Tenant requests come from the tenant portal, so
-// they carry the Coming chip until tenant sign-in arrives.
+// they carry the Coming chip until tenant sign-in arrives (PORTALS_LIVE,
+// src/lib/releaseState.ts).
 // ─────────────────────────────────────────────────────────────────────
 
 const ORDERS: Block[] = [
@@ -99,10 +101,10 @@ export default function Maintenance() {
 
       <section className="lp-section">
         <div className="lp-wrap">
-          <SectionHead title="Requests from tenants" coming>
+          <SectionHead title="Requests from tenants" coming={!PORTALS_LIVE}>
             Tenants file repair requests from their portal, with the kind of repair, where in the
-            unit and photos, and staff open the work order from the request. Tenants reach the
-            portal once tenant sign-in arrives on app.occupella.com.
+            unit and photos, and staff open the work order from the request.
+            {PORTALS_LIVE ? "" : " Tenants reach the portal once tenant sign-in arrives on app.occupella.com."}
           </SectionHead>
         </div>
       </section>

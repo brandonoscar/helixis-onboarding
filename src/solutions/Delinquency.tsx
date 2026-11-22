@@ -117,8 +117,8 @@ export default function Delinquency() {
       <section className="lp-section">
         <div className="lp-wrap">
           <SectionHead title="Rent paid online" coming>
-            Tenants will pay rent online through our payments provider, by bank first and then by
-            card, and set up autopay. Occupella will earn a small fee on each payment, shown
+            Tenants will pay rent online through our payments provider, by bank or card, and set
+            up autopay. Occupella will earn a small fee on each payment, shown
             before anyone pays. Until then, you record payments as they come in.
           </SectionHead>
         </div>

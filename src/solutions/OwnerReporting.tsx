@@ -1,4 +1,5 @@
 import { Blocks, SectionHead, SitePageShell, type Block } from "../Site";
+import { PORTALS_LIVE } from "../lib/releaseState";
 
 // ─────────────────────────────────────────────────────────────────────
 // /solutions/owner-reporting: one job, an owner's money, from the rent that
@@ -12,7 +13,8 @@ import { Blocks, SectionHead, SitePageShell, type Block } from "../Site";
 //
 // ⚠ NOT CLAIMED: statements emailed to owners each month (needs the server
 // to send email, NOT VERIFIED on the hosted app) and mailing anything. The
-// owner portal carries the Coming chip until owner sign-in arrives.
+// owner portal carries the Coming chip until owner sign-in arrives
+// (PORTALS_LIVE, src/lib/releaseState.ts).
 // ─────────────────────────────────────────────────────────────────────
 
 const STATEMENTS: Block[] = [
@@ -22,7 +24,7 @@ const STATEMENTS: Block[] = [
   },
   {
     t: "Income statements",
-    b: "Cash or accrual, by what each charge was, with each line on its Schedule E line, for one owner or all of them.",
+    b: "Income statements for one owner, on cash or accrual basis, and on cash basis across all owners. Each counts by what each charge was, with each line on its Schedule E line.",
   },
   {
     t: "The year-end",
@@ -104,11 +106,12 @@ export default function OwnerReporting() {
 
       <section className="lp-section">
         <div className="lp-wrap">
-          <SectionHead title="The owner portal" coming>
+          <SectionHead title="The owner portal" coming={!PORTALS_LIVE}>
             Owners read their statements and the year-end, approve bills over their limit and see
-            repairs at their properties. They sign in on app.occupella.com once owner sign-in
-            arrives. Until then, staff record an approval an owner gives by phone, email or in
-            person.
+            repairs at their properties.
+            {PORTALS_LIVE
+              ? ""
+              : " They sign in on app.occupella.com once owner sign-in arrives. Until then, staff record an approval an owner gives by phone, email or in person."}
           </SectionHead>
         </div>
       </section>

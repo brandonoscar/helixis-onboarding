@@ -3,11 +3,15 @@ import { Coming, Reveal, SitePageShell } from "./Site";
 // ─────────────────────────────────────────────────────────────────────
 // /pricing
 //
-// ⚠ THE OFFER (founder, 2026-11-13). Occupella, the books, is free to use.
-// Occupella earns a small fee on each online rent payment, set just above our
-// cost and shown before anyone pays; online payments are Coming and NO FIGURE
-// IS SET, so the fee is written in words and never as a number. The AI
-// assistant is the paid add-on.
+// ⚠ THE OFFER (founder, 2026-11-13; copy of 2026-11-22). Occupella, the
+// books, is free to use and open source. The AI assistant is the paid add-on.
+// Online rent payments are not available yet, so they are a note under the
+// cards, not a card: a small fee on each one, set just above our cost and
+// shown before anyone pays. NO FIGURE IS SET, so the fee is written in words
+// and never as a number.
+//
+// ⚠ "Billing isn't switched on yet" STAYS until billing is (founder's
+// decision, 2026-11-22): the add-on's limits are not charged for today.
 //
 // ⚠ THE ADD-ON'S PRICES ARE TODAY'S CHAT PLANS, until the founder confirms
 // otherwise, and they are HAND-COPIED FROM ANOTHER REPOSITORY. The authority
@@ -17,20 +21,19 @@ import { Coming, Reveal, SitePageShell } from "./Site";
 // which is the only thing connecting them. Change a price there, change it
 // here, and in the terms.
 //
-// ⚠ VOCABULARY (founder call, 2026-09-08). The page sells USAGE as a tier
-// (Standard, 3x, 8x relative to Starter) and puts no countable unit on a card.
-//
-// ⚠ NO LEASING OR TEXTING LINE ON THE ADD-ON. The chat plans used to differ on
-// the Leasing pipeline and "your own number for texts and calls". Texting is
-// not offered (founder, 2026-11-13), and Leasing in the books is free, so the
-// add-on's cards differ only on usage and on per-person or pooled.
-// billing/plans.py still gates its Leasing CRM to Pro and Scale; nothing here
-// promises it on Starter.
+// ⚠ VOCABULARY (founder, 2026-11-22, replacing the call of 2026-09-08 that
+// sold usage as 3x and 8x tiers, which read 400 / 150 as 3x). Each card says
+// its questions a month (billing/plans.py turns_included: 150 pooled, 400 per
+// seat, 1,200 pooled) and whether the leasing pipeline is included
+// (billing/plans.py FEATURE_CRM: Pro and Scale). No texting line: texting is
+// not offered (founder, 2026-11-13).
 // ─────────────────────────────────────────────────────────────────────
 
 const css = `
   .pr-plans { display: grid; gap: 20px; margin-top: 56px; }
   @media (min-width: 900px) { .pr-plans { grid-template-columns: repeat(3, 1fr); } }
+  @media (min-width: 900px) { .pr-plans[data-cols="2"] { grid-template-columns: repeat(2, 1fr); max-width: 820px; } }
+  .pr-note b { color: var(--ink); font-weight: 600; }
 
   .pr-plan {
     display: flex; flex-direction: column; gap: 12px;
@@ -69,13 +72,15 @@ type Card = {
   fig: string;
   unit: string;
   allowance?: string;
+  /** A second short line under the allowance. */
+  extra?: string;
   forWho: string;
   coming?: boolean;
   featured?: boolean;
   cta?: { href: string; label: string };
 };
 
-/** What Occupella costs, in three parts. */
+/** What Occupella costs: the books, and the add-on. */
 export const OFFER: Card[] = [
   {
     key: "books",
@@ -88,15 +93,6 @@ export const OFFER: Card[] = [
     cta: { href: "/start", label: "Start free" },
   },
   {
-    key: "payments",
-    name: "Online rent payments",
-    fig: "A small fee",
-    unit: "on each payment made online",
-    forWho:
-      "Set just above what each payment costs us, and shown before anyone pays. By bank first, then by card. Payments you record by hand cost nothing.",
-    coming: true,
-  },
-  {
     key: "ai",
     name: "AI assistant",
     fig: "From $50",
@@ -106,12 +102,22 @@ export const OFFER: Card[] = [
   },
 ];
 
+/**
+ * Online rent payments, not available yet: a note under the cards. In words,
+ * with no figure, until one is set (claims.test.ts).
+ */
+export const PAYMENTS_NOTE = {
+  t: "Online rent payments (not available yet).",
+  b: "When they arrive, a small fee on each payment made online, set just above what each payment costs us and shown before anyone pays. Rent you record by hand (check, money order, cash) never carries a fee.",
+};
+
 type Plan = {
   key: string;
   name: string;
   fig: string;
   unit: string;
   allowance: string;
+  extra: string;
   forWho: string;
   /** Per person, for the structured data's description. */
   perPerson?: boolean;
@@ -125,7 +131,8 @@ export const PLANS: Plan[] = [
     name: "Starter",
     fig: "$50",
     unit: "per month",
-    allowance: "Standard usage, every month",
+    allowance: "150 questions a month, shared",
+    extra: "Leasing pipeline: no",
     forWho: "For one person working a small book.",
   },
   {
@@ -133,7 +140,8 @@ export const PLANS: Plan[] = [
     name: "Pro",
     fig: "$199",
     unit: "per person, per month",
-    allowance: "3× Starter's usage, per person",
+    allowance: "400 questions a month per person",
+    extra: "Leasing pipeline: yes",
     forWho: "For a team. Usage is counted per person, so it grows as you add people.",
     perPerson: true,
   },
@@ -142,7 +150,8 @@ export const PLANS: Plan[] = [
     name: "Scale",
     fig: "$500",
     unit: "per month",
-    allowance: "8× Starter's usage, pooled",
+    allowance: "1,200 questions a month, shared",
+    extra: "Leasing pipeline: yes",
     forWho: "For the whole team on one bill, with no per-person charge and the usage shared.",
   },
 ];
@@ -152,9 +161,9 @@ const FAQ: { q: string; a: React.ReactNode }[] = [
     q: "Is Occupella really free?",
     a: (
       <>
-        Yes. The books are free to use, with no card to start and no trial that ends. We earn
-        money from the AI assistant and, once online rent payments arrive, from a small fee on
-        each one.
+        Yes. The books are free to use and open source, with no card to start and no trial
+        that ends. We earn money from the AI assistant and, once online rent payments are
+        available, from a small fee on each one.
       </>
     ),
   },
@@ -181,9 +190,8 @@ const FAQ: { q: string; a: React.ReactNode }[] = [
     q: "How much can I use the assistant?",
     a: (
       <>
-        Usage counts the questions you ask that produce an answer. One that fails or comes back
-        empty costs nothing. If you get near your plan&rsquo;s limit, we tell you before you reach
-        it, and your usage for the period is on the billing page in the app.
+        Your plan&rsquo;s questions for the month are on the billing page in the app, which turns
+        amber at 80%.
       </>
     ),
   },
@@ -240,6 +248,7 @@ function OfferCard({ c }: { c: Card }) {
         <div className="pr-unit">{c.unit}</div>
       </div>
       {c.allowance ? <div className="pr-allow">{c.allowance}</div> : null}
+      {c.extra ? <div className="pr-unit">{c.extra}</div> : null}
       <p className="pr-for">{c.forWho}</p>
       {c.cta ? (
         <div className="pr-cta">
@@ -259,8 +268,8 @@ export default function Pricing() {
       title="Free to use"
       lede={
         <>
-          The books are free. Once online rent payments arrive, we earn a small fee on each one.
-          The AI assistant is a paid add-on.
+          The books are free and open source. The AI assistant is a paid add-on. Once online rent
+          payments are available, there will be a small fee on each payment made online.
         </>
       }
       css={css}
@@ -272,12 +281,15 @@ export default function Pricing() {
       <section>
         <div className="lp-wrap">
           <Reveal>
-            <div className="pr-plans">
+            <div className="pr-plans" data-cols="2">
               {OFFER.map((c) => (
                 <OfferCard c={c} key={c.key} />
               ))}
             </div>
           </Reveal>
+          <p className="pr-note" id="online-payments" data-not-yet>
+            <b>{PAYMENTS_NOTE.t}</b> {PAYMENTS_NOTE.b}
+          </p>
         </div>
       </section>
 
@@ -287,8 +299,9 @@ export default function Pricing() {
             <div className="lp-section-head">
               <h2 className="lp-h2">The AI assistant</h2>
               <p className="lp-body">
-                An add-on to the free books. The plans differ on how much you can use and on
-                whether it is priced per person. <a href="/features#ai-assistant">What it does</a>
+                An add-on to the free books. The plans differ in how many questions you can ask,
+                whether they&rsquo;re counted per person, and whether the leasing pipeline is
+                included. <a href="/features#ai-assistant">What it does</a>
               </p>
             </div>
           </Reveal>
@@ -302,11 +315,14 @@ export default function Pricing() {
               ))}
             </div>
           </Reveal>
-          {/* Every plan starts the same trial, inside the app, because you
-              cannot buy before you have an account. */}
           <p className="pr-note">
-            Each plan starts with a 14-day trial, with no card. You choose a plan in the app when
-            it ends.
+            A question counts only when it gets an answer. One that fails or comes back empty costs
+            nothing.
+          </p>
+          {/* The founder's decision (2026-11-22): this note stays until billing is on. */}
+          <p className="pr-note" id="billing-off">
+            <b>Billing isn&rsquo;t switched on yet.</b> Until it is, the assistant is free to use
+            within these limits. We&rsquo;ll email every company before the first charge.
           </p>
         </div>
       </section>

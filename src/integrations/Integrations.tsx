@@ -123,7 +123,7 @@ export const CONNECTIONS: Card[] = [
   {
     name: "Online rent payments",
     status: "coming",
-    body: "Tenants pay rent online through our payments provider, by bank first and by card after, with a small fee on each payment shown before anyone pays.",
+    body: "Tenants pay rent online through our payments provider, by bank or card, with a small fee on each payment shown before anyone pays.",
   },
 ];
 

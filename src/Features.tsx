@@ -1,4 +1,6 @@
+import { CONNECT_AI } from "./Landing";
 import { Blocks, Checks, SectionHead, SitePageShell, type Block } from "./Site";
+import { BOOKS_EMAIL_LIVE, BOOKS_LIVE, CHAT_READS_ONLY, PORTALS_LIVE } from "./lib/releaseState";
 
 // ─────────────────────────────────────────────────────────────────────
 // /features — what Occupella does, in detail.
@@ -6,21 +8,28 @@ import { Blocks, Checks, SectionHead, SitePageShell, type Block } from "./Site";
 // ⚠ EVERY LINE ON THIS PAGE IS A CLAIM SOMEBODY WILL TEST WITHIN TEN MINUTES
 // OF READING IT. The source is the free PMS the hosted product is built on:
 // Occupella-PMS, whose CLAUDE.md lists what is built and the rule behind each
-// line (founder, 2026-11-13: "read what is really built"). A capability is
-// listed as working only if a staff member can reach it on
-// app.occupella.com/books today. Anything else carries the Coming chip:
-//   · online rent payments and autopay (bank first, then card),
-//   · owner and tenant sign-in, so everything the portals do,
-//   · the assistant reading the books and proposing drafts.
+// line (founder, 2026-11-13: "read what is really built"). The copy is the
+// founder's of 2026-11-22. What isn't available yet is listed in the last
+// section, "Not available yet": online rent payments, the assistant reading
+// the books, sending listings to other sites, tenant screening. Lines that
+// turn true later read a flag in src/lib/releaseState.ts and show a true
+// fallback until then:
+//   · PORTALS_LIVE: the portals and tenant requests keep the Coming chip;
+//   · BOOKS_LIVE: "Connect the AI you already use" appears;
+//   · BOOKS_EMAIL_LIVE: "Emails the books send by themselves" appears;
+//   · CHAT_READS_ONLY: the AI section's new wording.
 //
 // ⚠ THE SPECIFICS ARE THE POINT (founder direction, 2026-09-04: "get nitty
 // gritty"). Replace a specific with a better specific, never with an
 // adjective.
 //
 // ⚠ NOT CLAIMED, each deliberately:
-//   · Any email the PMS sends by itself (reminders, late notices, statements,
-//     receipts). The hosted books send email only once PMS_EMAIL_SENDER is set
-//     on Render, which is NOT VERIFIED.
+//   · Any email the PMS sends by itself, until BOOKS_EMAIL_LIVE. The hosted
+//     books send email only once PMS_EMAIL_SENDER is set on Render, which is
+//     NOT VERIFIED.
+//   · "Can't merge" for any check: neither repository's main branch requires
+//     checks to pass (measured 2026-11-22), so the testing section says what
+//     runs, and when.
 //   · Screening. The PMS has a hook for a screening partner and none is
 //     connected; the leasing section says Occupella doesn't screen.
 //   · Texting, listing syndication, HOA management, bank feeds, 1099 e-filing,
@@ -47,12 +56,12 @@ const TRUST: Block[] = [
     b: "Tenants' security deposits sit in a security deposit trust account and everything else you hold in an operating one. A posting into the wrong kind is refused.",
   },
   {
-    t: "Every account ties out",
-    b: "On every posting, a trust bank account's cash must equal what it holds for owners, prepaid rent, deposits, vendors and your company's fees, or the posting doesn't go through.",
+    t: "Every account balances on every posting",
+    b: "A trust bank account's cash must equal what it holds for owners, prepaid rent, deposits, vendors and your company's fees, or the posting doesn't go through. Month-end matches it to the bank statement.",
   },
   {
     t: "A ledger that's never rewritten",
-    b: "Nothing is edited or deleted. A mistake is fixed with a reversing entry, and every change is logged with the staff member who made it.",
+    b: "Nothing is edited or deleted. A mistake is fixed with a reversing entry. Every change goes in an audit log, naming the staff member who made it.",
   },
   {
     t: "Closed months stay closed",
@@ -87,7 +96,7 @@ const RENT: Block[] = [
   },
   {
     t: "Leases and e-signing",
-    b: "Draft a lease on your own PDF or a template filled from its terms. Each signer agrees to sign electronically and signs on Occupella's own page, and the lease keeps a signing certificate.",
+    b: "Draft a lease on your own PDF or on a template filled in from its terms. Each signer agrees to sign electronically and signs on Occupella's own page. Once everyone has signed, you activate it and it becomes the lease, with a signing certificate kept beside it.",
   },
   {
     t: "Renewals and holds",
@@ -133,7 +142,7 @@ const MONTH_END: Block[] = [
   },
   {
     t: "Owner statements",
-    b: "Each owner's statement for any period, an income statement by Schedule E line, and the year-end summary with the year's 1099-MISC rents.",
+    b: "Each owner's statement for any period; an income statement by Schedule E line, on cash or accrual basis, and a cash-basis statement across all owners; and the year-end summary with the year's 1099-MISC rents.",
   },
   {
     t: "1099 summary",
@@ -145,11 +154,11 @@ const MONTH_END: Block[] = [
   },
   {
     t: "Your data, whole",
-    b: "Download the ledger as CSV files, or every record, document and signed lease in one zip. Journal entries export to QuickBooks Desktop and Online.",
+    b: "Download the ledger as CSV files, or every record, document and signed lease in one zip. The trust ledger's transfers over any dates export as journal entries for QuickBooks Desktop (IIF) and QuickBooks Online (CSV).",
   },
 ];
 
-// The section head carries the Coming chip for all three.
+// The section head carries the Coming chip for all three until PORTALS_LIVE.
 const PORTALS: Block[] = [
   {
     t: "For owners",
@@ -188,7 +197,7 @@ const MAINTENANCE: Block[] = [
   },
   {
     t: "Tenant requests",
-    coming: true,
+    coming: !PORTALS_LIVE,
     b: "Tenants file repair requests from their portal, with the kind of repair, where in the unit and photos.",
   },
 ];
@@ -208,7 +217,7 @@ const LEASING: Block[] = [
   },
   {
     t: "From approval to lease",
-    b: "Turn an approved application into a draft lease with its deposit and monthly charges, send it to sign, and it becomes the lease once everyone has signed.",
+    b: "Turn an approved application into a draft lease with its deposit and monthly charges and send it to sign. Once everyone has signed, you activate it and it becomes the lease.",
   },
   {
     t: "Renewals",
@@ -216,15 +225,17 @@ const LEASING: Block[] = [
   },
   {
     t: "Move-out and deposits",
-    b: "Return deposits once a lease ends, keeping what is owed, with an itemized statement letter for each tenant. Each ended lease shows the day its deposit is due back.",
+    b: "Return deposits once a lease ends, keeping what is owed, with an itemized statement letter for each tenant. Each ended lease shows the day its deposit is due back: 14 days after the lease ends, or 10 when nothing is owed. That is the strictest deadline we found in any state, so it is on or before your state's. Your state's own deadline is on the deposit calculator.",
   },
 ];
 
 const MORE = [
-  "Housing assistance: the authority's share of rent charged to the authority, the tenant charged the rest",
-  "Utility bills billed back to tenants by unit, square feet, occupants or submeter",
-  "Tax credit units: income limits, income certifications and rent tests",
-  "Deposit interest, paid as a rent credit or added to the deposit",
+  "Section 8 and other housing assistance: the housing authority's share of rent charged to the authority and the tenant charged the rest, authority late fees, returned authority payments, and a compliance report of income certifications and inspections due",
+  "LIHTC (tax credit) units: area income limits, income certifications, and the income and rent tests by unit",
+  "Utility billing (RUBS): utility bills billed back to tenants by unit, square feet, occupants or submeter, never more than the bill",
+  "Deposits: security, pet and key deposits held apart, deposit interest paid as a rent credit or added to the deposit, and deposits the owner holds outside trust",
+  "Unapplied cash: money that came in and can't be matched yet, held in its own account until applied or refunded",
+  "Chart of accounts with codes, your own kinds of fee, and expense accounts on Schedule E lines",
   "Budgets by property and month, beside what happened",
   "Property groups, to narrow every list to part of your portfolio",
   "Notice templates in your own words, filled in from a lease",
@@ -233,7 +244,24 @@ const MORE = [
   "Year close: a finished year locked so nothing is dated in it",
 ];
 
-const AI: Block[] = [
+/** The AI section once the chat can't change records (CHAT_READS_ONLY). */
+const AI_READS_ONLY: Block[] = [
+  {
+    t: "What it does today",
+    b: "A chat that works with your Gmail, Google Calendar and Google Drive, the documents you give it and the web.",
+  },
+  {
+    t: "Fair housing guardrails",
+    b: "It declines questions that would steer by a protected class, and doesn't offer a workaround after it declines. These cases are in the test suite, and a change that breaks one fails it.",
+  },
+  {
+    t: "It can't change your records",
+    b: "The assistant has no tool that records a payment, a charge, a bill or a draw. When it connects to your books, it will do so under a database role that can only read and propose.",
+  },
+];
+
+/** Today's AI section, kept until CHAT_READS_ONLY. */
+const AI_TODAY: Block[] = [
   {
     t: "Today",
     b: "A chat that works with your Gmail, Google Calendar and Google Drive, the documents you give it and the web.",
@@ -258,6 +286,32 @@ const AI: Block[] = [
   },
 ];
 
+/** What the books email by themselves, each turned on in Company setup. */
+const EMAILS =
+  "Turn each on in Company setup: rent reminders before the due day, late notices, monthly owner statements with the PDF, payment receipts, work orders to vendors, and a low-balance alert to an owner whose account falls below its reserve. Your admins are emailed if a nightly run fails.";
+
+/** The test suite, as the PMS's CI runs it (checked 2026-11-22 against Occupella-PMS main). */
+const TESTED_EACH_CHANGE = [
+  "Property tests that throw thousands of random sequences of postings at the ledger rules",
+  "Fixed expected outputs for every report",
+  "Accessibility checks against WCAG 2.2 AA on every page the browser tests reach",
+];
+const TESTED_EACH_NIGHT = [
+  "A mutation run that breaks the ledger's money rules on purpose, one small change at a time, to prove a test catches each one",
+  "Five years of a company's nightly runs replayed, with the books checked after each night",
+  "A timed run of ten staff at once against a 1,000-unit company",
+];
+
+/** Not available yet: the page's last section, the draft's bullets as written. */
+const NOT_YET = [
+  "Online rent payments, by bank or card, with a small fee on each one, shown before anyone pays.",
+  BOOKS_LIVE
+    ? "The assistant reading your books and proposing drafts your staff approve. Any AI you connect with an API key can do this today (see Connect your own AI)."
+    : "The assistant reading your books and proposing drafts your staff approve.",
+  "Listing syndication: listings are on your own public page, not sent to other sites.",
+  "Tenant screening: Occupella doesn't screen applicants.",
+];
+
 export default function Features() {
   return (
     <SitePageShell
@@ -266,7 +320,8 @@ export default function Features() {
       lede={
         <>
           The books for a property management company, with trust accounting under every page.
-          Occupella is free to use. Anything not on app.occupella.com yet is marked Coming.
+          Free and open source (Apache-2.0). What isn&rsquo;t available yet is listed at the
+          bottom, marked as such.
         </>
       }
       css={css}
@@ -321,9 +376,10 @@ export default function Features() {
 
       <section className="lp-section lp-anchor" id="portals">
         <div className="lp-wrap">
-          <SectionHead title="Owner and tenant portals" coming>
-            The portals are built. Owners and tenants sign in to them on app.occupella.com once
-            that sign-in arrives.
+          <SectionHead title="Owner and tenant portals" coming={!PORTALS_LIVE}>
+            {PORTALS_LIVE
+              ? "Owners and tenants sign in with the email you invite them at."
+              : "The portals are built. Owners and tenants sign in to them on app.occupella.com once that sign-in arrives."}
           </SectionHead>
           <Blocks items={PORTALS} cols={3} />
         </div>
@@ -356,6 +412,14 @@ export default function Features() {
         </div>
       </section>
 
+      {BOOKS_EMAIL_LIVE ? (
+        <section className="lp-section lp-anchor" id="emails">
+          <div className="lp-wrap">
+            <SectionHead title="Emails the books send by themselves">{EMAILS}</SectionHead>
+          </div>
+        </section>
+      ) : null}
+
       <section className="lp-section lp-anchor" id="switching">
         <div className="lp-wrap">
           <SectionHead title="Switching from another system">
@@ -369,6 +433,30 @@ export default function Features() {
         </div>
       </section>
 
+      {BOOKS_LIVE ? (
+        <section className="lp-section lp-anchor" id="connect-ai">
+          <div className="lp-wrap">
+            <SectionHead title="Connect your own AI">{CONNECT_AI}</SectionHead>
+          </div>
+        </section>
+      ) : null}
+
+      <section className="lp-section lp-anchor" id="testing">
+        <div className="lp-wrap">
+          <SectionHead title="How the books are tested">
+            Every change to the books runs these on GitHub:
+          </SectionHead>
+          <Checks items={TESTED_EACH_CHANGE} />
+          <p className="lp-body" style={{ marginTop: 32 }}>
+            And each night:
+          </p>
+          <Checks items={TESTED_EACH_NIGHT} />
+          <p className="lp-body" style={{ marginTop: 32 }}>
+            It&rsquo;s all public in the repo.
+          </p>
+        </div>
+      </section>
+
       <section className="ft-band lp-anchor" id="ai-assistant">
         <div className="lp-wrap">
           <SectionHead title="The AI assistant">
@@ -377,7 +465,14 @@ export default function Features() {
           <a className="lp-textlink" href="/pricing#ai-assistant" style={{ display: "inline-block", marginTop: 16 }}>
             What it costs
           </a>
-          <Blocks items={AI} cols={3} />
+          <Blocks items={CHAT_READS_ONLY ? AI_READS_ONLY : AI_TODAY} cols={3} />
+        </div>
+      </section>
+
+      <section className="lp-section lp-anchor" id="not-yet" data-not-yet>
+        <div className="lp-wrap">
+          <SectionHead title="Not available yet" />
+          <Checks items={NOT_YET} />
         </div>
       </section>
     </SitePageShell>
