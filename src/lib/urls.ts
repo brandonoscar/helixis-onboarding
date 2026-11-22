@@ -34,3 +34,7 @@ export const DEMO_URL: string = "";
 /** The free, open-source PMS the books are built on (founder, 2026-11-15: lead people to the
  *  repository, where they can read the code, run it and star it). */
 export const GITHUB_URL: string = "https://github.com/brandonoscar/Occupella-PMS";
+
+/** How to run your own copy of the books (Occupella-PMS docs/install.md: Docker Compose, the
+ *  daily backup). */
+export const INSTALL_GUIDE_URL: string = `${GITHUB_URL}/blob/main/docs/install.md`;

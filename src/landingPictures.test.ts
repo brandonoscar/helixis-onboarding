@@ -5,7 +5,8 @@
  * - Each photo is a JPEG of exactly the size its <img> declares, light enough for a first visit,
  *   and credited in public/shots/photos/CREDITS.md with where it came from and why it may be used.
  * - Each screen of the books is a 1600 x 1000 JPEG, with words a screen reader can read.
- * - A screen of a portal whose sign-in is still coming says so (the Coming chip).
+ * - A screen of a portal whose sign-in is still coming says so (the Coming chip), until
+ *   PORTALS_LIVE (src/lib/releaseState.ts) says it isn't.
  */
 
 import { readFileSync, statSync } from 'node:fs'
@@ -14,6 +15,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 import { PHOTOS, SHOT, TOUR } from './Landing'
+import { PORTALS_LIVE } from './lib/releaseState'
 
 function publicFile(sitePath: string): string {
   return fileURLToPath(new URL(`../public${sitePath}`, import.meta.url))
@@ -71,7 +73,7 @@ describe("the home page's screens of the books", () => {
   })
 
   it('marks a portal whose sign-in is still coming', () => {
-    for (const r of TOUR.filter((r) => /portal/i.test(r.who))) expect(r.coming, r.who).toBe(true)
+    for (const r of TOUR.filter((r) => /portal/i.test(r.who))) expect(r.coming, r.who).toBe(!PORTALS_LIVE)
   })
 })
 
@@ -84,6 +86,6 @@ describe('the home page leads to the open-source repository (founder, 2026-11-15
     const first = hero.match(/href="([^"]+)"/)
     expect(first?.[1]).toBe(GITHUB_URL)
     expect(hero).toContain('href="/start"')
-    expect(html).toContain('View the code on GitHub')
+    expect(html).toContain('Read the code on GitHub')
   })
 })

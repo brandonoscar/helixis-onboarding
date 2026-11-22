@@ -43,7 +43,9 @@ export interface StateRules {
     return_deadline_unit?: string;
     deadline_trigger: string;
     penalty: string | null;
-    interest_owed: boolean | null;
+    /** true, false, or the rule in words where it depends on something
+     *  ("required for buildings with 6+ units"). */
+    interest_owed: boolean | string | null;
     citation: string | null;
     verify_flag?: boolean;
     note?: string;
@@ -135,9 +137,13 @@ export function returnDeadline(r: StateRules["deposit"]): string {
   return `${plural(v, unit)} ${trigger}`;
 }
 
-export function yesNo(v: boolean | null | undefined): string {
+/** A yes/no field. Where the data gives the rule in words instead (deposit
+ *  interest in nine states), the words are the answer, passed through as the
+ *  other string fields are. */
+export function yesNo(v: boolean | string | null | undefined): string {
   if (v === true) return "Yes";
   if (v === false) return "No";
+  if (typeof v === "string" && v.trim() !== "") return v;
   return "Not in our data";
 }
 

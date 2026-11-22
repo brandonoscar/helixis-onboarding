@@ -65,7 +65,7 @@ const LEASES: Block[] = [
   },
   {
     t: "It becomes the lease",
-    b: "Once everyone has signed, it becomes the lease on its first day, with its tenants, the deposit it asked and its monthly charges.",
+    b: "Once everyone has signed, you activate it and it becomes the lease, with its tenants, the deposit it asked and its monthly charges.",
   },
 ];
 

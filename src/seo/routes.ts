@@ -205,7 +205,7 @@ const STATIC_ROUTES: MarketingRoute[] = [
     path: "/contact",
     name: "contact",
     title: "Contact | Occupella",
-    description: "Email team@occupella.com for setup help, account and billing questions, security and data requests. Support replies within one business day.",
+    description: "Email team@occupella.com for setup help, account and billing questions, security and data requests. A person reads every email.",
     inSitemap: true,
     source: "src/Contact.tsx",
     changefreq: "monthly",

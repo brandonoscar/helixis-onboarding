@@ -13,6 +13,7 @@ import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { pageFor } from "../pages";
+import StateLawPage from "./StateLawPage";
 import { MARKETING_ROUTES, routeFor } from "../seo/routes";
 import {
   DATA,
@@ -24,6 +25,7 @@ import {
   VERIFY_NOTE,
   depositCap,
   returnDeadline,
+  yesNo,
   type StateEntry,
 } from "./data";
 
@@ -124,5 +126,55 @@ describe("the wording never turns a missing value into a rule", () => {
   it("keeps a phrase the data holds instead of a number", () => {
     const nj = STATES.find((s) => s.code === "NJ")!;
     expect(page(nj)).toContain("none - file directly");
+  });
+});
+
+describe("deposit interest says the rule the data holds", () => {
+  // The data gives nine states' deposit interest as a rule in words, not yes
+  // or no. Until 2026-11-22 yesNo() read only true and false, so these pages
+  // said "Not in our data" over a rule the data had.
+  const WORDED = ["FL", "IL", "NH", "NM", "NY", "ND", "OH", "PA", "VT"];
+  // The row's value: what follows "Interest owed" up to the next row or the
+  // section's link.
+  const interestRow = (t: string) => t.match(/Interest owed (.*?) (Note |Work out the return date)/)?.[1];
+
+  it("finds exactly those nine in the data", () => {
+    const worded = STATES.filter((s) => typeof s.rules.deposit.interest_owed === "string").map((s) => s.code);
+    expect(worded.sort()).toEqual([...WORDED].sort());
+  });
+
+  for (const code of WORDED) {
+    it(`${code}'s page shows its rule, not "Not in our data"`, () => {
+      const st = STATES.find((s) => s.code === code)!;
+      const rule = st.rules.deposit.interest_owed as string;
+      const t = page(st);
+      expect(t).toContain(`Interest owed ${rule}`);
+      expect(interestRow(t)).toBe(rule);
+    });
+  }
+
+  it("still says yes or no where the data does", () => {
+    const yes = STATES.find((s) => s.rules.deposit.interest_owed === true)!;
+    const no = STATES.find((s) => s.rules.deposit.interest_owed === false)!;
+    expect(page(yes)).toContain("Interest owed Yes");
+    expect(page(no)).toContain("Interest owed No");
+  });
+
+  it('says "Not in our data" where the data has no answer', () => {
+    // No state lacks it today, so a state whose data does is made here from
+    // a real one with the field emptied, and rendered the same way.
+    expect(yesNo(null)).toBe("Not in our data");
+    expect(yesNo(undefined)).toBe("Not in our data");
+    expect(yesNo("")).toBe("Not in our data");
+    const ny = STATES.find((s) => s.code === "NY")!;
+    for (const missing of [null, undefined]) {
+      const st: StateEntry = {
+        ...ny,
+        rules: { ...ny.rules, deposit: { ...ny.rules.deposit, interest_owed: missing as unknown as null } },
+      };
+      const t = text(renderToString(<StateLawPage state={st} />));
+      expect(t).toContain("Interest owed Not in our data");
+      expect(t).not.toContain(ny.rules.deposit.interest_owed as string);
+    }
   });
 });

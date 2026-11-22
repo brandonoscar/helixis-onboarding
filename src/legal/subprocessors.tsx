@@ -29,6 +29,10 @@
  *     feedback MX on send.updates.
  *   · Stripe also takes tenants' rent and owners' money online, on Stripe's
  *     own page (the PMS's src/pms/payments.py; it never sees a bank number).
+ * Corrected 2026-11-22 (the founder's site copy): Supabase holds sign-in and
+ * the assistant's own data, not Buildium data (the connector left); Stripe
+ * takes no rent online yet (not available on app.occupella.com); Twilio and
+ * the US government data are not in use for customers today.
  * Adding a vendor to the code means adding it here the same day.
  */
 
@@ -41,7 +45,7 @@ export interface Subprocessor {
 export const SUBPROCESSORS: Subprocessor[] = [
   { name: "Anthropic", purpose: "The AI models that read your data and write answers and drafts." },
   { name: "Voyage AI", purpose: "Turns remembered facts into search vectors so they can be recalled later." },
-  { name: "Supabase", purpose: "Database and sign-in. Your synced Buildium data and your account live here." },
+  { name: "Supabase", purpose: "Sign-in, and the AI assistant's own data (chats and what it remembers)." },
   {
     name: "Render",
     purpose: "Runs the Occupella servers and background workers, and the books' database.",
@@ -51,13 +55,13 @@ export const SUBPROCESSORS: Subprocessor[] = [
   {
     name: "Stripe",
     purpose:
-      "Billing for your subscription, and rent and owners' money paid online by bank, on Stripe's own page.",
+      "Billing for your AI assistant subscription. When online rent payments are available, it will also take those payments on Stripe's own page.",
   },
   {
     name: "Resend",
     purpose: "Sends Occupella's email, with Amazon Web Services' email service (Amazon SES) behind it.",
   },
-  { name: "Twilio", purpose: "Text messages and calls, and the carrier registration for your business number." },
+  { name: "Twilio", purpose: "Text messages and calls.", status: "Not in use for customers today." },
   { name: "Tavily", purpose: "Web search, when a question needs public information." },
   { name: "Sentry", purpose: "Error reports, so we can see and fix failures." },
   { name: "Langfuse", purpose: "Traces of AI requests, so we can check answer quality." },
@@ -70,6 +74,7 @@ export const SUBPROCESSORS: Subprocessor[] = [
   {
     name: "US government public data (FEMA, HUD, EPA, USFS)",
     purpose: "Flood, wildfire and radon data and fair market rents, looked up by property location.",
+    status: "Not in use for customers today.",
   },
   {
     name: "Browserbase",

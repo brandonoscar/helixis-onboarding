@@ -915,7 +915,7 @@ export function CloseBand({
           </a>
           {github ? (
             <a className="btn btn-secondary" href={GITHUB_URL} style={{ marginLeft: 12 }}>
-              View the code on GitHub
+              Read the code on GitHub
             </a>
           ) : null}
         </Reveal>
@@ -1004,7 +1004,10 @@ export function SiteFooter() {
 
         <div className="lp-footer-legal">
           <span>© 2026 Oscar Ventures LLC</span>
-          <span>Occupella is not affiliated with Buildium.</span>
+          <span>
+            Occupella is not affiliated with Buildium. Switching from it works from CSV files you
+            export.
+          </span>
         </div>
       </div>
     </footer>
