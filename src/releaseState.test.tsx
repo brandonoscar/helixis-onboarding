@@ -133,7 +133,7 @@ describe('PORTALS_LIVE: owners and tenants sign in on app.occupella.com [after B
   })
 })
 
-describe("CHAT_READS_ONLY: the chat can't change records [after G]", () => {
+describe("CHAT_READS_ONLY: the chat can't move money [after G]", () => {
   it("off: /security keeps today's wording with the Coming chip, /features today's AI section", async () => {
     const s = await site({ CHAT_READS_ONLY: false })
     expect(s.html('/security')).toContain("The assistant can&#x27;t move money<span class=\"lp-coming\">Coming</span>")
@@ -141,7 +141,7 @@ describe("CHAT_READS_ONLY: the chat can't change records [after G]", () => {
     const ai = text(part(s.html('/features'), 'id="ai-assistant"'))
     expect(ai).toContain("It can't move money")
     expect(ai).toContain('Reading your books')
-    expect(ai).not.toContain("It can't change your records")
+    expect(ai).not.toContain('The assistant has no tool that records a payment')
   })
 
   it('on: /security loses the chip and takes the new wording, /features its new AI section', async () => {
@@ -152,7 +152,7 @@ describe("CHAT_READS_ONLY: the chat can't change records [after G]", () => {
     )
     const ai = text(part(s.html('/features'), 'id="ai-assistant"'))
     expect(ai).toContain('What it does today')
-    expect(ai).toContain("It can't change your records")
+    expect(ai).toContain('The assistant has no tool that records a payment, a charge, a bill or a draw.')
     expect(ai).toContain('These cases are in the test suite, and a change that breaks one fails it.')
     expect(ai).not.toContain('Reading your books')
     expect(part(s.html('/features'), 'id="ai-assistant"')).not.toContain('class="lp-coming"')

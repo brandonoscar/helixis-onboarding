@@ -255,7 +255,7 @@ const AI_READS_ONLY: Block[] = [
     b: "It declines questions that would steer by a protected class, and doesn't offer a workaround after it declines. These cases are in the test suite, and a change that breaks one fails it.",
   },
   {
-    t: "It can't change your records",
+    t: "It can't move money",
     b: "The assistant has no tool that records a payment, a charge, a bill or a draw. When it connects to your books, it will do so under a database role that can only read and propose.",
   },
 ];
